@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { AdminTimeRow } from "@/lib/availability";
 import { WalkInSheet } from "./walk-in-sheet";
-import { adminCancelBooking } from "./actions";
+import { BookingActionSheet } from "./booking-action-sheet";
 
 interface Court {
   id: string;
@@ -21,18 +20,12 @@ export function CalendarGrid({
   courts: Court[];
   rows: AdminTimeRow[];
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
   const [selectedSlot, setSelectedSlot] = useState<{ courtId: string; courtName: string; startsAtIso: string } | null>(
     null
   );
-
-  function onCancel(bookingId: string) {
-    startTransition(async () => {
-      await adminCancelBooking(bookingId);
-      router.refresh();
-    });
-  }
+  const [selectedBooking, setSelectedBooking] = useState<{ id: string; label: string; startsAtIso: string } | null>(
+    null
+  );
 
   return (
     <>
@@ -72,11 +65,17 @@ export function CalendarGrid({
                       {cell.status === "booked" && (
                         <button
                           type="button"
-                          disabled={isPending}
-                          onClick={() => cell.bookingId && onCancel(cell.bookingId)}
-                          title="Click to cancel"
+                          onClick={() =>
+                            cell.bookingId &&
+                            setSelectedBooking({
+                              id: cell.bookingId,
+                              label: cell.label ?? "Booking",
+                              startsAtIso: row.startsAtIso,
+                            })
+                          }
+                          title="View booking"
                           className={cn(
-                            "h-11 w-full min-w-28 truncate rounded-sm bg-muted px-1 text-xs font-medium text-foreground hover:bg-destructive/10"
+                            "h-11 w-full min-w-28 truncate rounded-sm bg-muted px-1 text-xs font-medium text-foreground hover:bg-muted/70"
                           )}
                         >
                           {cell.label}
@@ -104,6 +103,14 @@ export function CalendarGrid({
         courtName={selectedSlot?.courtName ?? ""}
         startsAtIso={selectedSlot?.startsAtIso ?? ""}
         timezone={timezone}
+      />
+
+      <BookingActionSheet
+        open={selectedBooking !== null}
+        onOpenChange={(open) => !open && setSelectedBooking(null)}
+        bookingId={selectedBooking?.id ?? ""}
+        label={selectedBooking?.label ?? ""}
+        startsAtIso={selectedBooking?.startsAtIso ?? ""}
       />
     </>
   );

@@ -49,3 +49,15 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
   revalidatePath("/admin/calendar");
   return { success: true, referenceCode: "" };
 }
+
+export async function adminMarkNoShow(bookingId: string): Promise<WalkInResult> {
+  const { supabase } = await requireAdmin();
+  const { error } = await supabase.rpc("mark_no_show", { p_booking_id: bookingId });
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/members");
+  return { success: true, referenceCode: "" };
+}

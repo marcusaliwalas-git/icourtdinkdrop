@@ -2,6 +2,38 @@
 
 Running log of choices made that weren't explicitly specified in `PRD.md`, per its section 0.
 
+## Remaining admin capability from spec 4.10/4.5 (2026-07-30)
+
+Filled out the rest of the admin dashboard section that fit Phase 1's data model without
+pulling in Phase 2 (payments/credits) or Phase 4 (reports/heatmaps, automatic no-show
+enforcement) scope:
+
+- **Member directory** (`/admin/members`) — search by name/phone, each member's booking
+  history, no-show count, membership status. No credit balance/manual credit adjustments
+  shown, since there's no payment data yet (Phase 2).
+- **Mark a booking as no-show** — added a `mark_no_show` SECURITY DEFINER function (only for
+  confirmed bookings that have already started), which increments the booker's
+  `no_show_count`. The admin calendar's booked cells now open an action sheet (Cancel /
+  Mark no-show) instead of cancelling immediately on click — a small correctness fix, since a
+  single misclick used to cancel a real booking with no confirmation step.
+- **Manual booking restriction** — an admin can set `profiles.booking_restricted_until` from
+  the member detail page, and `create_booking` now rejects new bookings for a restricted
+  member. This is deliberately the *manual* half of spec 4.5's "N no-shows in a rolling window
+  restricts booking privileges" — the automatic rolling-window trigger is still Phase 4;
+  here the admin decides if/when to apply or lift a restriction.
+- **Audit log viewer** (`/admin/audit`) — filterable by entity, since the log itself already
+  existed (bookings, venue/court/closure edits, and now no-show/restriction actions all write
+  to it).
+- **CSV export** — `/admin/members/export` and `/admin/bookings/export` (optional
+  `from`/`to` date range), linked from the members page and the admin calendar toolbar.
+
+**Bug found while verifying this**: `audit_log` had a SELECT policy for admins but no INSERT
+policy. Every admin action logged via the client's own session (venue/court/closure edits,
+the new no-show/restriction actions) was silently failing to write its entry — only booking
+events survived, because those are logged inside SECURITY DEFINER functions that bypass RLS
+as the table owner. Fixed with an admin-only INSERT policy; audit_log stays append-only
+(no UPDATE/DELETE policy for anyone).
+
 ## Bugs found and fixed during Phase 1 verification (2026-07-29)
 
 Live-testing every flow in the browser (not just `npm test`) surfaced four real bugs the

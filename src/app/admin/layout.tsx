@@ -19,6 +19,12 @@ export default async function AdminLayout({
           <Link href="/admin/calendar" className="text-muted-foreground hover:text-foreground">
             Calendar
           </Link>
+          <Link href="/admin/members" className="text-muted-foreground hover:text-foreground">
+            Members
+          </Link>
+          <Link href="/admin/audit" className="text-muted-foreground hover:text-foreground">
+            Audit Log
+          </Link>
           <Link href="/" className="ml-auto text-muted-foreground hover:text-foreground">
             Back to site
           </Link>

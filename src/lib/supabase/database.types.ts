@@ -759,6 +759,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
       cancel_booking: {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
@@ -845,7 +846,35 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_booking_owner: { Args: { p_booking_id: string }; Returns: boolean }
       is_organizer_or_admin: { Args: never; Returns: boolean }
+      mark_no_show: {
+        Args: { p_booking_id: string }
+        Returns: {
+          booked_by: string | null
+          court_id: string
+          created_at: string
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

@@ -97,6 +97,9 @@ export default async function AdminCalendarPage({
           <a href={hrefFor(addDays(1))} className="rounded-md border px-3 py-1.5 text-sm">
             Next →
           </a>
+          <a href={`/admin/bookings/export?from=${date}&to=${date}`} className="rounded-md border px-3 py-1.5 text-sm">
+            Export day CSV
+          </a>
         </div>
       </div>
 
