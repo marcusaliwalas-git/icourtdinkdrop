@@ -1,0 +1,74 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { cancelBooking } from "@/app/book/actions";
+import { formatInTimezone } from "@/lib/time";
+import { parseTstzRange } from "@/lib/availability";
+
+interface Booking {
+  id: string;
+  status: string;
+  party_size: number;
+  total_cents: number;
+  payment_status: string;
+  reference_code: string;
+  time_range: string;
+  courts: { name: string } | null;
+}
+
+function pesos(cents: number) {
+  return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
+}
+
+const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
+  confirmed: "default",
+  cancelled: "secondary",
+  completed: "secondary",
+  no_show: "destructive",
+  pending: "secondary",
+};
+
+export function BookingCard({ booking, timezone }: { booking: Booking; timezone: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const { start, end } = parseTstzRange(booking.time_range);
+  const canCancel = booking.status === "confirmed" && start > new Date();
+
+  function onCancel() {
+    setError(null);
+    startTransition(async () => {
+      const result = await cancelBooking({ bookingId: booking.id });
+      if (!result.success) setError(result.message);
+    });
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between gap-4 py-4">
+        <div>
+          <p className="font-medium">{booking.courts?.name}</p>
+          <p className="text-sm text-muted-foreground">
+            {formatInTimezone(start, "EEE, MMM d 'at' h:mm a", timezone)} –{" "}
+            {formatInTimezone(end, "h:mm a", timezone)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Ref {booking.reference_code} · {booking.party_size} players · {pesos(booking.total_cents)} (
+            {booking.payment_status === "paid_at_venue" ? "paid" : "pay at venue"})
+          </p>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <Badge variant={STATUS_VARIANT[booking.status] ?? "secondary"}>{booking.status}</Badge>
+          {canCancel && (
+            <Button size="sm" variant="outline" disabled={isPending} onClick={onCancel}>
+              {isPending ? "Cancelling..." : "Cancel"}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

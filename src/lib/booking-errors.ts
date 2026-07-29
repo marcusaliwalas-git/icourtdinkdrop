@@ -1,0 +1,28 @@
+const MESSAGES: Record<string, string> = {
+  INVALID_DURATION: "Please choose a valid duration.",
+  GUEST_INFO_REQUIRED: "Enter your name and mobile number to book as a guest.",
+  COURT_NOT_FOUND: "That court isn't available.",
+  LEAD_TIME_TOO_SHORT: "This slot starts too soon — please choose a later time.",
+  OUTSIDE_BOOKING_WINDOW: "That date is too far ahead to book yet.",
+  OUTSIDE_OPERATING_HOURS: "The venue is closed at that time.",
+  COURT_CLOSED: "This court is closed for that time (maintenance or event).",
+  NOT_FOUND: "Booking not found.",
+  NOT_AUTHORIZED: "You're not able to cancel this booking.",
+  ALREADY_FINAL: "This booking is already finished and can't be cancelled.",
+  ALREADY_STARTED: "This booking has already started and can't be cancelled.",
+};
+
+/** Maps a Postgres/PostgREST error (from an RPC call) to a stable code + friendly message. */
+export function mapBookingError(error: { message?: string; code?: string } | null | undefined): {
+  code: string;
+  message: string;
+} {
+  if (error?.code === "23P01") {
+    return { code: "SLOT_TAKEN", message: "Sorry, that slot was just taken. Pick another." };
+  }
+  const key = error?.message?.trim();
+  if (key && MESSAGES[key]) {
+    return { code: key, message: MESSAGES[key] };
+  }
+  return { code: "UNKNOWN", message: "Something went wrong. Please try again." };
+}
