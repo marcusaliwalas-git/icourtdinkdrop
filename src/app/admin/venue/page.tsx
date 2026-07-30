@@ -38,6 +38,16 @@ export default async function AdminVenuePage() {
       .order("starts_at", { ascending: false }),
   ]);
 
+  const courtIds = (courts ?? []).map((c) => c.id);
+  const { data: ratePeriods } = courtIds.length
+    ? await supabase.from("court_rate_periods").select("*").in("court_id", courtIds)
+    : { data: [] as { id: string; court_id: string; start_time: string; end_time: string; hourly_rate_cents: number; member_rate_cents: number | null }[] };
+
+  const ratePeriodsByCourtId: Record<string, NonNullable<typeof ratePeriods>> = {};
+  for (const period of ratePeriods ?? []) {
+    (ratePeriodsByCourtId[period.court_id] ??= []).push(period);
+  }
+
   return (
     <div>
       <h1 className="mb-4 text-xl font-semibold">{venue.name}</h1>
@@ -52,7 +62,11 @@ export default async function AdminVenuePage() {
           <VenueDetailsForm venue={venue} />
         </TabsContent>
         <TabsContent value="courts">
-          <CourtsManager venueId={venue.id} courts={courts ?? []} />
+          <CourtsManager
+            venueId={venue.id}
+            courts={courts ?? []}
+            ratePeriodsByCourtId={ratePeriodsByCourtId}
+          />
         </TabsContent>
         <TabsContent value="hours">
           <HoursManager venueId={venue.id} hours={hours ?? []} />

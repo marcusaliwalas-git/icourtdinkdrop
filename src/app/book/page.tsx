@@ -61,6 +61,15 @@ export default async function BookPage({
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
   const dayEnd = endOfLocalDayUtc(date, venue.timezone);
 
+  const { data: ratePeriods } = courtIds.length
+    ? await supabase.from("court_rate_periods").select("*").in("court_id", courtIds)
+    : { data: [] as { court_id: string; start_time: string; end_time: string; hourly_rate_cents: number; member_rate_cents: number | null }[] };
+
+  const ratePeriodsByCourtId: Record<string, NonNullable<typeof ratePeriods>> = {};
+  for (const period of ratePeriods ?? []) {
+    (ratePeriodsByCourtId[period.court_id] ??= []).push(period);
+  }
+
   const [{ data: dayHours }, { data: bookedSlots }, { data: closures }] = await Promise.all([
     supabase
       .from("operating_hours")
@@ -139,6 +148,7 @@ export default async function BookPage({
           courts={courts ?? []}
           rows={grid.rows}
           courtIds={courtIds}
+          ratePeriodsByCourtId={ratePeriodsByCourtId}
           isLoggedIn={!!user}
         />
       )}

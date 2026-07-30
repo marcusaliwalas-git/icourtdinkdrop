@@ -7,6 +7,7 @@ import {
   courtSchema,
   operatingHoursSchema,
   closureSchema,
+  ratePeriodSchema,
 } from "@/lib/validation/venue";
 
 type ActionResult = { error?: string; success?: boolean };
@@ -186,6 +187,45 @@ export async function addClosure(formData: FormData): Promise<ActionResult> {
 export async function deleteClosure(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("closures").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/venue");
+  return { success: true };
+}
+
+export async function addRatePeriod(formData: FormData): Promise<ActionResult> {
+  const parsed = ratePeriodSchema.safeParse({
+    courtId: formData.get("courtId"),
+    startTime: formData.get("startTime"),
+    endTime: formData.get("endTime"),
+    hourlyRateCents: Math.round(Number(formData.get("hourlyRate")) * 100),
+    memberRateCents: formData.get("memberRate")
+      ? Math.round(Number(formData.get("memberRate")) * 100)
+      : undefined,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  if (parsed.data.endTime <= parsed.data.startTime) {
+    return { error: "End time must be after start time." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("court_rate_periods").insert({
+    court_id: parsed.data.courtId,
+    start_time: parsed.data.startTime,
+    end_time: parsed.data.endTime,
+    hourly_rate_cents: parsed.data.hourlyRateCents,
+    member_rate_cents: parsed.data.memberRateCents ?? null,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/venue");
+  return { success: true };
+}
+
+export async function deleteRatePeriod(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("court_rate_periods").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin/venue");
   return { success: true };

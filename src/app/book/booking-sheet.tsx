@@ -13,16 +13,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { createBooking } from "./actions";
 import { formatInTimezone } from "@/lib/time";
-import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
+import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
 
 interface Court {
   id: string;
@@ -38,20 +31,25 @@ function pesos(cents: number) {
 export function BookingSheet({
   open,
   onOpenChange,
+  onBookingConfirmed,
   court,
+  ratePeriods,
   startsAtIso,
+  durationMinutes,
   timezone,
   isLoggedIn,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onBookingConfirmed?: () => void;
   court: Court | null;
+  ratePeriods: RatePeriod[];
   startsAtIso: string;
+  durationMinutes: number;
   timezone: string;
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
-  const [durationHours, setDurationHours] = useState("1");
   const [partySize, setPartySize] = useState("2");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -66,16 +64,31 @@ export function BookingSheet({
 
   if (!court) return null;
 
-  // Guests always pay the hourly rate; only a logged-in user might qualify for the member
+  const durationHours = durationMinutes / 60;
+  const endsAtIso = startsAtIso
+    ? new Date(new Date(startsAtIso).getTime() + durationMinutes * 60_000).toISOString()
+    : "";
+
+  // Guests always pay the guest rate; only a logged-in user might qualify for the member
   // rate (actual membership status is still verified server-side when the booking is created).
-  const rateCents = isLoggedIn ? court.member_rate_cents ?? court.hourly_rate_cents : court.hourly_rate_cents;
-  const estimateCents = Math.round(rateCents * Number(durationHours));
+  // Mirrors create_booking's per-hour pricing exactly, so this estimate always matches what
+  // gets charged — including courts with different rates at different times of day.
+  const estimateCents = startsAtIso
+    ? computeBookingTotalCents({
+        startsAtIso,
+        durationMinutes,
+        timezone,
+        ratePeriods,
+        baseHourlyRateCents: court.hourly_rate_cents,
+        baseMemberRateCents: court.member_rate_cents,
+        isMember: isLoggedIn,
+      })
+    : 0;
 
   function handleClose(next: boolean) {
     if (!next) {
       setError(null);
       setConfirmation(null);
-      setDurationHours("1");
       setGuestName("");
       setGuestPhone("");
       setGuestEmail("");
@@ -90,12 +103,12 @@ export function BookingSheet({
       const result = await createBooking({
         courtId: court!.id,
         startsAt: startsAtIso,
-        durationMinutes: Number(durationHours) * 60,
+        durationMinutes,
         partySize: Number(partySize),
         guestName: isLoggedIn ? undefined : guestName,
         guestPhone: isLoggedIn ? undefined : guestPhone,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
-        idempotencyKey: `${court!.id}-${startsAtIso}-${durationHours}-${Date.now()}`,
+        idempotencyKey: `${court!.id}-${startsAtIso}-${durationMinutes}-${Date.now()}`,
       });
       if (!result.success) {
         setError(result.message);
@@ -109,6 +122,7 @@ export function BookingSheet({
         status: result.status,
         whatsAppShareLink: result.whatsAppShareLink,
       });
+      onBookingConfirmed?.();
       router.refresh();
     });
   }
@@ -144,25 +158,19 @@ export function BookingSheet({
             <SheetHeader className="p-0">
               <SheetTitle>{court.name}</SheetTitle>
               <SheetDescription>
-                {startsAtIso && formatInTimezone(new Date(startsAtIso), "EEEE, MMM d 'at' h:mm a", timezone)}
+                {startsAtIso && endsAtIso && (
+                  <>
+                    {formatInTimezone(new Date(startsAtIso), "EEEE, MMM d", timezone)}
+                    {" · "}
+                    {formatInTimezone(new Date(startsAtIso), "h:mm a", timezone)}
+                    {"–"}
+                    {formatInTimezone(new Date(endsAtIso), "h:mm a", timezone)}
+                    {" · "}
+                    {durationHours} hr{durationHours > 1 ? "s" : ""}
+                  </>
+                )}
               </SheetDescription>
             </SheetHeader>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="duration">Duration</Label>
-              <Select value={durationHours} onValueChange={setDurationHours}>
-                <SelectTrigger id="duration">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DURATION_HOURS.map((h) => (
-                    <SelectItem key={h} value={String(h)}>
-                      {durationLabel(h)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="partySize">Party size</Label>

@@ -1,0 +1,197 @@
+-- Time-of-day (peak/off-peak) pricing per court, e.g. PHP 400/hr from 7am-2pm then PHP
+-- 500/hr from 2pm onwards. A court with no rate periods just keeps using its flat
+-- hourly_rate_cents / member_rate_cents for every hour — periods are optional overrides for
+-- specific windows, not a replacement for the base rate, so existing courts need no data
+-- migration to keep working exactly as before.
+create table court_rate_periods (
+  id uuid primary key default gen_random_uuid(),
+  court_id uuid not null references courts (id) on delete cascade,
+  start_time time not null,
+  end_time time not null,
+  hourly_rate_cents integer not null check (hourly_rate_cents >= 0),
+  -- Nullable, same fallback convention as courts.member_rate_cents: falls back to this
+  -- period's own hourly_rate_cents when unset, not the court's base member rate.
+  member_rate_cents integer check (member_rate_cents is null or member_rate_cents >= 0),
+  created_at timestamptz not null default now(),
+  check (end_time > start_time)
+);
+
+create index court_rate_periods_court_id_idx on court_rate_periods (court_id);
+
+alter table court_rate_periods enable row level security;
+
+-- Public read so the booking page and pricing estimates can see the tiers; admin write.
+create policy court_rate_periods_select_public on court_rate_periods
+  for select using (true);
+
+create policy court_rate_periods_admin_write on court_rate_periods
+  for all using (is_admin()) with check (is_admin());
+
+-- Prices each hour of a booking individually against court_rate_periods instead of one flat
+-- rate for the whole duration. Duration is already constrained to whole hours (see the
+-- INVALID_DURATION check below), so this is an exact integer-cent sum, no fractional-hour
+-- rounding needed.
+create or replace function create_booking(
+  p_court_id uuid,
+  p_starts_at timestamptz,
+  p_duration_minutes integer,
+  p_party_size integer default 1,
+  p_booked_by uuid default null,
+  p_guest_name text default null,
+  p_guest_phone text default null,
+  p_guest_email text default null,
+  p_source text default 'online',
+  p_notes text default null,
+  p_idempotency_key text default null,
+  p_player_names text[] default '{}'
+)
+returns bookings
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_court courts;
+  v_venue venues;
+  v_time_range tstzrange;
+  v_local_start time;
+  v_local_start_minutes integer;
+  v_local_end_minutes integer;
+  v_day_of_week smallint;
+  v_is_member boolean;
+  v_hour_idx integer;
+  v_segment_minutes integer;
+  v_segment_rate_cents integer;
+  v_total_cents integer;
+  v_initial_status text;
+  v_booking bookings;
+  v_player_name text;
+begin
+  if p_duration_minutes is null or p_duration_minutes <= 0
+     or p_duration_minutes % 60 <> 0 or p_duration_minutes > 1440 then
+    raise exception 'INVALID_DURATION' using errcode = 'P0001';
+  end if;
+
+  if p_booked_by is null and (p_guest_name is null or p_guest_phone is null) then
+    raise exception 'GUEST_INFO_REQUIRED' using errcode = 'P0001';
+  end if;
+
+  -- Idempotency: a retried request with the same key returns the original booking untouched.
+  if p_idempotency_key is not null then
+    select * into v_booking from bookings where idempotency_key = p_idempotency_key;
+    if found then
+      return v_booking;
+    end if;
+  end if;
+
+  if p_booked_by is not null and exists (
+    select 1 from profiles
+    where id = p_booked_by
+      and booking_restricted_until is not null
+      and booking_restricted_until > now()
+  ) then
+    raise exception 'BOOKING_RESTRICTED' using errcode = 'P0001';
+  end if;
+
+  select * into v_court from courts where id = p_court_id and is_active for share;
+  if not found then
+    raise exception 'COURT_NOT_FOUND' using errcode = 'P0001';
+  end if;
+
+  select * into v_venue from venues where id = v_court.venue_id;
+
+  if p_starts_at < now() + make_interval(mins => v_venue.min_lead_minutes) then
+    raise exception 'LEAD_TIME_TOO_SHORT' using errcode = 'P0001';
+  end if;
+
+  if p_starts_at > now() + make_interval(days => v_venue.max_advance_days) then
+    raise exception 'OUTSIDE_BOOKING_WINDOW' using errcode = 'P0001';
+  end if;
+
+  v_time_range := tstzrange(p_starts_at, p_starts_at + make_interval(mins => p_duration_minutes), '[)');
+
+  v_local_start := (p_starts_at at time zone v_venue.timezone)::time;
+  v_day_of_week := extract(dow from (p_starts_at at time zone v_venue.timezone));
+  v_local_start_minutes := extract(hour from v_local_start) * 60 + extract(minute from v_local_start);
+  -- Deliberately not wrapped at 1440 (24h): a booking that would spill past local midnight
+  -- ends up with v_local_end_minutes > 1440, which no close_time can ever satisfy, so it's
+  -- rejected below rather than silently allowed.
+  v_local_end_minutes := v_local_start_minutes + p_duration_minutes;
+
+  if not exists (
+    select 1 from operating_hours oh
+    where oh.venue_id = v_venue.id
+      and oh.day_of_week = v_day_of_week
+      and extract(hour from oh.open_time) * 60 + extract(minute from oh.open_time) <= v_local_start_minutes
+      and extract(hour from oh.close_time) * 60 + extract(minute from oh.close_time) >= v_local_end_minutes
+  ) then
+    raise exception 'OUTSIDE_OPERATING_HOURS' using errcode = 'P0001';
+  end if;
+
+  if exists (
+    select 1 from closures c
+    where (c.court_id = p_court_id or (c.court_id is null and c.venue_id = v_venue.id))
+      and tstzrange(c.starts_at, c.ends_at) && v_time_range
+  ) then
+    raise exception 'COURT_CLOSED' using errcode = 'P0001';
+  end if;
+
+  v_is_member := p_booked_by is not null and has_active_membership(p_booked_by);
+
+  -- Sum each hour of the booking against the court's rate periods (peak/off-peak pricing),
+  -- falling back to the court's flat rate for any hour no period covers. Ties between
+  -- overlapping periods (a data-entry mistake, not a supported setup) resolve to whichever
+  -- period starts latest, i.e. the more specific/narrower window.
+  v_total_cents := 0;
+  for v_hour_idx in 0..(p_duration_minutes / 60 - 1) loop
+    v_segment_minutes := v_local_start_minutes + v_hour_idx * 60;
+
+    select
+      case when v_is_member and crp.member_rate_cents is not null
+        then crp.member_rate_cents
+        else crp.hourly_rate_cents
+      end
+    into v_segment_rate_cents
+    from court_rate_periods crp
+    where crp.court_id = p_court_id
+      and extract(hour from crp.start_time) * 60 + extract(minute from crp.start_time) <= v_segment_minutes
+      and extract(hour from crp.end_time) * 60 + extract(minute from crp.end_time) > v_segment_minutes
+    order by extract(hour from crp.start_time) * 60 + extract(minute from crp.start_time) desc
+    limit 1;
+
+    if v_segment_rate_cents is null then
+      v_segment_rate_cents := case when v_is_member and v_court.member_rate_cents is not null
+        then v_court.member_rate_cents
+        else v_court.hourly_rate_cents
+      end;
+    end if;
+
+    v_total_cents := v_total_cents + v_segment_rate_cents;
+  end loop;
+
+  v_initial_status := case when p_source = 'online' then 'pending' else 'confirmed' end;
+
+  insert into bookings (
+    court_id, booked_by, guest_name, guest_phone, guest_email, time_range, status,
+    party_size, total_cents, payment_status, source, notes, idempotency_key
+  ) values (
+    p_court_id, p_booked_by, p_guest_name, p_guest_phone, p_guest_email, v_time_range, v_initial_status,
+    p_party_size, v_total_cents, 'pay_at_venue', p_source, p_notes, p_idempotency_key
+  )
+  returning * into v_booking;
+
+  foreach v_player_name in array coalesce(p_player_names, '{}') loop
+    insert into booking_players (booking_id, guest_name) values (v_booking.id, v_player_name);
+  end loop;
+
+  -- booking_slots feeds the public availability grid; a pending booking still occupies the
+  -- slot (nobody else should be able to grab it while it awaits admin review).
+  insert into booking_slots (booking_id, court_id, time_range)
+  values (v_booking.id, p_court_id, v_time_range);
+
+  insert into audit_log (actor_id, action, entity, entity_id, after)
+  values (p_booked_by, 'booking_created', 'booking', v_booking.id, to_jsonb(v_booking));
+
+  return v_booking;
+end;
+$$;

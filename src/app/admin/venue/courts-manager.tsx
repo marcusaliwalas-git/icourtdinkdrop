@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { upsertCourt } from "./actions";
+import { RatePeriodsManager } from "./rate-periods-manager";
 
 type Court = {
   id: string;
@@ -32,6 +33,14 @@ type Court = {
   is_active: boolean;
 };
 
+type RatePeriod = {
+  id: string;
+  start_time: string;
+  end_time: string;
+  hourly_rate_cents: number;
+  member_rate_cents: number | null;
+};
+
 function centsToPesos(cents: number) {
   return (cents / 100).toFixed(2);
 }
@@ -39,10 +48,12 @@ function centsToPesos(cents: number) {
 function CourtForm({
   venueId,
   court,
+  ratePeriods,
   onSaved,
 }: {
   venueId: string;
   court: Court | null;
+  ratePeriods: RatePeriod[];
   onSaved: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -61,59 +72,75 @@ function CourtForm({
   }
 
   return (
-    <form action={onSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="name">Court name</Label>
-        <Input id="name" name="name" defaultValue={court?.name} required />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="surface">Surface</Label>
-        <Input id="surface" name="surface" defaultValue={court?.surface ?? ""} placeholder="Cushioned acrylic" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+    <div className="flex flex-col gap-4">
+      <form action={onSubmit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="hourlyRate">Hourly rate (PHP)</Label>
-          <Input
-            id="hourlyRate"
-            name="hourlyRate"
-            type="number"
-            step="0.01"
-            min={0}
-            defaultValue={court ? centsToPesos(court.hourly_rate_cents) : undefined}
-            required
-          />
+          <Label htmlFor="name">Court name</Label>
+          <Input id="name" name="name" defaultValue={court?.name} required />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="memberRate">Member rate (PHP, optional)</Label>
-          <Input
-            id="memberRate"
-            name="memberRate"
-            type="number"
-            step="0.01"
-            min={0}
-            defaultValue={
-              court?.member_rate_cents != null ? centsToPesos(court.member_rate_cents) : undefined
-            }
-          />
+          <Label htmlFor="surface">Surface</Label>
+          <Input id="surface" name="surface" defaultValue={court?.surface ?? ""} placeholder="Cushioned acrylic" />
         </div>
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="isIndoor" defaultChecked={court?.is_indoor} />
-        Indoor court
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="isActive" defaultChecked={court?.is_active ?? true} />
-        Active (bookable)
-      </label>
-      <Button type="submit" disabled={isPending}>
-        {isPending ? "Saving..." : "Save court"}
-      </Button>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-    </form>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="hourlyRate">Hourly rate (PHP)</Label>
+            <Input
+              id="hourlyRate"
+              name="hourlyRate"
+              type="number"
+              step="0.01"
+              min={0}
+              defaultValue={court ? centsToPesos(court.hourly_rate_cents) : undefined}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="memberRate">Member rate (PHP, optional)</Label>
+            <Input
+              id="memberRate"
+              name="memberRate"
+              type="number"
+              step="0.01"
+              min={0}
+              defaultValue={
+                court?.member_rate_cents != null ? centsToPesos(court.member_rate_cents) : undefined
+              }
+            />
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="isIndoor" defaultChecked={court?.is_indoor} />
+          Indoor court
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="isActive" defaultChecked={court?.is_active ?? true} />
+          Active (bookable)
+        </label>
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Saving..." : "Save court"}
+        </Button>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+      </form>
+
+      {court && (
+        <div className="border-t pt-4">
+          <RatePeriodsManager courtId={court.id} ratePeriods={ratePeriods} />
+        </div>
+      )}
+    </div>
   );
 }
 
-export function CourtsManager({ venueId, courts }: { venueId: string; courts: Court[] }) {
+export function CourtsManager({
+  venueId,
+  courts,
+  ratePeriodsByCourtId,
+}: {
+  venueId: string;
+  courts: Court[];
+  ratePeriodsByCourtId: Record<string, RatePeriod[]>;
+}) {
   const [openId, setOpenId] = useState<string | "new" | null>(null);
 
   return (
@@ -127,7 +154,7 @@ export function CourtsManager({ venueId, courts }: { venueId: string; courts: Co
             <DialogHeader>
               <DialogTitle>Add court</DialogTitle>
             </DialogHeader>
-            <CourtForm venueId={venueId} court={null} onSaved={() => setOpenId(null)} />
+            <CourtForm venueId={venueId} court={null} ratePeriods={[]} onSaved={() => setOpenId(null)} />
           </DialogContent>
         </Dialog>
       </div>
@@ -152,6 +179,9 @@ export function CourtsManager({ venueId, courts }: { venueId: string; courts: Co
                 {court.member_rate_cents != null && (
                   <span className="text-muted-foreground"> (₱{centsToPesos(court.member_rate_cents)} member)</span>
                 )}
+                {(ratePeriodsByCourtId[court.id]?.length ?? 0) > 0 && (
+                  <span className="text-muted-foreground"> + time-based rates</span>
+                )}
               </TableCell>
               <TableCell>
                 <Badge variant={court.is_active ? "default" : "secondary"}>
@@ -163,11 +193,16 @@ export function CourtsManager({ venueId, courts }: { venueId: string; courts: Co
                   <DialogTrigger asChild>
                     <Button size="sm" variant="outline">Edit</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Edit court</DialogTitle>
                     </DialogHeader>
-                    <CourtForm venueId={venueId} court={court} onSaved={() => setOpenId(null)} />
+                    <CourtForm
+                      venueId={venueId}
+                      court={court}
+                      ratePeriods={ratePeriodsByCourtId[court.id] ?? []}
+                      onSaved={() => setOpenId(null)}
+                    />
                   </DialogContent>
                 </Dialog>
               </TableCell>

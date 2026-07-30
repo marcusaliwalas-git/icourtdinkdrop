@@ -12,7 +12,7 @@ export default async function AdminLayout({
     <div className="flex min-h-svh flex-col">
       <header className="border-b">
         <nav className="mx-auto flex max-w-5xl items-center gap-4 p-4 text-sm">
-          <span className="font-semibold">DinkDrop Admin</span>
+          <span className="font-heading font-bold">DinkDrop Admin</span>
           <Link href="/admin/venue" className="text-muted-foreground hover:text-foreground">
             Venue &amp; Courts
           </Link>

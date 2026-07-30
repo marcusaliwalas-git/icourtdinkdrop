@@ -42,3 +42,13 @@ export const closureSchema = z.object({
 });
 
 export type ClosureInput = z.infer<typeof closureSchema>;
+
+export const ratePeriodSchema = z.object({
+  courtId: z.uuid(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  hourlyRateCents: z.number().int().min(0),
+  memberRateCents: z.number().int().min(0).optional(),
+});
+
+export type RatePeriodInput = z.infer<typeof ratePeriodSchema>;
