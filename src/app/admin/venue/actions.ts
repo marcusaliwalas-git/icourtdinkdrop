@@ -6,6 +6,7 @@ import {
   venueSchema,
   courtSchema,
   operatingHoursSchema,
+  operatingHoursUpdateSchema,
   closureSchema,
   ratePeriodSchema,
 } from "@/lib/validation/venue";
@@ -135,6 +136,34 @@ export async function addOperatingHours(formData: FormData): Promise<ActionResul
     open_time: parsed.data.openTime,
     close_time: parsed.data.closeTime,
   });
+
+  if (error) return { error: error.message };
+  revalidatePath("/admin/venue");
+  return { success: true };
+}
+
+export async function updateOperatingHours(id: string, formData: FormData): Promise<ActionResult> {
+  const parsed = operatingHoursUpdateSchema.safeParse({
+    dayOfWeek: Number(formData.get("dayOfWeek")),
+    openTime: formData.get("openTime"),
+    closeTime: formData.get("closeTime"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  if (parsed.data.closeTime <= parsed.data.openTime) {
+    return { error: "Close time must be after open time." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("operating_hours")
+    .update({
+      day_of_week: parsed.data.dayOfWeek,
+      open_time: parsed.data.openTime,
+      close_time: parsed.data.closeTime,
+    })
+    .eq("id", id);
 
   if (error) return { error: error.message };
   revalidatePath("/admin/venue");

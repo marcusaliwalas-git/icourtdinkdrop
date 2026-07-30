@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { addOperatingHours, deleteOperatingHours } from "./actions";
+import { addOperatingHours, updateOperatingHours, deleteOperatingHours } from "./actions";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -29,6 +29,82 @@ type Hours = {
   open_time: string;
   close_time: string;
 };
+
+// A native <input type="time"> can't display "24:00" (the value the app stores for a close
+// time of midnight — see lib/validation/venue.ts), so show it as 12:00 AM instead. The form
+// action re-translates 00:00 back to 24:00 on save.
+function closeTimeInputValue(closeTime: string): string {
+  const hhmm = closeTime.slice(0, 5);
+  return hhmm === "24:00" ? "00:00" : hhmm;
+}
+
+function HourRow({ hour }: { hour: Hours }) {
+  const [isPending, startTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function onSave(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateOperatingHours(hour.id, formData);
+      if (result.error) setError(result.error);
+    });
+  }
+
+  function onDelete() {
+    startDeleteTransition(async () => {
+      await deleteOperatingHours(hour.id);
+    });
+  }
+
+  return (
+    <TableRow>
+      <TableCell colSpan={4} className="p-2">
+        <form action={onSave} className="flex flex-wrap items-end gap-3">
+          <Select name="dayOfWeek" defaultValue={String(hour.day_of_week)}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DAYS.map((day, i) => (
+                <SelectItem key={i} value={String(i)}>
+                  {day}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            name="openTime"
+            type="time"
+            defaultValue={hour.open_time.slice(0, 5)}
+            required
+            className="w-32"
+          />
+          <Input
+            name="closeTime"
+            type="time"
+            defaultValue={closeTimeInputValue(hour.close_time)}
+            required
+            className="w-32"
+          />
+          <Button type="submit" size="sm" disabled={isPending}>
+            {isPending ? "Saving..." : "Save"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={isDeleting}
+            onClick={onDelete}
+          >
+            Remove
+          </Button>
+          {error && <p className="w-full text-sm text-destructive">{error}</p>}
+        </form>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export function HoursManager({ venueId, hours }: { venueId: string; hours: Hours[] }) {
   const [isPending, startTransition] = useTransition();
@@ -40,14 +116,11 @@ export function HoursManager({ venueId, hours }: { venueId: string; hours: Hours
     });
   }
 
-  function onDelete(id: string) {
-    startTransition(async () => {
-      await deleteOperatingHours(id);
-    });
-  }
-
   return (
     <div className="flex max-w-xl flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        To allow bookings up until midnight, set Close to 12:00 AM.
+      </p>
       <Table>
         <TableHeader>
           <TableRow>
@@ -59,16 +132,7 @@ export function HoursManager({ venueId, hours }: { venueId: string; hours: Hours
         </TableHeader>
         <TableBody>
           {hours.map((h) => (
-            <TableRow key={h.id}>
-              <TableCell>{DAYS[h.day_of_week]}</TableCell>
-              <TableCell>{h.open_time.slice(0, 5)}</TableCell>
-              <TableCell>{h.close_time.slice(0, 5)}</TableCell>
-              <TableCell>
-                <Button size="sm" variant="ghost" disabled={isPending} onClick={() => onDelete(h.id)}>
-                  Remove
-                </Button>
-              </TableCell>
-            </TableRow>
+            <HourRow key={h.id} hour={h} />
           ))}
           {hours.length === 0 && (
             <TableRow>
