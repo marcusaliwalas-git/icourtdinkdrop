@@ -139,7 +139,7 @@ async function main() {
       if (startsAt.getTime() < Date.now() + 90 * 60_000) continue; // respect lead time
 
       const court = randomFrom(courts);
-      const duration = randomFrom([30, 60, 90]);
+      const duration = randomFrom([60, 120, 180]);
       const useMember = Math.random() < 0.6 && profileIds.length > 0;
 
       const rpcArgs: Record<string, unknown> = {

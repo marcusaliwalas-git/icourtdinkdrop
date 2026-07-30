@@ -64,7 +64,9 @@ export default async function AdminCalendarPage({
   const grid = buildAdminCalendarGrid({
     date,
     timezone: venue.timezone,
-    slotMinutes: 30,
+    // Whole-hour rows, matching the whole-hour booking durations. Anchored to the venue's
+    // configured open_time (the row loop starts there), so it follows the admin's hours setup.
+    slotMinutes: 60,
     courts: courts ?? [],
     dayHours: dayHours ?? [],
     bookings: (bookings ?? []) as never,

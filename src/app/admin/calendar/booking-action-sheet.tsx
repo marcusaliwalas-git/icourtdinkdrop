@@ -11,7 +11,7 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { adminCancelBooking, adminMarkNoShow } from "./actions";
+import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow } from "./actions";
 
 export function BookingActionSheet({
   open,
@@ -19,18 +19,34 @@ export function BookingActionSheet({
   bookingId,
   label,
   startsAtIso,
+  status,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   bookingId: string;
   label: string;
   startsAtIso: string;
+  status: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const hasStarted = startsAtIso !== "" && new Date(startsAtIso) <= new Date();
+  const isPendingConfirmation = status === "pending";
+
+  function onConfirm() {
+    setError(null);
+    startTransition(async () => {
+      const result = await adminConfirmBooking(bookingId);
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
 
   function onCancel() {
     setError(null);
@@ -66,13 +82,22 @@ export function BookingActionSheet({
         <div className="flex flex-col gap-4 p-4">
           <SheetHeader className="p-0">
             <SheetTitle>{label}</SheetTitle>
-            <SheetDescription>What would you like to do with this booking?</SheetDescription>
+            <SheetDescription>
+              {isPendingConfirmation
+                ? "This booking is awaiting confirmation."
+                : "What would you like to do with this booking?"}
+            </SheetDescription>
           </SheetHeader>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <SheetFooter className="flex-col gap-2 p-0 sm:flex-col">
-            {hasStarted && (
+            {isPendingConfirmation && (
+              <Button disabled={isPending} onClick={onConfirm}>
+                Confirm booking
+              </Button>
+            )}
+            {!isPendingConfirmation && hasStarted && (
               <Button variant="outline" disabled={isPending} onClick={onNoShow}>
                 Mark as no-show
               </Button>

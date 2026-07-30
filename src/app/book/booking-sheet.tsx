@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { createBooking } from "./actions";
 import { formatInTimezone } from "@/lib/time";
+import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
 
 interface Court {
   id: string;
@@ -29,8 +30,6 @@ interface Court {
   hourly_rate_cents: number;
   member_rate_cents: number | null;
 }
-
-const DURATIONS = [30, 60, 90, 120];
 
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
@@ -52,14 +51,17 @@ export function BookingSheet({
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
-  const [duration, setDuration] = useState("60");
+  const [durationHours, setDurationHours] = useState("1");
   const [partySize, setPartySize] = useState("2");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<{ referenceCode: string; whatsAppShareLink: string } | null>(
-    null
-  );
+  const [confirmation, setConfirmation] = useState<{
+    referenceCode: string;
+    status: string;
+    whatsAppShareLink: string;
+  } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   if (!court) return null;
@@ -67,15 +69,16 @@ export function BookingSheet({
   // Guests always pay the hourly rate; only a logged-in user might qualify for the member
   // rate (actual membership status is still verified server-side when the booking is created).
   const rateCents = isLoggedIn ? court.member_rate_cents ?? court.hourly_rate_cents : court.hourly_rate_cents;
-  const estimateCents = Math.round((rateCents * Number(duration)) / 60);
+  const estimateCents = Math.round(rateCents * Number(durationHours));
 
   function handleClose(next: boolean) {
     if (!next) {
       setError(null);
       setConfirmation(null);
-      setDuration("60");
+      setDurationHours("1");
       setGuestName("");
       setGuestPhone("");
+      setGuestEmail("");
     }
     onOpenChange(next);
   }
@@ -87,11 +90,12 @@ export function BookingSheet({
       const result = await createBooking({
         courtId: court!.id,
         startsAt: startsAtIso,
-        durationMinutes: Number(duration),
+        durationMinutes: Number(durationHours) * 60,
         partySize: Number(partySize),
         guestName: isLoggedIn ? undefined : guestName,
         guestPhone: isLoggedIn ? undefined : guestPhone,
-        idempotencyKey: `${court!.id}-${startsAtIso}-${duration}-${Date.now()}`,
+        guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
+        idempotencyKey: `${court!.id}-${startsAtIso}-${durationHours}-${Date.now()}`,
       });
       if (!result.success) {
         setError(result.message);
@@ -100,7 +104,11 @@ export function BookingSheet({
         }
         return;
       }
-      setConfirmation({ referenceCode: result.referenceCode, whatsAppShareLink: result.whatsAppShareLink });
+      setConfirmation({
+        referenceCode: result.referenceCode,
+        status: result.status,
+        whatsAppShareLink: result.whatsAppShareLink,
+      });
       router.refresh();
     });
   }
@@ -110,9 +118,13 @@ export function BookingSheet({
       <SheetContent side="bottom" className="mx-auto max-w-md">
         {confirmation ? (
           <div className="flex flex-col items-center gap-3 p-6 text-center">
-            <SheetTitle>Booking confirmed!</SheetTitle>
+            <SheetTitle>
+              {confirmation.status === "pending" ? "Booking requested!" : "Booking confirmed!"}
+            </SheetTitle>
             <p className="text-sm text-muted-foreground">
-              Show this reference at the venue. Pay at the counter.
+              {confirmation.status === "pending"
+                ? "The venue will confirm your booking shortly. Show this reference at the venue and pay at the counter."
+                : "Show this reference at the venue. Pay at the counter."}
             </p>
             <p className="rounded-md border bg-muted px-4 py-2 font-mono text-lg tracking-widest">
               {confirmation.referenceCode}
@@ -138,14 +150,14 @@ export function BookingSheet({
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="duration">Duration</Label>
-              <Select value={duration} onValueChange={setDuration}>
+              <Select value={durationHours} onValueChange={setDurationHours}>
                 <SelectTrigger id="duration">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DURATIONS.map((d) => (
-                    <SelectItem key={d} value={String(d)}>
-                      {d} minutes
+                  {DURATION_HOURS.map((h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {durationLabel(h)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -186,19 +198,33 @@ export function BookingSheet({
                     required
                   />
                 </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="guestEmail">Email (optional)</Label>
+                  <Input
+                    id="guestEmail"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    We&apos;ll email you when your booking is submitted and confirmed.
+                  </p>
+                </div>
               </>
             )}
 
             <p className="text-sm text-muted-foreground">
               Estimated total: <span className="font-medium text-foreground">{pesos(estimateCents)}</span> — pay at
-              venue. {isLoggedIn && court.member_rate_cents != null && "Member rate applied if you're an active member."}
+              venue. {isLoggedIn && court.member_rate_cents != null && "Member rate applied if you're an active member."}{" "}
+              The venue will confirm your booking before it&apos;s final.
             </p>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <SheetFooter className="p-0">
               <Button type="submit" disabled={isPending}>
-                {isPending ? "Booking..." : "Confirm booking"}
+                {isPending ? "Requesting..." : "Request booking"}
               </Button>
             </SheetFooter>
           </form>

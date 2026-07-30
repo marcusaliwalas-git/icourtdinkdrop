@@ -7,12 +7,13 @@ const MESSAGES: Record<string, string> = {
   OUTSIDE_OPERATING_HOURS: "The venue is closed at that time.",
   COURT_CLOSED: "This court is closed for that time (maintenance or event).",
   NOT_FOUND: "Booking not found.",
-  NOT_AUTHORIZED: "You're not able to cancel this booking.",
+  NOT_AUTHORIZED: "You're not authorized to do that.",
   ALREADY_FINAL: "This booking is already finished and can't be cancelled.",
   ALREADY_STARTED: "This booking has already started and can't be cancelled.",
   BOOKING_RESTRICTED: "This member's booking privileges are currently restricted.",
   INVALID_STATUS: "Only confirmed bookings can be marked as no-show.",
   NOT_STARTED_YET: "This booking hasn't started yet.",
+  NOT_PENDING: "This booking is not awaiting confirmation.",
 };
 
 /** Maps a Postgres/PostgREST error (from an RPC call) to a stable code + friendly message. */

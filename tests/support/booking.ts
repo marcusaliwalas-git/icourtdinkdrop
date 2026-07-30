@@ -8,6 +8,7 @@ export interface CreateBookingParams {
   bookedBy?: string | null;
   guestName?: string | null;
   guestPhone?: string | null;
+  guestEmail?: string | null;
   source?: string;
   notes?: string | null;
   idempotencyKey?: string | null;
@@ -20,6 +21,7 @@ export interface BookingRow {
   booked_by: string | null;
   guest_name: string | null;
   guest_phone: string | null;
+  guest_email: string | null;
   reference_code: string;
   time_range: string;
   status: string;
@@ -43,10 +45,11 @@ export async function callCreateBooking(
        p_booked_by => $5,
        p_guest_name => $6,
        p_guest_phone => $7,
-       p_source => $8,
-       p_notes => $9,
-       p_idempotency_key => $10,
-       p_player_names => $11
+       p_guest_email => $8,
+       p_source => $9,
+       p_notes => $10,
+       p_idempotency_key => $11,
+       p_player_names => $12
      )`,
     [
       params.courtId,
@@ -56,12 +59,25 @@ export async function callCreateBooking(
       params.bookedBy ?? null,
       params.guestName ?? null,
       params.guestPhone ?? null,
+      params.guestEmail ?? null,
       params.source ?? "online",
       params.notes ?? null,
       params.idempotencyKey ?? null,
       params.playerNames ?? [],
     ]
   );
+  return result.rows[0] as BookingRow;
+}
+
+/** Requires the caller to have already run actAsAdmin(client, adminProfileId) on this connection. */
+export async function callConfirmBooking(client: Pool | PoolClient, bookingId: string): Promise<BookingRow> {
+  const result = await client.query(`select * from confirm_booking(p_booking_id => $1)`, [bookingId]);
+  return result.rows[0] as BookingRow;
+}
+
+/** Requires the caller to have already run actAsAdmin(client, adminProfileId) on this connection. */
+export async function callMarkNoShow(client: Pool | PoolClient, bookingId: string): Promise<BookingRow> {
+  const result = await client.query(`select * from mark_no_show(p_booking_id => $1)`, [bookingId]);
   return result.rows[0] as BookingRow;
 }
 

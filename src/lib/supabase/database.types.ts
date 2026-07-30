@@ -158,6 +158,7 @@ export type Database = {
           booked_by: string | null
           court_id: string
           created_at: string
+          guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
           id: string
@@ -176,6 +177,7 @@ export type Database = {
           booked_by?: string | null
           court_id: string
           created_at?: string
+          guest_email?: string | null
           guest_name?: string | null
           guest_phone?: string | null
           id?: string
@@ -194,6 +196,7 @@ export type Database = {
           booked_by?: string | null
           court_id?: string
           created_at?: string
+          guest_email?: string | null
           guest_name?: string | null
           guest_phone?: string | null
           id?: string
@@ -766,6 +769,35 @@ export type Database = {
           booked_by: string | null
           court_id: string
           created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      confirm_booking: {
+        Args: { p_booking_id: string }
+        Returns: {
+          booked_by: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
           id: string
@@ -792,6 +824,7 @@ export type Database = {
           p_booked_by?: string
           p_court_id: string
           p_duration_minutes: number
+          p_guest_email?: string
           p_guest_name?: string
           p_guest_phone?: string
           p_idempotency_key?: string
@@ -805,6 +838,7 @@ export type Database = {
           booked_by: string | null
           court_id: string
           created_at: string
+          guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
           id: string
@@ -854,6 +888,7 @@ export type Database = {
           booked_by: string | null
           court_id: string
           created_at: string
+          guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
           id: string

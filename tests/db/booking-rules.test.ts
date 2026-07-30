@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { withRollback, closePool } from "../support/db";
-import { createVenueWithCourt, createMemberProfile } from "../support/fixtures";
-import { callCreateBooking, callCancelBooking } from "../support/booking";
+import { createVenueWithCourt, createMemberProfile, createAdminProfile, actAsAdmin } from "../support/fixtures";
+import { callCreateBooking, callCancelBooking, callConfirmBooking, callMarkNoShow } from "../support/booking";
 
 // These tests hit a real local Supabase Postgres (see tests/support/db.ts) because the
 // booking-conflict guarantee lives in the database, not in application code (PRD.md
@@ -18,7 +18,7 @@ function daysFromNow(days: number, hour = 10): Date {
 describe("create_booking — pricing and rules", () => {
   afterAll(closePool);
 
-  it("confirms a valid booking and computes the guest rate from the court's hourly rate", async () => {
+  it("creates a valid online booking as pending and computes the guest rate", async () => {
     await withRollback(async (client) => {
       const { courtId } = await createVenueWithCourt(client, {
         hourlyRateCents: 120000,
@@ -27,15 +27,165 @@ describe("create_booking — pricing and rules", () => {
       const booking = await callCreateBooking(client, {
         courtId,
         startsAt: daysFromNow(2),
-        durationMinutes: 90,
+        durationMinutes: 120,
         guestName: "Juan Dela Cruz",
         guestPhone: "+639171234567",
       });
 
-      expect(booking.status).toBe("confirmed");
+      expect(booking.status).toBe("pending");
       expect(booking.payment_status).toBe("pay_at_venue");
-      expect(booking.total_cents).toBe(180000); // 120000 * 1.5h
+      expect(booking.total_cents).toBe(240000); // 120000 * 2h
       expect(booking.reference_code).toHaveLength(8);
+    });
+  });
+
+  it("stores an optional guest email when provided, and leaves it null otherwise", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      const withEmail = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Has Email",
+        guestPhone: "+639170000060",
+        guestEmail: "guest@example.com",
+      });
+      expect(withEmail.guest_email).toBe("guest@example.com");
+
+      const withoutEmail = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(3),
+        durationMinutes: 60,
+        guestName: "No Email",
+        guestPhone: "+639170000061",
+      });
+      expect(withoutEmail.guest_email).toBeNull();
+    });
+  });
+
+  it("auto-confirms walk-in and admin-sourced bookings instead of leaving them pending", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      const walkin = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Walkin",
+        guestPhone: "+639170000030",
+        source: "walkin",
+      });
+      expect(walkin.status).toBe("confirmed");
+    });
+  });
+
+  it("rejects a duration that isn't a whole number of hours", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(2),
+          durationMinutes: 90,
+          guestName: "Odd",
+          guestPhone: "+639170000031",
+        })
+      ).rejects.toThrow(/INVALID_DURATION/);
+    });
+  });
+
+  it("rejects a duration longer than 24 hours", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(2),
+          durationMinutes: 1500,
+          guestName: "TooLong",
+          guestPhone: "+639170000032",
+        })
+      ).rejects.toThrow(/INVALID_DURATION/);
+    });
+  });
+
+  it("rejects a 24-hour booking that would run past the same day's closing time", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(2, 10),
+          durationMinutes: 1440,
+          guestName: "FullDay",
+          guestPhone: "+639170000033",
+        })
+      ).rejects.toThrow(/OUTSIDE_OPERATING_HOURS/);
+    });
+  });
+
+  it("rejects a booking whose duration would run past midnight into the next calendar day", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      // Fixture hours are 00:00-23:45 local. 11:00 PM local (UTC 15:00, Manila is UTC+8)
+      // + 2 hours would end at 1:00 AM the next day — must be rejected, not silently allowed.
+      const startsAt = daysFromNow(2, 15);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt,
+          durationMinutes: 120,
+          guestName: "Overnight",
+          guestPhone: "+639170000034",
+        })
+      ).rejects.toThrow(/OUTSIDE_OPERATING_HOURS/);
+    });
+  });
+
+  it("allows a duration that reaches exactly the closing time", async () => {
+    await withRollback(async (client) => {
+      const { courtId, venueId } = await createVenueWithCourt(client);
+      await client.query(`update operating_hours set open_time = '06:00', close_time = '22:00' where venue_id = $1`, [
+        venueId,
+      ]);
+      // UTC 12:00 = 20:00 Manila; + 2 hours ends exactly at the 22:00 close.
+      const startsAt = daysFromNow(2, 12);
+
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt,
+        durationMinutes: 120,
+        guestName: "JustInTime",
+        guestPhone: "+639170000035",
+      });
+
+      expect(booking.status).toBe("pending");
+    });
+  });
+
+  it("rejects a duration that runs just one hour past the closing time", async () => {
+    await withRollback(async (client) => {
+      const { courtId, venueId } = await createVenueWithCourt(client);
+      await client.query(`update operating_hours set open_time = '06:00', close_time = '22:00' where venue_id = $1`, [
+        venueId,
+      ]);
+      // Same start as above, but one hour longer — now ends at 23:00, past the 22:00 close.
+      const startsAt = daysFromNow(2, 12);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt,
+          durationMinutes: 180,
+          guestName: "OneTooMany",
+          guestPhone: "+639170000036",
+        })
+      ).rejects.toThrow(/OUTSIDE_OPERATING_HOURS/);
     });
   });
 
@@ -114,13 +264,19 @@ describe("create_booking — pricing and rules", () => {
     });
   });
 
-  it("rejects a booking outside the venue's operating hours", async () => {
+  it("rejects a booking outside the venue's operating hours (same day, no wrap)", async () => {
     await withRollback(async (client) => {
-      const { courtId } = await createVenueWithCourt(client);
-      // Venue timezone is Asia/Manila (UTC+8). Fixture operating hours are 00:00-23:45
-      // local; a 23:30 local start + 60min crosses midnight, so UTC 15:30 (= 23:30 Manila).
-      const startsAt = daysFromNow(2, 15);
-      startsAt.setUTCMinutes(30);
+      const { courtId, venueId } = await createVenueWithCourt(client);
+      // Narrow the fixture's default 00:00-23:45 hours down to 08:00-20:00 so a same-day
+      // out-of-hours booking is actually reachable without wrapping past midnight (crossing
+      // midnight is now allowed — see the 24-hour-booking test below).
+      await client.query(
+        `update operating_hours set open_time = '08:00', close_time = '20:00' where venue_id = $1`,
+        [venueId]
+      );
+      // Venue timezone is Asia/Manila (UTC+8): UTC 13:00 = 21:00 local, ending 22:00
+      // local — same day (no wrap), past the 20:00 close.
+      const startsAt = daysFromNow(2, 13);
 
       await expect(
         callCreateBooking(client, {
@@ -179,8 +335,8 @@ describe("create_booking — pricing and rules", () => {
         guestPhone: "+639170000002",
       });
 
-      expect(a.status).toBe("confirmed");
-      expect(b.status).toBe("confirmed");
+      expect(a.status).toBe("pending");
+      expect(b.status).toBe("pending");
     });
   });
 
@@ -213,7 +369,7 @@ describe("create_booking — pricing and rules", () => {
       await client.query("rollback to savepoint conflict_check");
 
       const { rows } = await client.query(
-        `select count(*)::int as count from bookings where court_id = $1 and status = 'confirmed'`,
+        `select count(*)::int as count from bookings where court_id = $1 and status in ('confirmed', 'pending')`,
         [courtId]
       );
       expect(rows[0].count).toBe(1);
@@ -264,6 +420,111 @@ describe("create_booking — pricing and rules", () => {
           durationMinutes: 60,
         })
       ).rejects.toThrow(/GUEST_INFO_REQUIRED/);
+    });
+  });
+});
+
+describe("confirm_booking", () => {
+  afterAll(closePool);
+
+  it("confirms a pending booking", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      const adminId = await createAdminProfile(client);
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Awaiting",
+        guestPhone: "+639170000040",
+      });
+      expect(booking.status).toBe("pending");
+
+      await actAsAdmin(client, adminId);
+      const confirmed = await callConfirmBooking(client, booking.id);
+      expect(confirmed.status).toBe("confirmed");
+    });
+  });
+
+  it("rejects confirming a booking that isn't pending", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      const adminId = await createAdminProfile(client);
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "AlreadyIn",
+        guestPhone: "+639170000041",
+        source: "walkin",
+      });
+      expect(booking.status).toBe("confirmed");
+
+      await actAsAdmin(client, adminId);
+      await expect(callConfirmBooking(client, booking.id)).rejects.toThrow(/NOT_PENDING/);
+    });
+  });
+
+  it("rejects confirming a booking when the caller isn't an admin", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "NoAdmin",
+        guestPhone: "+639170000042",
+      });
+
+      await expect(callConfirmBooking(client, booking.id)).rejects.toThrow(/NOT_AUTHORIZED/);
+    });
+  });
+});
+
+describe("mark_no_show", () => {
+  afterAll(closePool);
+
+  it("marks a started, confirmed booking as no-show and increments the member's counter", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      const adminId = await createAdminProfile(client);
+      const memberId = await createMemberProfile(client);
+      const startsAt = new Date(Date.now() - 60 * 60 * 1000); // started an hour ago
+
+      const { rows } = await client.query(
+        `insert into bookings (court_id, booked_by, time_range, status, total_cents)
+         values ($1, $2, tstzrange($3::timestamptz, $3::timestamptz + interval '60 minutes'), 'confirmed', 100000)
+         returning id`,
+        [courtId, memberId, startsAt.toISOString()]
+      );
+
+      await actAsAdmin(client, adminId);
+      const result = await callMarkNoShow(client, rows[0].id);
+      expect(result.status).toBe("no_show");
+
+      const { rows: profileRows } = await client.query(
+        `select no_show_count from profiles where id = $1`,
+        [memberId]
+      );
+      expect(profileRows[0].no_show_count).toBe(1);
+    });
+  });
+
+  it("rejects marking a booking that hasn't started yet", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      const adminId = await createAdminProfile(client);
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Future",
+        guestPhone: "+639170000050",
+        source: "walkin",
+      });
+
+      await actAsAdmin(client, adminId);
+      await expect(callMarkNoShow(client, booking.id)).rejects.toThrow(/NOT_STARTED_YET/);
     });
   });
 });

@@ -102,6 +102,7 @@ export interface AdminCell {
   status: SlotStatus;
   bookingId?: string;
   label?: string;
+  bookingStatus?: string;
 }
 
 export interface AdminTimeRow {
@@ -117,7 +118,14 @@ export function buildAdminCalendarGrid(params: {
   slotMinutes: number;
   courts: CourtSummary[];
   dayHours: { open_time: string; close_time: string }[];
-  bookings: { id: string; court_id: string; time_range: string; guest_name: string | null; profiles: { full_name: string | null } | null }[];
+  bookings: {
+    id: string;
+    court_id: string;
+    time_range: string;
+    status: string;
+    guest_name: string | null;
+    profiles: { full_name: string | null } | null;
+  }[];
   closures: { court_id: string | null; starts_at: string; ends_at: string }[];
   now?: Date;
 }): { rows: AdminTimeRow[]; closedAllDay: boolean } {
@@ -135,6 +143,7 @@ export function buildAdminCalendarGrid(params: {
     id: b.id,
     courtId: b.court_id,
     label: b.profiles?.full_name ?? b.guest_name ?? "Booked",
+    status: b.status,
     range: parseTstzRange(b.time_range),
   }));
   const closureRanges = closures.map((c) => ({
@@ -152,7 +161,12 @@ export function buildAdminCalendarGrid(params: {
     for (const court of courts) {
       const booking = bookingRanges.find((b) => b.courtId === court.id && overlaps(startsAt, endsAt, b.range));
       if (booking) {
-        cells[court.id] = { status: "booked", bookingId: booking.id, label: booking.label };
+        cells[court.id] = {
+          status: "booked",
+          bookingId: booking.id,
+          label: booking.label,
+          bookingStatus: booking.status,
+        };
         continue;
       }
       const closure = closureRanges.find(

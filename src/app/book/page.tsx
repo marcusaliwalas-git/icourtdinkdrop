@@ -85,7 +85,10 @@ export default async function BookPage({
   const grid = buildAvailabilityGrid({
     date,
     timezone: venue.timezone,
-    slotMinutes: 30,
+    // Whole-hour rows, matching the whole-hour booking durations (see booking-durations.ts).
+    // The row loop starts at the venue's configured open_time (see buildAvailabilityGrid), so
+    // this also naturally anchors to whatever hours the admin set up, not a fixed clock grid.
+    slotMinutes: 60,
     courts: courts ?? [],
     dayHours: dayHours ?? [],
     bookedSlots: bookedSlots ?? [],

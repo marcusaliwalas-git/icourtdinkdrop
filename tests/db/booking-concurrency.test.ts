@@ -82,8 +82,10 @@ describe("create_booking — concurrent conflict handling", () => {
       expect(failure.reason).toMatchObject({ code: "23P01" });
     }
 
+    // Online bookings start 'pending', not 'confirmed' — either way, exactly one should
+    // hold the slot; that's what the exclusion constraint is actually guaranteeing here.
     const { rows } = await getPool().query(
-      `select count(*)::int as count from bookings where court_id = $1 and status = 'confirmed'`,
+      `select count(*)::int as count from bookings where court_id = $1 and status in ('confirmed', 'pending')`,
       [courtId]
     );
     expect(rows[0].count).toBe(1);

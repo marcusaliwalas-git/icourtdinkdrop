@@ -2,6 +2,99 @@
 
 Running log of choices made that weren't explicitly specified in `PRD.md`, per its section 0.
 
+## Reversed the midnight-crossing exception — bookings now capped to same-day closing time (2026-07-30)
+
+Earlier, `create_booking` deliberately skipped the operating-hours check for any booking whose
+duration crossed local midnight, reasoning that a long (up to 24h) booking needing to span
+closing time was legitimate and the admin's pending-review step was enough of a safety net.
+On reflection (prompted by a direct question about whether a 10pm-close venue should let
+someone pick more hours than fit before close) that reasoning didn't hold up: a venue's
+operating hours are a real-world constraint — no one's there to let a player in overnight —
+so silently allowing a booking to run past them was a bug, not a feature, regardless of the
+pending-approval safety net.
+
+Reversed it: every booking must now fit entirely within the operating hours of the day it
+starts on, with no exception. Implemented by computing the booking's end time as
+minutes-from-local-midnight-of-the-start-day *without* wrapping at 24h (so a booking that
+would spill into the next calendar day produces an end-minutes value no `close_time` can
+ever satisfy, and is rejected the same way a same-day overflow is) rather than the previous
+separate "crosses midnight" branch. A round-the-clock venue (open_time 00:00, close_time
+24:00) would still support a genuine 24-hour booking under this rule — it's the same-day
+constraint that's now absolute, not the duration cap itself.
+
+## Hourly-only calendar rows, anchored to admin-configured hours (2026-07-30)
+
+Both grids (`/book` and `/admin/calendar`) showed 30-minute rows, left over from before booking
+durations moved to whole-hour increments. Changed `slotMinutes` from 30 to 60 in both
+`buildAvailabilityGrid` and `buildAdminCalendarGrid` call sites — no other logic changes were
+needed, since that loop already started at the venue's configured `open_time` and stepped by
+`slotMinutes`. That's also what "depends on the admin setup" means here: rows anchor to
+whatever `open_time` the admin sets (e.g. an open_time of 06:30 produces rows at 6:30, 7:30,
+8:30..., not rounded to the clock hour) rather than a fixed grid — added a unit test
+(`tests/unit/availability.test.ts`) asserting exactly that, since these pure functions had no
+direct test coverage before. Didn't add a DB-level check that `create_booking`'s start time is
+hour-aligned relative to `open_time` — the grid is the only path that constructs start times in
+the app today, so the UI already enforces it end-to-end; flagged as a gap if the RPC is ever
+called directly from outside the app.
+
+## Optional guest email (2026-07-30)
+
+Guest checkout only ever collected name + phone (spec 4.1's minimal "no account" flow), so
+guests never got the pending/confirmed booking emails — only members with an account did.
+Added an **optional** `guest_email` column and form field rather than making email required:
+a guest who provides one now gets the same pending/confirmed/cancelled emails as a member;
+a guest who leaves it blank still gets the reference code + WhatsApp share link as before.
+Chose optional over required specifically to not add friction to the spec's "book in under
+60 seconds" mobile guest flow. `create_booking`'s signature changed (added `p_guest_email`),
+which required an explicit `drop function` before `create or replace` — Postgres only
+replaces on an exact argument-type match, so adding a parameter without dropping the old
+signature first would have left two ambiguous overloads coexisting.
+
+## Local-dev SMTP fallback for booking emails (2026-07-30)
+
+The submitted/confirmed booking emails (`sendBookingPendingEmail`, `sendBookingConfirmationEmail`)
+were already wired into `createBooking` and `adminConfirmBooking`, but were unverifiable in local
+dev — Resend needs a real API key, and without one `safeSend` just logged a warning and skipped.
+Added a dev-only fallback: when `RESEND_API_KEY` isn't set, `safeSend` now routes through
+`LOCAL_SMTP_URL` (nodemailer → the local Supabase Mailpit SMTP port) instead of just skipping, so
+booking emails are actually visible in the Mailpit inbox at http://127.0.0.1:54324. Needed
+uncommenting `smtp_port = 54325` in `supabase/config.toml` (off by default) so Mailpit's SMTP
+port is reachable from the host, not just its web UI. Production is unaffected — `RESEND_API_KEY`
+takes priority whenever it's set, and `LOCAL_SMTP_URL` should never be set outside local dev.
+
+## Pending-approval bookings + hourly durations (2026-07-30)
+
+Two requested changes to the booking flow:
+
+- **Online bookings now start `pending`, not `confirmed`.** `create_booking` picks the initial
+  status from `source`: `online` → `pending`, `walkin`/`admin` → `confirmed`. Walk-ins stay
+  auto-confirmed since staff are already handling those in person at the counter — there's no
+  one else to "confirm" it. A new admin-only `confirm_booking` function moves a pending
+  booking to `confirmed`; the admin calendar's booked cells now open an action sheet (rather
+  than cancelling on click) that shows **Confirm booking** for pending bookings, or
+  **Mark as no-show** for started confirmed ones, plus **Cancel** either way. Pending
+  bookings render in a distinct yellow tint with a "(pending)" label so admins can spot
+  them at a glance. Guests/members can still cancel a pending booking themselves, same as a
+  confirmed one; a pending booking that's never confirmed doesn't get a "no-show" concept
+  (that only applies once the venue expected it to happen).
+- **Booking confirmation emails split into two.** `sendBookingPendingEmail` goes out
+  immediately ("we got your request, awaiting confirmation"); the existing
+  `sendBookingConfirmationEmail` is now sent when an admin confirms it (from
+  `adminConfirmBooking`, using the service-role admin client to look up the member's email
+  since a normal admin session can't read `auth.users`).
+- **Duration selection moved from 30-minute increments (30 min-4 hr) to whole-hour
+  increments, 1-24 hours.** Both `createBookingSchema` and `create_booking` itself enforce
+  `% 60 = 0` and `<= 1440` (the RPC is callable directly, not just through the Next.js action,
+  so the DB has to enforce this too, not just the Zod schema).
+- **24-hour bookings routinely cross midnight in venue-local time**, which the old "must fit
+  inside one day's `operating_hours` row" check always rejected. Rather than build multi-day
+  operating-hours logic, `create_booking` now skips that containment check specifically when
+  the booking's local end-of-day wraps past its local start (i.e. spans more than one calendar
+  day) — closures and the exclusion constraint still apply regardless, and since it's an
+  online booking it stays `pending` until an admin reviews it anyway, which doubles as the
+  sanity check for these edge cases. A same-day booking that simply falls outside operating
+  hours (no wrap) is still rejected as before.
+
 ## Remaining admin capability from spec 4.10/4.5 (2026-07-30)
 
 Filled out the rest of the admin dashboard section that fit Phase 1's data model without

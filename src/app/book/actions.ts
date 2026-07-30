@@ -7,12 +7,13 @@ import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import {
   sendBookingConfirmationEmail,
+  sendBookingPendingEmail,
   sendBookingCancellationEmail,
   buildWhatsAppShareLink,
 } from "@/lib/email";
 
 export type CreateBookingResult =
-  | { success: true; bookingId: string; referenceCode: string; whatsAppShareLink: string }
+  | { success: true; bookingId: string; referenceCode: string; status: string; whatsAppShareLink: string }
   | { success: false; code: string; message: string };
 
 export async function createBooking(input: unknown): Promise<CreateBookingResult> {
@@ -33,6 +34,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
     partySize,
     guestName,
     guestPhone,
+    guestEmail,
     notes,
     playerNames,
     idempotencyKey,
@@ -46,6 +48,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
     p_booked_by: user?.id ?? null,
     p_guest_name: user ? null : guestName ?? null,
     p_guest_phone: user ? null : guestPhone ?? null,
+    p_guest_email: user ? null : guestEmail || null,
     p_source: "online",
     p_notes: notes ?? null,
     p_idempotency_key: idempotencyKey ?? null,
@@ -65,16 +68,26 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
   const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
   const { start, end } = parseTstzRange(data.time_range);
 
-  if (user?.email) {
-    await sendBookingConfirmationEmail({
-      to: user.email,
+  // Members always have an email; guests only get one if they chose to give it (it's optional
+  // on the guest form — see lib/validation/booking.ts).
+  const recipientEmail = user?.email ?? data.guest_email;
+  if (recipientEmail) {
+    const emailDetails = {
+      to: recipientEmail,
       courtName: court?.name ?? "Court",
       startsAt: start,
       endsAt: end,
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
-    });
+    };
+    // Online bookings start 'pending'; only walk-in/admin-created bookings come back
+    // already 'confirmed'.
+    if (data.status === "pending") {
+      await sendBookingPendingEmail(emailDetails);
+    } else {
+      await sendBookingConfirmationEmail(emailDetails);
+    }
   }
 
   const whatsAppShareLink = buildWhatsAppShareLink({
@@ -87,7 +100,13 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
 
   revalidatePath("/book");
   revalidatePath("/bookings");
-  return { success: true, bookingId: data.id, referenceCode: data.reference_code, whatsAppShareLink };
+  return {
+    success: true,
+    bookingId: data.id,
+    referenceCode: data.reference_code,
+    status: data.status,
+    whatsAppShareLink,
+  };
 }
 
 export type CancelBookingResult = { success: true } | { success: false; code: string; message: string };
@@ -113,7 +132,8 @@ export async function cancelBooking(input: unknown): Promise<CancelBookingResult
     return { success: false, ...mapped };
   }
 
-  if (user?.email) {
+  const recipientEmail = user?.email ?? data.guest_email;
+  if (recipientEmail) {
     const { data: court } = await supabase
       .from("courts")
       .select("name, venues(timezone)")
@@ -122,7 +142,7 @@ export async function cancelBooking(input: unknown): Promise<CancelBookingResult
     const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
     const { start, end } = parseTstzRange(data.time_range);
     await sendBookingCancellationEmail({
-      to: user.email,
+      to: recipientEmail,
       courtName: court?.name ?? "Court",
       startsAt: start,
       endsAt: end,

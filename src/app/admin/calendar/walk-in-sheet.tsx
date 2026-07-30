@@ -22,8 +22,7 @@ import {
 } from "@/components/ui/select";
 import { createWalkInBooking } from "./actions";
 import { formatInTimezone } from "@/lib/time";
-
-const DURATIONS = [30, 60, 90, 120];
+import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
 
 export function WalkInSheet({
   open,
@@ -43,7 +42,7 @@ export function WalkInSheet({
   const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [duration, setDuration] = useState("60");
+  const [durationHours, setDurationHours] = useState("1");
   const [partySize, setPartySize] = useState("2");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -51,7 +50,7 @@ export function WalkInSheet({
   function reset() {
     setName("");
     setPhone("");
-    setDuration("60");
+    setDurationHours("1");
     setPartySize("2");
     setError(null);
   }
@@ -63,7 +62,7 @@ export function WalkInSheet({
       const result = await createWalkInBooking({
         courtId,
         startsAt: startsAtIso,
-        durationMinutes: Number(duration),
+        durationMinutes: Number(durationHours) * 60,
         partySize: Number(partySize),
         guestName: name,
         guestPhone: phone,
@@ -113,14 +112,14 @@ export function WalkInSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="wiDuration">Duration</Label>
-              <Select value={duration} onValueChange={setDuration}>
+              <Select value={durationHours} onValueChange={setDurationHours}>
                 <SelectTrigger id="wiDuration">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DURATIONS.map((d) => (
-                    <SelectItem key={d} value={String(d)}>
-                      {d} min
+                  {DURATION_HOURS.map((h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {durationLabel(h)}
                     </SelectItem>
                   ))}
                 </SelectContent>

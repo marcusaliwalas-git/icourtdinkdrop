@@ -23,9 +23,12 @@ export function CalendarGrid({
   const [selectedSlot, setSelectedSlot] = useState<{ courtId: string; courtName: string; startsAtIso: string } | null>(
     null
   );
-  const [selectedBooking, setSelectedBooking] = useState<{ id: string; label: string; startsAtIso: string } | null>(
-    null
-  );
+  const [selectedBooking, setSelectedBooking] = useState<{
+    id: string;
+    label: string;
+    startsAtIso: string;
+    status: string;
+  } | null>(null);
 
   return (
     <>
@@ -71,14 +74,19 @@ export function CalendarGrid({
                               id: cell.bookingId,
                               label: cell.label ?? "Booking",
                               startsAtIso: row.startsAtIso,
+                              status: cell.bookingStatus ?? "confirmed",
                             })
                           }
-                          title="View booking"
+                          title={cell.bookingStatus === "pending" ? "Pending confirmation" : "View booking"}
                           className={cn(
-                            "h-11 w-full min-w-28 truncate rounded-sm bg-muted px-1 text-xs font-medium text-foreground hover:bg-muted/70"
+                            "h-11 w-full min-w-28 truncate rounded-sm px-1 text-xs font-medium",
+                            cell.bookingStatus === "pending"
+                              ? "bg-yellow-100 text-yellow-900 hover:bg-yellow-200 dark:bg-yellow-950 dark:text-yellow-300"
+                              : "bg-muted text-foreground hover:bg-muted/70"
                           )}
                         >
                           {cell.label}
+                          {cell.bookingStatus === "pending" && " (pending)"}
                         </button>
                       )}
                       {cell.status === "closed" && (
@@ -111,6 +119,7 @@ export function CalendarGrid({
         bookingId={selectedBooking?.id ?? ""}
         label={selectedBooking?.label ?? ""}
         startsAtIso={selectedBooking?.startsAtIso ?? ""}
+        status={selectedBooking?.status ?? "confirmed"}
       />
     </>
   );

@@ -81,3 +81,24 @@ export async function createMemberProfile(
 
   return profileId;
 }
+
+/** Same as createMemberProfile, but promotes the resulting profile to admin. */
+export async function createAdminProfile(client: PoolClient): Promise<string> {
+  const profileId = await createMemberProfile(client);
+  await client.query(`update profiles set role = 'admin' where id = $1`, [profileId]);
+  return profileId;
+}
+
+/**
+ * Makes auth.uid()/auth.role() resolve to the given profile for the rest of the *current*
+ * transaction (is_local = true), so admin-gated SECURITY DEFINER functions (confirm_booking,
+ * mark_no_show, ...) can be exercised directly over this raw connection. Only safe to call
+ * inside withRollback: the setting is transaction-scoped and disappears on rollback, so it
+ * can never leak into a later test that reuses the same pooled connection.
+ */
+export async function actAsAdmin(client: PoolClient, profileId: string): Promise<void> {
+  await client.query(
+    `select set_config('request.jwt.claims', json_build_object('sub', $1::text, 'role', 'authenticated')::text, true)`,
+    [profileId]
+  );
+}

@@ -31,11 +31,15 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = 
   pending: "secondary",
 };
 
+const STATUS_LABEL: Record<string, string> = {
+  pending: "Awaiting confirmation",
+};
+
 export function BookingCard({ booking, timezone }: { booking: Booking; timezone: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const { start, end } = parseTstzRange(booking.time_range);
-  const canCancel = booking.status === "confirmed" && start > new Date();
+  const canCancel = ["confirmed", "pending"].includes(booking.status) && start > new Date();
 
   function onCancel() {
     setError(null);
@@ -61,7 +65,9 @@ export function BookingCard({ booking, timezone }: { booking: Booking; timezone:
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
         <div className="flex flex-col items-end gap-2">
-          <Badge variant={STATUS_VARIANT[booking.status] ?? "secondary"}>{booking.status}</Badge>
+          <Badge variant={STATUS_VARIANT[booking.status] ?? "secondary"}>
+            {STATUS_LABEL[booking.status] ?? booking.status}
+          </Badge>
           {canCancel && (
             <Button size="sm" variant="outline" disabled={isPending} onClick={onCancel}>
               {isPending ? "Cancelling..." : "Cancel"}

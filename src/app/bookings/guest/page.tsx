@@ -46,7 +46,8 @@ export default function GuestBookingLookupPage() {
     });
   }
 
-  const canCancel = booking?.status === "confirmed" && new Date(booking.starts_at) > new Date();
+  const canCancel =
+    !!booking && ["confirmed", "pending"].includes(booking.status) && new Date(booking.starts_at) > new Date();
 
   return (
     <div className="mx-auto max-w-sm p-6">
@@ -79,7 +80,7 @@ export default function GuestBookingLookupPage() {
           <CardContent className="flex flex-col gap-2 py-4">
             <div className="flex items-center justify-between">
               <p className="font-medium">{booking.court_name}</p>
-              <Badge>{booking.status}</Badge>
+              <Badge>{booking.status === "pending" ? "Awaiting confirmation" : booking.status}</Badge>
             </div>
             <p className="text-sm text-muted-foreground">
               {formatInTimezone(new Date(booking.starts_at), "EEE, MMM d 'at' h:mm a")} –{" "}

@@ -10,15 +10,19 @@ export const createBookingSchema = z
   .object({
     courtId: z.uuid(),
     startsAt: z.iso.datetime({ offset: true }),
+    // Whole-hour increments, 1-24 hours.
     durationMinutes: z
       .number()
       .int()
-      .min(30)
-      .max(240)
-      .multipleOf(30),
+      .min(60)
+      .max(1440)
+      .multipleOf(60),
     partySize: z.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
     guestPhone: phSchema.optional(),
+    // Optional even for guests — email isn't required to keep guest checkout frictionless,
+    // but if provided, the guest gets the same pending/confirmed emails as a member.
+    guestEmail: z.email().optional().or(z.literal("")),
     notes: z.string().trim().max(500).optional(),
     playerNames: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
     idempotencyKey: z.string().trim().min(1).max(200).optional(),

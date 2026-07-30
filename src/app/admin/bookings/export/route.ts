@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("bookings")
     .select(
-      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, time_range, reference_code, courts(name), profiles(full_name, phone)"
+      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, courts(name), profiles(full_name, phone)"
     )
     .order("time_range", { ascending: false });
 
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const { data: bookings } = await query.limit(2000);
 
   const csv = toCsv(
-    ["Reference", "Court", "Starts", "Ends", "Booked by", "Phone", "Party", "Total (PHP)", "Payment", "Source", "Status"],
+    ["Reference", "Court", "Starts", "Ends", "Booked by", "Phone", "Email", "Party", "Total (PHP)", "Payment", "Source", "Status"],
     (bookings ?? []).map((b) => {
       const { start, end } = parseTstzRange(b.time_range);
       const court = (b.courts as unknown as { name: string } | null)?.name ?? "";
@@ -37,6 +37,7 @@ export async function GET(request: Request) {
         formatInTimezone(end, "yyyy-MM-dd HH:mm"),
         profile?.full_name ?? b.guest_name ?? "",
         profile?.phone ?? b.guest_phone ?? "",
+        b.guest_email ?? "",
         b.party_size,
         (b.total_cents / 100).toFixed(2),
         b.payment_status,
