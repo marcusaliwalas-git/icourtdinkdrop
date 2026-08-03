@@ -13,6 +13,11 @@ export interface CreateBookingParams {
   notes?: string | null;
   idempotencyKey?: string | null;
   playerNames?: string[];
+  // Undefined (the default) fills in a fixture reference/slip for 'online' bookings, since
+  // that's not what most tests in this suite are actually exercising — pass `null` explicitly
+  // to test the PAYMENT_PROOF_REQUIRED rule itself.
+  paymentReference?: string | null;
+  paymentSlipPath?: string | null;
 }
 
 export interface BookingRow {
@@ -30,12 +35,28 @@ export interface BookingRow {
   payment_status: string;
   source: string;
   idempotency_key: string | null;
+  payment_reference: string | null;
+  payment_slip_path: string | null;
 }
 
 export async function callCreateBooking(
   client: Pool | PoolClient,
   params: CreateBookingParams
 ): Promise<BookingRow> {
+  const source = params.source ?? "online";
+  const paymentReference =
+    params.paymentReference !== undefined
+      ? params.paymentReference
+      : source === "online"
+        ? "TEST-REF-0001"
+        : null;
+  const paymentSlipPath =
+    params.paymentSlipPath !== undefined
+      ? params.paymentSlipPath
+      : source === "online"
+        ? "test-fixtures/slip.jpg"
+        : null;
+
   const result = await client.query(
     `select * from create_booking(
        p_court_id => $1,
@@ -49,7 +70,9 @@ export async function callCreateBooking(
        p_source => $9,
        p_notes => $10,
        p_idempotency_key => $11,
-       p_player_names => $12
+       p_player_names => $12,
+       p_payment_reference => $13,
+       p_payment_slip_path => $14
      )`,
     [
       params.courtId,
@@ -60,10 +83,12 @@ export async function callCreateBooking(
       params.guestName ?? null,
       params.guestPhone ?? null,
       params.guestEmail ?? null,
-      params.source ?? "online",
+      source,
       params.notes ?? null,
       params.idempotencyKey ?? null,
       params.playerNames ?? [],
+      paymentReference,
+      paymentSlipPath,
     ]
   );
   return result.rows[0] as BookingRow;

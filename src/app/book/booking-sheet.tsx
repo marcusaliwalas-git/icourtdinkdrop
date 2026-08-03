@@ -16,6 +16,10 @@ import { Label } from "@/components/ui/label";
 import { createBooking } from "./actions";
 import { formatInTimezone } from "@/lib/time";
 import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
+import { createClient } from "@/lib/supabase/client";
+
+const MAX_SLIP_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
 
 interface Court {
   id: string;
@@ -54,6 +58,8 @@ export function BookingSheet({
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentSlipFile, setPaymentSlipFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
     referenceCode: string;
@@ -92,6 +98,8 @@ export function BookingSheet({
       setGuestName("");
       setGuestPhone("");
       setGuestEmail("");
+      setPaymentReference("");
+      setPaymentSlipFile(null);
     }
     onOpenChange(next);
   }
@@ -99,7 +107,25 @@ export function BookingSheet({
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!paymentSlipFile) {
+      setError("Attach a screenshot or photo of your payment receipt.");
+      return;
+    }
+
     startTransition(async () => {
+      const ext = paymentSlipFile.name.split(".").pop() || "jpg";
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage
+        .from("payment-slips")
+        .upload(path, paymentSlipFile, { contentType: paymentSlipFile.type });
+
+      if (uploadError) {
+        setError("Couldn't upload your receipt. Please try again.");
+        return;
+      }
+
       const result = await createBooking({
         courtId: court!.id,
         startsAt: startsAtIso,
@@ -108,6 +134,8 @@ export function BookingSheet({
         guestName: isLoggedIn ? undefined : guestName,
         guestPhone: isLoggedIn ? undefined : guestPhone,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
+        paymentReference,
+        paymentSlipPath: path,
         idempotencyKey: `${court!.id}-${startsAtIso}-${durationMinutes}-${Date.now()}`,
       });
       if (!result.success) {
@@ -137,8 +165,8 @@ export function BookingSheet({
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
               {confirmation.status === "pending"
-                ? "The venue will confirm your booking shortly. Show this reference at the venue and pay at the counter."
-                : "Show this reference at the venue. Pay at the counter."}
+                ? "The venue will confirm your booking once they verify your payment. We'll email you either way."
+                : "Show this reference at the venue."}
             </p>
             <p className="rounded-md border bg-muted px-4 py-2 font-mono text-lg tracking-widest">
               {confirmation.referenceCode}
@@ -223,9 +251,49 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Estimated total: <span className="font-medium text-foreground">{pesos(estimateCents)}</span> — pay at
-              venue. {isLoggedIn && court.member_rate_cents != null && "Member rate applied if you're an active member."}{" "}
-              The venue will confirm your booking before it&apos;s final.
+              Total: <span className="font-medium text-foreground">{pesos(estimateCents)}</span>.{" "}
+              {isLoggedIn && court.member_rate_cents != null && "Member rate applied if you're an active member. "}
+              Transfer this amount via GCash or bank transfer, then enter your reference number and attach proof
+              below.
+            </p>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="paymentReference">Payment reference number</Label>
+              <Input
+                id="paymentReference"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                placeholder="e.g. GCash reference number"
+                required
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="paymentSlip">Proof of payment</Label>
+              <Input
+                id="paymentSlip"
+                type="file"
+                accept={ACCEPTED_SLIP_TYPES.join(",")}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  if (file && file.size > MAX_SLIP_BYTES) {
+                    setError("That file is too large — please attach something under 5MB.");
+                    e.target.value = "";
+                    setPaymentSlipFile(null);
+                    return;
+                  }
+                  setError(null);
+                  setPaymentSlipFile(file);
+                }}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Screenshot or photo of your GCash/bank transfer receipt.
+              </p>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              The venue will confirm your booking once they verify your payment.
             </p>
 
             {error && <p className="text-sm text-destructive">{error}</p>}

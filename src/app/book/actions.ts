@@ -38,6 +38,8 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
     notes,
     playerNames,
     idempotencyKey,
+    paymentReference,
+    paymentSlipPath,
   } = parsed.data;
 
   const { data, error } = await supabase.rpc("create_booking", {
@@ -53,6 +55,8 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
     p_notes: notes ?? null,
     p_idempotency_key: idempotencyKey ?? null,
     p_player_names: playerNames ?? [],
+    p_payment_reference: paymentReference ?? null,
+    p_payment_slip_path: paymentSlipPath ?? null,
   });
 
   if (error) {

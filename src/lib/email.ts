@@ -79,10 +79,10 @@ export async function sendBookingConfirmationEmail(details: BookingEmailDetails)
     to: details.to,
     subject: `Booking confirmed: ${details.courtName}, ${when}`,
     html: `
-      <p>Your court is booked.</p>
+      <p>Your court is booked — the venue has verified your payment.</p>
       <p><strong>${details.courtName}</strong><br/>${when} – ${until}</p>
       <p>Reference code: <strong>${details.referenceCode}</strong></p>
-      <p>Total: ${pesos(details.totalCents)} — pay at the venue.</p>
+      <p>Total paid: ${pesos(details.totalCents)}</p>
       <p>Show your reference code at check-in.</p>
     `,
   });
@@ -99,10 +99,10 @@ export async function sendBookingPendingEmail(details: BookingEmailDetails) {
     to: details.to,
     subject: `Booking request received: ${details.courtName}, ${when}`,
     html: `
-      <p>We've received your booking request — it's awaiting confirmation from the venue.</p>
+      <p>We've received your booking request and payment reference — the venue is verifying your transfer before confirming.</p>
       <p><strong>${details.courtName}</strong><br/>${when} – ${until}</p>
       <p>Reference code: <strong>${details.referenceCode}</strong></p>
-      <p>Total: ${pesos(details.totalCents)} — pay at the venue.</p>
+      <p>Total: ${pesos(details.totalCents)}</p>
       <p>We'll email you again once it's confirmed.</p>
     `,
   });

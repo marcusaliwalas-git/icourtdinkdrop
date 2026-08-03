@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -11,7 +11,7 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow } from "./actions";
+import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow, getBookingPaymentProof } from "./actions";
 
 export function BookingActionSheet({
   open,
@@ -31,9 +31,18 @@ export function BookingActionSheet({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [proof, setProof] = useState<{ paymentReference: string | null; slipUrl: string | null } | null>(null);
 
   const hasStarted = startsAtIso !== "" && new Date(startsAtIso) <= new Date();
   const isPendingConfirmation = status === "pending";
+
+  useEffect(() => {
+    if (!open || !bookingId) {
+      setProof(null);
+      return;
+    }
+    getBookingPaymentProof(bookingId).then(setProof);
+  }, [open, bookingId]);
 
   function onConfirm() {
     setError(null);
@@ -88,6 +97,25 @@ export function BookingActionSheet({
                 : "What would you like to do with this booking?"}
             </SheetDescription>
           </SheetHeader>
+
+          {proof && (proof.paymentReference || proof.slipUrl) && (
+            <div className="rounded-md border p-3 text-sm">
+              <p className="font-medium">Payment proof</p>
+              {proof.paymentReference && (
+                <p className="mt-1 text-muted-foreground">Reference: {proof.paymentReference}</p>
+              )}
+              {proof.slipUrl && (
+                <a
+                  href={proof.slipUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block underline underline-offset-2"
+                >
+                  View receipt
+                </a>
+              )}
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

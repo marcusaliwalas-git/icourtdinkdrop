@@ -26,6 +26,10 @@ export const createBookingSchema = z
     notes: z.string().trim().max(500).optional(),
     playerNames: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
     idempotencyKey: z.string().trim().min(1).max(200).optional(),
+    // Required for online bookings, not for admin/walk-in — enforced in create_booking rather
+    // than here, since this schema is shared with createWalkInBooking (see admin/calendar/actions.ts).
+    paymentReference: z.string().trim().min(1).max(100).optional(),
+    paymentSlipPath: z.string().trim().min(1).max(300).optional(),
   })
   .refine((data) => !!data.guestName === !!data.guestPhone, {
     message: "guestName and guestPhone must be provided together",

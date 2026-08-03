@@ -33,7 +33,7 @@ describe("create_booking — pricing and rules", () => {
       });
 
       expect(booking.status).toBe("pending");
-      expect(booking.payment_status).toBe("pay_at_venue");
+      expect(booking.payment_status).toBe("awaiting_verification");
       expect(booking.total_cents).toBe(240000); // 120000 * 2h
       expect(booking.reference_code).toHaveLength(8);
     });
@@ -422,6 +422,64 @@ describe("create_booking — pricing and rules", () => {
       ).rejects.toThrow(/GUEST_INFO_REQUIRED/);
     });
   });
+
+  it("requires a payment reference and slip for an online booking", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(2),
+          durationMinutes: 60,
+          guestName: "Juan Dela Cruz",
+          guestPhone: "+639171234567",
+          paymentReference: null,
+          paymentSlipPath: null,
+        })
+      ).rejects.toThrow(/PAYMENT_PROOF_REQUIRED/);
+    });
+  });
+
+  it("requires both a reference and a slip, not just one of them", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(2),
+          durationMinutes: 60,
+          guestName: "Juan Dela Cruz",
+          guestPhone: "+639171234567",
+          paymentReference: "GCASH-REF-123",
+          paymentSlipPath: null,
+        })
+      ).rejects.toThrow(/PAYMENT_PROOF_REQUIRED/);
+    });
+  });
+
+  it("does not require a payment reference or slip for walk-in/admin-sourced bookings", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Juan Dela Cruz",
+        guestPhone: "+639171234567",
+        source: "walkin",
+        paymentReference: null,
+        paymentSlipPath: null,
+      });
+
+      expect(booking.status).toBe("confirmed");
+      expect(booking.payment_status).toBe("pay_at_venue");
+      expect(booking.payment_reference).toBeNull();
+      expect(booking.payment_slip_path).toBeNull();
+    });
+  });
 });
 
 describe("confirm_booking", () => {
@@ -443,6 +501,10 @@ describe("confirm_booking", () => {
       await actAsAdmin(client, adminId);
       const confirmed = await callConfirmBooking(client, booking.id);
       expect(confirmed.status).toBe("confirmed");
+      // Confirming is the admin's signal that they checked the reference/slip and the
+      // transfer is legit — see confirm_booking's comment for why this is safe to do
+      // unconditionally (only ever reachable for online bookings with proof attached).
+      expect(confirmed.payment_status).toBe("paid_online");
     });
   });
 

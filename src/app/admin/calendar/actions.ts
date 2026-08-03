@@ -92,6 +92,35 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
   return { success: true, referenceCode: data.reference_code };
 }
 
+export type BookingPaymentProof = {
+  paymentReference: string | null;
+  slipUrl: string | null;
+};
+
+/** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
+ * signed URL can only ever be minted server-side with the service-role client, never by a
+ * client-side/anon read, so a slip can't be enumerated or guessed even by another admin's
+ * browser session. */
+export async function getBookingPaymentProof(bookingId: string): Promise<BookingPaymentProof> {
+  const { supabase } = await requireAdmin();
+  const { data } = await supabase
+    .from("bookings")
+    .select("payment_reference, payment_slip_path")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (!data?.payment_slip_path) {
+    return { paymentReference: data?.payment_reference ?? null, slipUrl: null };
+  }
+
+  const adminClient = createAdminClient();
+  const { data: signed } = await adminClient.storage
+    .from("payment-slips")
+    .createSignedUrl(data.payment_slip_path, 60 * 10);
+
+  return { paymentReference: data.payment_reference, slipUrl: signed?.signedUrl ?? null };
+}
+
 export async function adminMarkNoShow(bookingId: string): Promise<WalkInResult> {
   const { supabase } = await requireAdmin();
   const { error } = await supabase.rpc("mark_no_show", { p_booking_id: bookingId });

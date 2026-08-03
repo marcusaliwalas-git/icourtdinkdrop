@@ -14,6 +14,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_STATUS: "Only confirmed bookings can be marked as no-show.",
   NOT_STARTED_YET: "This booking hasn't started yet.",
   NOT_PENDING: "This booking is not awaiting confirmation.",
+  PAYMENT_PROOF_REQUIRED: "Enter your payment reference and attach proof of payment.",
 };
 
 /** Maps a Postgres/PostgREST error (from an RPC call) to a stable code + friendly message. */
