@@ -20,6 +20,8 @@ export interface CreateBookingParams {
   paymentSlipPath?: string | null;
 }
 
+const DEFAULT_GUEST_EMAIL = "guest-fixture@test-fixtures.local";
+
 export interface BookingRow {
   id: string;
   court_id: string;
@@ -44,6 +46,15 @@ export async function callCreateBooking(
   params: CreateBookingParams
 ): Promise<BookingRow> {
   const source = params.source ?? "online";
+  // Same reasoning as paymentReference/paymentSlipPath below: default a fixture email for a
+  // guest's online booking (source 'online', no bookedBy) since that's not what most tests
+  // here exercise — pass `null` explicitly to test the GUEST_EMAIL_REQUIRED rule itself.
+  const guestEmail =
+    params.guestEmail !== undefined
+      ? params.guestEmail
+      : source === "online" && !params.bookedBy
+        ? DEFAULT_GUEST_EMAIL
+        : null;
   const paymentReference =
     params.paymentReference !== undefined
       ? params.paymentReference
@@ -82,7 +93,7 @@ export async function callCreateBooking(
       params.bookedBy ?? null,
       params.guestName ?? null,
       params.guestPhone ?? null,
-      params.guestEmail ?? null,
+      guestEmail,
       source,
       params.notes ?? null,
       params.idempotencyKey ?? null,

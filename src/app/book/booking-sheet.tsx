@@ -235,16 +235,17 @@ export function BookingSheet({
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="guestEmail">Email (optional)</Label>
+                  <Label htmlFor="guestEmail">Email</Label>
                   <Input
                     id="guestEmail"
                     type="email"
                     placeholder="you@example.com"
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
+                    required
                   />
                   <p className="text-xs text-muted-foreground">
-                    We&apos;ll email you when your booking is submitted and confirmed.
+                    We&apos;ll email you when your booking is submitted, confirmed, or cancelled.
                   </p>
                 </div>
               </>

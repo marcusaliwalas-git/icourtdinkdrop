@@ -1,6 +1,7 @@
 const MESSAGES: Record<string, string> = {
   INVALID_DURATION: "Please choose a valid duration.",
   GUEST_INFO_REQUIRED: "Enter your name and mobile number to book as a guest.",
+  GUEST_EMAIL_REQUIRED: "Enter your email so we can send your booking updates.",
   COURT_NOT_FOUND: "That court isn't available.",
   LEAD_TIME_TOO_SHORT: "This slot starts too soon — please choose a later time.",
   OUTSIDE_BOOKING_WINDOW: "That date is too far ahead to book yet.",
