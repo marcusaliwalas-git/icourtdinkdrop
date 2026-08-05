@@ -75,7 +75,7 @@ export default function LoginPage() {
     <div className="flex min-h-svh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>{mode === "signin" ? "Sign in to DinkDrop" : "Create your account"}</CardTitle>
+          <CardTitle>{mode === "signin" ? "Sign in to iCourt Social" : "Create your account"}</CardTitle>
           <CardDescription>
             {mode === "signin"
               ? "Book a court in under a minute."

@@ -21,7 +21,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "DinkDrop — Book a Pickleball Court",
+  title: "iCourt Social — Book a Pickleball Court",
   description: "See what's open and book a pickleball court in under a minute.",
 };
 

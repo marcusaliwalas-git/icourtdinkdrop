@@ -34,7 +34,7 @@ export default async function HomePage() {
     return (
       <div className="flex min-h-svh items-center justify-center p-6 text-center">
         <div>
-          <p className="text-lg">DinkDrop is getting set up.</p>
+          <p className="text-lg">iCourt Social is getting set up.</p>
           <p className="mt-2 text-sm text-muted-foreground">Check back soon, or sign in as an admin to configure a venue.</p>
         </div>
       </div>
@@ -128,18 +128,8 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* ── Top bar ─────────────────────────────────────────────── */}
-      <header className="mx-auto flex max-w-3xl items-center justify-between px-5 py-5">
-        <span className="font-heading text-lg font-bold tracking-tight">
-          DinkDrop
-        </span>
-        <Link href="/bookings" className="text-sm text-muted-foreground hover:text-foreground">
-          My bookings
-        </Link>
-      </header>
-
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-3xl px-5 pt-6 pb-10">
+      <section className="mx-auto max-w-3xl px-5 pt-10 pb-10">
         <p className="font-mono text-xs tracking-[0.2em] text-primary uppercase">
           {venue.name}
         </p>

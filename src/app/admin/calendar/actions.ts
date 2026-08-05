@@ -50,6 +50,7 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
     return { success: false, ...mapped };
   }
   revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
   return { success: true, referenceCode: "" };
 }
 
@@ -88,6 +89,7 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
   }
 
   revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
   revalidatePath("/bookings");
   return { success: true, referenceCode: data.reference_code };
 }
@@ -129,6 +131,7 @@ export async function adminMarkNoShow(bookingId: string): Promise<WalkInResult> 
     return { success: false, ...mapped };
   }
   revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
   revalidatePath("/admin/members");
   return { success: true, referenceCode: "" };
 }

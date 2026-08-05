@@ -130,9 +130,11 @@ export function BookingActionSheet({
                 Mark as no-show
               </Button>
             )}
-            <Button variant="destructive" disabled={isPending} onClick={onCancel}>
-              Cancel booking
-            </Button>
+            {!hasStarted && (
+              <Button variant="destructive" disabled={isPending} onClick={onCancel}>
+                Cancel booking
+              </Button>
+            )}
           </SheetFooter>
         </div>
       </SheetContent>

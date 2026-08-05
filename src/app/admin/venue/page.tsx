@@ -50,7 +50,8 @@ export default async function AdminVenuePage() {
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold">{venue.name}</h1>
+      <p className="font-mono text-xs tracking-[0.2em] text-primary uppercase">Venue &amp; courts</p>
+      <h1 className="mt-1 mb-6 text-2xl font-bold">{venue.name}</h1>
       <Tabs defaultValue="details">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>

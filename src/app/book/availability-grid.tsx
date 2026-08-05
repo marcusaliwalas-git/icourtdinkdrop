@@ -174,12 +174,13 @@ export function AvailabilityGrid({
                         onClick={() => handleCellClick(court.id, rowIdx)}
                         aria-label={`${court.name} at ${row.label}, ${STATUS_LABEL[status] || "unavailable"}${isSelected ? ", selected" : ""}`}
                         className={cn(
-                          "h-11 w-full min-w-24 rounded-sm text-xs font-medium transition-colors",
-                          isAvailableCell && "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300",
+                          "h-11 w-full min-w-24 rounded-md text-xs font-medium transition-all duration-150",
+                          isAvailableCell && "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20",
                           status === "booked" && "bg-muted text-muted-foreground",
-                          status === "closed" && "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+                          status === "closed" && "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
                           status === "past" && "bg-transparent text-transparent",
-                          isSelected && "bg-primary text-primary-foreground hover:bg-primary dark:bg-primary dark:text-primary-foreground"
+                          isSelected &&
+                            "bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(159,206,32,0.5),0_0_20px_-4px_rgba(159,206,32,0.6)] hover:bg-primary hover:text-primary-foreground dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground"
                         )}
                       >
                         {STATUS_LABEL[status]}
