@@ -14,6 +14,14 @@ function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
 
+const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
+  confirmed: "default",
+  cancelled: "secondary",
+  completed: "secondary",
+  no_show: "destructive",
+  pending: "secondary",
+};
+
 export default function GuestBookingLookupPage() {
   const [code, setCode] = useState("");
   const [booking, setBooking] = useState<GuestBookingLookup | null>(null);
@@ -80,7 +88,9 @@ export default function GuestBookingLookupPage() {
           <CardContent className="flex flex-col gap-2 py-4">
             <div className="flex items-center justify-between">
               <p className="font-medium">{booking.court_name}</p>
-              <Badge>{booking.status === "pending" ? "Awaiting confirmation" : booking.status}</Badge>
+              <Badge variant={STATUS_VARIANT[booking.status] ?? "secondary"}>
+                {booking.status === "pending" ? "Awaiting confirmation" : booking.status}
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground">
               {formatInTimezone(new Date(booking.starts_at), "EEE, MMM d 'at' h:mm a")} –{" "}

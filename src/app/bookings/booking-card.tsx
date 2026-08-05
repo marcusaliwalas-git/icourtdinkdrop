@@ -35,6 +35,15 @@ const STATUS_LABEL: Record<string, string> = {
   pending: "Awaiting confirmation",
 };
 
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  pay_at_venue: "pay at venue",
+  paid_at_venue: "paid",
+  awaiting_verification: "payment awaiting verification",
+  paid_online: "paid online",
+  refunded: "refunded",
+  partially_refunded: "partially refunded",
+};
+
 export function BookingCard({ booking, timezone }: { booking: Booking; timezone: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +69,7 @@ export function BookingCard({ booking, timezone }: { booking: Booking; timezone:
           </p>
           <p className="text-xs text-muted-foreground">
             Ref {booking.reference_code} · {booking.party_size} players · {pesos(booking.total_cents)} (
-            {booking.payment_status === "paid_at_venue" ? "paid" : "pay at venue"})
+            {PAYMENT_STATUS_LABEL[booking.payment_status] ?? booking.payment_status})
           </p>
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
