@@ -39,7 +39,7 @@ describe("create_booking — pricing and rules", () => {
     });
   });
 
-  it("stores an optional guest email when provided, and leaves it null otherwise", async () => {
+  it("stores the guest's email", async () => {
     await withRollback(async (client) => {
       const { courtId } = await createVenueWithCourt(client);
 
@@ -52,15 +52,6 @@ describe("create_booking — pricing and rules", () => {
         guestEmail: "guest@example.com",
       });
       expect(withEmail.guest_email).toBe("guest@example.com");
-
-      const withoutEmail = await callCreateBooking(client, {
-        courtId,
-        startsAt: daysFromNow(3),
-        durationMinutes: 60,
-        guestName: "No Email",
-        guestPhone: "+639170000061",
-      });
-      expect(withoutEmail.guest_email).toBeNull();
     });
   });
 
@@ -456,6 +447,50 @@ describe("create_booking — pricing and rules", () => {
           paymentSlipPath: null,
         })
       ).rejects.toThrow(/PAYMENT_PROOF_REQUIRED/);
+    });
+  });
+
+  it("requires an email for a guest's online booking", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(2),
+          durationMinutes: 60,
+          guestName: "Juan Dela Cruz",
+          guestPhone: "+639171234567",
+          guestEmail: null,
+        })
+      ).rejects.toThrow(/GUEST_EMAIL_REQUIRED/);
+    });
+  });
+
+  it("does not require a guest email for walk-in bookings, or any email for a member's own online booking", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      const profileId = await createMemberProfile(client);
+
+      const walkin = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Juan Dela Cruz",
+        guestPhone: "+639171234567",
+        source: "walkin",
+        guestEmail: null,
+      });
+      expect(walkin.status).toBe("confirmed");
+
+      const memberBooking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(3),
+        durationMinutes: 60,
+        bookedBy: profileId,
+        guestEmail: null,
+      });
+      expect(memberBooking.status).toBe("pending");
     });
   });
 

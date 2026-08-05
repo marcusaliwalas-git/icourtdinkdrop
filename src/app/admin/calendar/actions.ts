@@ -6,11 +6,23 @@ import { createBookingSchema } from "@/lib/validation/booking";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendBookingConfirmationEmail } from "@/lib/email";
+import { sendBookingConfirmationEmail, sendBookingCancellationEmail } from "@/lib/email";
 
 export type WalkInResult =
   | { success: true; referenceCode: string }
   | { success: false; code: string; message: string };
+
+/** A member's email lives in auth.users, which requireAdmin's own session can't read
+ * (only the service-role client can) — a guest's is just the guest_email column on the
+ * booking itself. Returns null for a walk-in (no booked_by, no guest_email collected). */
+async function resolveBookingRecipientEmail(bookedBy: string | null, guestEmail: string | null): Promise<string | null> {
+  if (bookedBy) {
+    const adminClient = createAdminClient();
+    const { data: authUser } = await adminClient.auth.admin.getUserById(bookedBy);
+    return authUser?.user?.email ?? null;
+  }
+  return guestEmail;
+}
 
 export async function createWalkInBooking(input: unknown): Promise<WalkInResult> {
   const parsed = createBookingSchema.safeParse(input);
@@ -44,11 +56,32 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
 
 export async function adminCancelBooking(bookingId: string): Promise<WalkInResult> {
   const { supabase } = await requireAdmin();
-  const { error } = await supabase.rpc("cancel_booking", { p_booking_id: bookingId });
+  const { data, error } = await supabase.rpc("cancel_booking", { p_booking_id: bookingId });
   if (error) {
     const mapped = mapBookingError(error);
     return { success: false, ...mapped };
   }
+
+  const recipientEmail = await resolveBookingRecipientEmail(data.booked_by, data.guest_email);
+  if (recipientEmail) {
+    const { data: court } = await supabase
+      .from("courts")
+      .select("name, venues(timezone)")
+      .eq("id", data.court_id)
+      .single();
+    const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
+    const { start, end } = parseTstzRange(data.time_range);
+
+    await sendBookingCancellationEmail({
+      to: recipientEmail,
+      courtName: court?.name ?? "Court",
+      startsAt: start,
+      endsAt: end,
+      timezone,
+      referenceCode: data.reference_code,
+    });
+  }
+
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
   return { success: true, referenceCode: "" };
@@ -62,7 +95,8 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
     return { success: false, ...mapped };
   }
 
-  if (data.booked_by) {
+  const recipientEmail = await resolveBookingRecipientEmail(data.booked_by, data.guest_email);
+  if (recipientEmail) {
     const { data: court } = await supabase
       .from("courts")
       .select("name, venues(timezone)")
@@ -71,21 +105,15 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
     const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
     const { start, end } = parseTstzRange(data.time_range);
 
-    // Confirming touches another member's account, which requireAdmin's own session can't
-    // read (auth.users isn't exposed to the client) — the service-role admin client can.
-    const adminClient = createAdminClient();
-    const { data: authUser } = await adminClient.auth.admin.getUserById(data.booked_by);
-    if (authUser?.user?.email) {
-      await sendBookingConfirmationEmail({
-        to: authUser.user.email,
-        courtName: court?.name ?? "Court",
-        startsAt: start,
-        endsAt: end,
-        timezone,
-        referenceCode: data.reference_code,
-        totalCents: data.total_cents,
-      });
-    }
+    await sendBookingConfirmationEmail({
+      to: recipientEmail,
+      courtName: court?.name ?? "Court",
+      startsAt: start,
+      endsAt: end,
+      timezone,
+      referenceCode: data.reference_code,
+      totalCents: data.total_cents,
+    });
   }
 
   revalidatePath("/admin/calendar");

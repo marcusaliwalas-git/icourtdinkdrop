@@ -20,8 +20,10 @@ export const createBookingSchema = z
     partySize: z.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
     guestPhone: phSchema.optional(),
-    // Optional even for guests — email isn't required to keep guest checkout frictionless,
-    // but if provided, the guest gets the same pending/confirmed emails as a member.
+    // Required for a guest's online booking (enforced in create_booking, not here — this
+    // schema is shared with createWalkInBooking, which never collects an email at all, same
+    // reasoning as paymentReference/paymentSlipPath below). It's how a guest, who has no
+    // account, ever receives their pending/confirmed/cancelled booking emails.
     guestEmail: z.email().optional().or(z.literal("")),
     notes: z.string().trim().max(500).optional(),
     playerNames: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
