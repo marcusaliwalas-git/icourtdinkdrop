@@ -9,8 +9,10 @@ import {
   sendBookingConfirmationEmail,
   sendBookingPendingEmail,
   sendBookingCancellationEmail,
+  sendAdminBookingRequestEmail,
   buildWhatsAppShareLink,
 } from "@/lib/email";
+import { getAdminEmails } from "@/lib/admin-recipients";
 
 export type CreateBookingResult =
   | { success: true; bookingId: string; referenceCode: string; status: string; whatsAppShareLink: string }
@@ -92,6 +94,29 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
     } else {
       await sendBookingConfirmationEmail(emailDetails);
     }
+  }
+
+  // Notify admins of a new booking awaiting review. Only online bookings are ever 'pending'
+  // (walk-ins are admin-created and auto-confirmed), so this is exactly the set of bookings
+  // that needs a human to verify payment. Sent regardless of whether the booker gave an email.
+  if (data.status === "pending") {
+    const adminEmails = await getAdminEmails();
+    await Promise.all(
+      adminEmails.map((adminEmail) =>
+        sendAdminBookingRequestEmail({
+          to: adminEmail,
+          courtName: court?.name ?? "Court",
+          startsAt: start,
+          endsAt: end,
+          timezone,
+          referenceCode: data.reference_code,
+          totalCents: data.total_cents,
+          bookerName: data.guest_name ?? user?.email ?? "A member",
+          bookerContact: data.guest_phone ?? user?.email ?? "—",
+          paymentReference: data.payment_reference,
+        })
+      )
+    );
   }
 
   const whatsAppShareLink = buildWhatsAppShareLink({

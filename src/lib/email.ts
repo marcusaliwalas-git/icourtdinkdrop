@@ -2,6 +2,8 @@ import "server-only";
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { formatInTimezone } from "@/lib/time";
+import { getSiteUrl } from "@/lib/site-url";
+import { renderEmail } from "@/lib/email-template";
 
 let client: Resend | null = null;
 
@@ -23,6 +25,12 @@ function getLocalTransport(): nodemailer.Transporter | null {
   if (!process.env.LOCAL_SMTP_URL) return null;
   if (!localTransport) localTransport = nodemailer.createTransport(process.env.LOCAL_SMTP_URL);
   return localTransport;
+}
+
+/** Adds a display name so the inbox shows "iCourt Social", not a bare address. */
+function fromAddress(): string {
+  const email = process.env.RESEND_FROM_EMAIL ?? "bookings@example.com";
+  return `iCourt Social <${email}>`;
 }
 
 interface BookingEmailDetails {
@@ -69,57 +77,118 @@ async function safeSend(payload: Parameters<Resend["emails"]["send"]>[0]) {
   console.warn("No email transport configured — skipping email send:", payload.subject);
 }
 
+// Guests have no account, so their booking emails point at the public home page (the
+// request's "main page for guests/members"); the members' view is reachable from there.
+const SITE_HOME = () => `${getSiteUrl()}/`;
+// Admins get sent straight to the pending-review queue they need to act on.
+const ADMIN_PENDING_URL = () => `${getSiteUrl()}/admin/bookings?status=pending`;
+
 export async function sendBookingConfirmationEmail(details: BookingEmailDetails) {
-  const from = process.env.RESEND_FROM_EMAIL ?? "bookings@example.com";
   const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from,
+    from: fromAddress(),
     to: details.to,
     subject: `Booking confirmed: ${details.courtName}, ${when}`,
-    html: `
-      <p>Your court is booked — the venue has verified your payment.</p>
-      <p><strong>${details.courtName}</strong><br/>${when} – ${until}</p>
-      <p>Reference code: <strong>${details.referenceCode}</strong></p>
-      <p>Total paid: ${pesos(details.totalCents)}</p>
-      <p>Show your reference code at check-in.</p>
-    `,
+    html: renderEmail({
+      heading: "Your booking is confirmed 🎉",
+      intro: ["The venue has verified your payment — your court is reserved. Show your reference code at check-in."],
+      detailRows: [
+        { label: "Court", value: details.courtName },
+        { label: "When", value: `${when} – ${until}` },
+        { label: "Reference", value: details.referenceCode, mono: true },
+        { label: "Total paid", value: pesos(details.totalCents) },
+      ],
+      button: { label: "Open iCourt Social", url: SITE_HOME() },
+    }),
   });
 }
 
 /** Sent immediately when an online booking is created — it's 'pending' until an admin confirms it. */
 export async function sendBookingPendingEmail(details: BookingEmailDetails) {
-  const from = process.env.RESEND_FROM_EMAIL ?? "bookings@example.com";
   const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from,
+    from: fromAddress(),
     to: details.to,
     subject: `Booking request received: ${details.courtName}, ${when}`,
-    html: `
-      <p>We've received your booking request and payment reference — the venue is verifying your transfer before confirming.</p>
-      <p><strong>${details.courtName}</strong><br/>${when} – ${until}</p>
-      <p>Reference code: <strong>${details.referenceCode}</strong></p>
-      <p>Total: ${pesos(details.totalCents)}</p>
-      <p>We'll email you again once it's confirmed.</p>
-    `,
+    html: renderEmail({
+      heading: "We've got your booking request",
+      intro: ["Thanks! We received your booking and payment reference. The venue is verifying your transfer before confirming — we'll email you again the moment it's approved."],
+      detailRows: [
+        { label: "Court", value: details.courtName },
+        { label: "When", value: `${when} – ${until}` },
+        { label: "Reference", value: details.referenceCode, mono: true },
+        { label: "Total", value: pesos(details.totalCents) },
+      ],
+      button: { label: "Open iCourt Social", url: SITE_HOME() },
+    }),
   });
 }
 
 export async function sendBookingCancellationEmail(details: Omit<BookingEmailDetails, "totalCents">) {
-  const from = process.env.RESEND_FROM_EMAIL ?? "bookings@example.com";
   const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
+  const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from,
+    from: fromAddress(),
     to: details.to,
     subject: `Booking cancelled: ${details.courtName}, ${when}`,
-    html: `
-      <p>Your booking for <strong>${details.courtName}</strong> on ${when} has been cancelled.</p>
-      <p>Reference code: ${details.referenceCode}</p>
-    `,
+    html: renderEmail({
+      accent: "red",
+      heading: "Your booking was cancelled",
+      intro: ["This booking has been cancelled. If this wasn't you, or you'd like to rebook, you can start a new booking any time."],
+      detailRows: [
+        { label: "Court", value: details.courtName },
+        { label: "When", value: `${when} – ${until}` },
+        { label: "Reference", value: details.referenceCode, mono: true },
+      ],
+      button: { label: "Book another court", url: SITE_HOME() },
+    }),
+  });
+}
+
+export interface AdminBookingRequestDetails {
+  to: string;
+  courtName: string;
+  startsAt: Date;
+  endsAt: Date;
+  timezone: string;
+  referenceCode: string;
+  totalCents: number;
+  bookerName: string;
+  bookerContact: string;
+  paymentReference: string | null;
+}
+
+/** Notifies an admin that a new online booking is awaiting their review/confirmation. */
+export async function sendAdminBookingRequestEmail(details: AdminBookingRequestDetails) {
+  const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
+  const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
+
+  await safeSend({
+    from: fromAddress(),
+    to: details.to,
+    subject: `New booking to review: ${details.courtName}, ${when}`,
+    html: renderEmail({
+      heading: "A booking is waiting for your review",
+      intro: [
+        `${details.bookerName} just requested a court and submitted a payment reference. Verify the payment, then confirm or cancel the booking.`,
+      ],
+      detailRows: [
+        { label: "Booked by", value: details.bookerName },
+        { label: "Contact", value: details.bookerContact },
+        { label: "Court", value: details.courtName },
+        { label: "When", value: `${when} – ${until}` },
+        { label: "Reference", value: details.referenceCode, mono: true },
+        { label: "Payment ref", value: details.paymentReference ?? "—" },
+        { label: "Total", value: pesos(details.totalCents) },
+      ],
+      button: { label: "Review booking", url: ADMIN_PENDING_URL() },
+      outro: ["Open the admin dashboard to view the payment proof and take action."],
+    }),
   });
 }
 
