@@ -165,6 +165,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -184,6 +186,8 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
+          payment_reference?: string | null
+          payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string
           source?: string
@@ -203,6 +207,8 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
+          payment_reference?: string | null
+          payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string
           source?: string
@@ -269,6 +275,44 @@ export type Database = {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      court_rate_periods: {
+        Row: {
+          court_id: string
+          created_at: string
+          end_time: string
+          hourly_rate_cents: number
+          id: string
+          member_rate_cents: number | null
+          start_time: string
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          end_time: string
+          hourly_rate_cents: number
+          id?: string
+          member_rate_cents?: number | null
+          start_time: string
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          end_time?: string
+          hourly_rate_cents?: number
+          id?: string
+          member_rate_cents?: number | null
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_rate_periods_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
             referencedColumns: ["id"]
           },
         ]
@@ -531,12 +575,91 @@ export type Database = {
         }
         Relationships: []
       }
+      session_match_players: {
+        Row: {
+          match_id: string
+          signup_id: string
+          team: number
+        }
+        Insert: {
+          match_id: string
+          signup_id: string
+          team: number
+        }
+        Update: {
+          match_id?: string
+          signup_id?: string
+          team?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_match_players_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "session_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_match_players_signup_id_fkey"
+            columns: ["signup_id"]
+            isOneToOne: false
+            referencedRelation: "session_signups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_matches: {
+        Row: {
+          court_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          session_id: string
+          started_at: string
+          winning_team: number | null
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          session_id: string
+          started_at?: string
+          winning_team?: number | null
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          session_id?: string
+          started_at?: string
+          winning_team?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_matches_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_matches_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_signups: {
         Row: {
           checked_in_at: string | null
           created_at: string
           guest_name: string | null
           id: string
+          last_played_at: string | null
           paid: boolean
           profile_id: string | null
           session_id: string
@@ -547,6 +670,7 @@ export type Database = {
           created_at?: string
           guest_name?: string | null
           id?: string
+          last_played_at?: string | null
           paid?: boolean
           profile_id?: string | null
           session_id: string
@@ -557,6 +681,7 @@ export type Database = {
           created_at?: string
           guest_name?: string | null
           id?: string
+          last_played_at?: string | null
           paid?: boolean
           profile_id?: string | null
           session_id?: string
@@ -776,6 +901,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -804,6 +931,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -830,6 +959,8 @@ export type Database = {
           p_idempotency_key?: string
           p_notes?: string
           p_party_size?: number
+          p_payment_reference?: string
+          p_payment_slip_path?: string
           p_player_names?: string[]
           p_source?: string
           p_starts_at: string
@@ -845,6 +976,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -882,6 +1015,7 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_booking_owner: { Args: { p_booking_id: string }; Returns: boolean }
       is_organizer_or_admin: { Args: never; Returns: boolean }
+      is_session_host: { Args: { p_session_id: string }; Returns: boolean }
       mark_no_show: {
         Args: { p_booking_id: string }
         Returns: {
@@ -895,6 +1029,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -906,6 +1042,104 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "bookings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      session_add_signup: {
+        Args: {
+          p_check_in?: boolean
+          p_guest_name?: string
+          p_profile_id?: string
+          p_session_id: string
+        }
+        Returns: {
+          checked_in_at: string | null
+          created_at: string
+          guest_name: string | null
+          id: string
+          last_played_at: string | null
+          paid: boolean
+          profile_id: string | null
+          session_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "session_signups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      session_end_match: {
+        Args: { p_match_id: string; p_winning_team: number }
+        Returns: {
+          court_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          session_id: string
+          started_at: string
+          winning_team: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "session_matches"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      session_queue: {
+        Args: { p_session_id: string }
+        Returns: {
+          name: string
+          signup_id: string
+          waited_since: string
+        }[]
+      }
+      session_remove_signup: {
+        Args: { p_signup_id: string }
+        Returns: undefined
+      }
+      session_set_check_in: {
+        Args: { p_checked_in: boolean; p_signup_id: string }
+        Returns: {
+          checked_in_at: string | null
+          created_at: string
+          guest_name: string | null
+          id: string
+          last_played_at: string | null
+          paid: boolean
+          profile_id: string | null
+          session_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "session_signups"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      session_start_match: {
+        Args: {
+          p_court_id: string
+          p_session_id: string
+          p_team1: string[]
+          p_team2: string[]
+        }
+        Returns: {
+          court_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          session_id: string
+          started_at: string
+          winning_team: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "session_matches"
           isOneToOne: true
           isSetofReturn: false
         }
