@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow, getBookingPaymentProof } from "./actions";
+import { RescheduleForm } from "./reschedule-sheet";
 
 export function BookingActionSheet({
   open,
@@ -32,6 +33,7 @@ export function BookingActionSheet({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [proof, setProof] = useState<{ paymentReference: string | null; slipUrl: string | null } | null>(null);
+  const [mode, setMode] = useState<"actions" | "reschedule">("actions");
 
   const hasStarted = startsAtIso !== "" && new Date(startsAtIso) <= new Date();
   const isPendingConfirmation = status === "pending";
@@ -39,6 +41,7 @@ export function BookingActionSheet({
   useEffect(() => {
     if (!open || !bookingId) {
       setProof(null);
+      setMode("actions");
       return;
     }
     getBookingPaymentProof(bookingId).then(setProof);
@@ -88,6 +91,16 @@ export function BookingActionSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="mx-auto max-w-md">
+        {mode === "reschedule" ? (
+          <RescheduleForm
+            bookingId={bookingId}
+            onBack={() => setMode("actions")}
+            onDone={() => {
+              onOpenChange(false);
+              router.refresh();
+            }}
+          />
+        ) : (
         <div className="flex flex-col gap-4 p-4">
           <SheetHeader className="p-0">
             <SheetTitle>{label}</SheetTitle>
@@ -131,12 +144,18 @@ export function BookingActionSheet({
               </Button>
             )}
             {!hasStarted && (
+              <Button variant="outline" disabled={isPending} onClick={() => setMode("reschedule")}>
+                Reschedule
+              </Button>
+            )}
+            {!hasStarted && (
               <Button variant="destructive" disabled={isPending} onClick={onCancel}>
                 Cancel booking
               </Button>
             )}
           </SheetFooter>
         </div>
+        )}
       </SheetContent>
     </Sheet>
   );
