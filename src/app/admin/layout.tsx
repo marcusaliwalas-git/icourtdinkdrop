@@ -19,7 +19,6 @@ export default async function AdminLayout({
           </AdminNavLink>
           <AdminNavLink href="/admin/venue">Venue &amp; Courts</AdminNavLink>
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
-          <AdminNavLink href="/admin/sessions">Sessions</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
           <AdminNavLink href="/admin/customers">Top Customers</AdminNavLink>
           <AdminNavLink href="/admin/members">Members</AdminNavLink>
