@@ -44,6 +44,16 @@ function CoachForm({ venueId, coach, onSaved }: { venueId: string; coach: Coach 
     if (!file) return;
     if (file.size > MAX_PHOTO_BYTES) {
       setError("That image is too large — please use one under 5MB.");
+      e.target.value = "";
+      return;
+    }
+    // Catch unsupported formats before the upload — most often an iPhone HEIC photo, which the
+    // bucket rejects and which browsers can't display anyway. Guide the admin to a web format.
+    if (!ACCEPTED_PHOTO_TYPES.includes(file.type)) {
+      setError(
+        "That photo format isn't supported. Please use a JPG, PNG, or WebP. On iPhone, set Settings → Camera → Formats to “Most Compatible”, or export the photo as JPEG first.",
+      );
+      e.target.value = "";
       return;
     }
     setError(null);
@@ -55,8 +65,11 @@ function CoachForm({ venueId, coach, onSaved }: { venueId: string; coach: Coach 
       .from("coach-photos")
       .upload(path, file, { contentType: file.type });
     if (uploadError) {
-      setError("Couldn't upload the photo. Please try again.");
+      // Surface the real reason (bucket missing, RLS, mime, size…) instead of a generic message.
+      console.error("coach photo upload failed:", uploadError);
+      setError(`Couldn't upload the photo: ${uploadError.message}`);
       setUploading(false);
+      e.target.value = "";
       return;
     }
     const { data } = supabase.storage.from("coach-photos").getPublicUrl(path);
