@@ -1007,6 +1007,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      reschedule_booking: {
+        Args: {
+          p_booking_id: string
+          p_new_court_id: string
+          p_new_starts_at: string
+        }
+        Returns: {
+          booked_by: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

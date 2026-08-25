@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildAdminCalendarGrid } from "@/lib/availability";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { CalendarGrid } from "./calendar-grid";
+import { CalendarDatePicker } from "./date-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ export default async function AdminCalendarPage({
         <h1 className="text-xl font-semibold">
           {formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
         </h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <a href={hrefFor(addDays(-1))} className="rounded-md border px-3 py-1.5 text-sm">
             ← Prev
           </a>
@@ -99,6 +100,7 @@ export default async function AdminCalendarPage({
           <a href={hrefFor(addDays(1))} className="rounded-md border px-3 py-1.5 text-sm">
             Next →
           </a>
+          <CalendarDatePicker date={date} />
           <a href={`/admin/bookings/export?from=${date}&to=${date}`} className="rounded-md border px-3 py-1.5 text-sm">
             Export day CSV
           </a>

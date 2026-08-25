@@ -150,6 +150,29 @@ export async function sendBookingCancellationEmail(details: Omit<BookingEmailDet
   });
 }
 
+/** Sent when an admin moves a booking to a new court/time. */
+export async function sendBookingRescheduledEmail(details: BookingEmailDetails) {
+  const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
+  const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
+
+  await safeSend({
+    from: fromAddress(),
+    to: details.to,
+    subject: `Booking rescheduled: ${details.courtName}, ${when}`,
+    html: renderEmail({
+      heading: "Your booking has been rescheduled",
+      intro: ["The venue moved your booking to a new time. Here are the updated details — your reference code stays the same."],
+      detailRows: [
+        { label: "Court", value: details.courtName },
+        { label: "New time", value: `${when} – ${until}` },
+        { label: "Reference", value: details.referenceCode, mono: true },
+        { label: "Total", value: pesos(details.totalCents) },
+      ],
+      button: { label: "Open iCourt Social", url: SITE_HOME() },
+    }),
+  });
+}
+
 export interface BookingLineItem {
   courtName: string;
   startsAt: Date;

@@ -128,3 +128,17 @@ export async function callCancelBooking(
   );
   return result.rows[0] as BookingRow;
 }
+
+/** Requires the caller to have already run actAsAdmin(client, adminProfileId) on this connection. */
+export async function callRescheduleBooking(
+  client: Pool | PoolClient,
+  bookingId: string,
+  newCourtId: string,
+  newStartsAt: Date
+): Promise<BookingRow> {
+  const result = await client.query(
+    `select * from reschedule_booking(p_booking_id => $1, p_new_court_id => $2, p_new_starts_at => $3)`,
+    [bookingId, newCourtId, newStartsAt.toISOString()]
+  );
+  return result.rows[0] as BookingRow;
+}

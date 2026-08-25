@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 function NavLink({
@@ -34,6 +36,31 @@ function NavLink({
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Show the "Admin" shortcut only to a signed-in admin. Checked client-side (the header is
+  // already a client component) — a user can read their own profile.role under RLS, and the
+  // /admin routes are still independently guarded server-side by requireAdmin, so this link
+  // is only a convenience, never the access-control boundary.
+  useEffect(() => {
+    let active = true;
+    const supabase = createClient();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        if (active) setIsAdmin(false);
+        return;
+      }
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      if (active) setIsAdmin(profile?.role === "admin");
+    })();
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
+
   // Admin has its own layout/nav entirely.
   if (pathname?.startsWith("/admin")) return null;
 
@@ -46,6 +73,11 @@ export function SiteHeader() {
         <NavLink href="/" pathname={pathname}>Home</NavLink>
         <NavLink href="/book" pathname={pathname}>Book</NavLink>
         <NavLink href="/bookings" pathname={pathname}>My bookings</NavLink>
+        {isAdmin && (
+          <NavLink href="/admin/venue" pathname={pathname} className="text-primary hover:text-primary">
+            Admin
+          </NavLink>
+        )}
         <NavLink href="/account" pathname={pathname} className="ml-auto">
           Account
         </NavLink>
