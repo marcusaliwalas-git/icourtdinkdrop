@@ -344,6 +344,37 @@ Added an "Admin" link to the shared site header (`site-header.tsx`), shown only 
 - **`from` now carries a display name** (`iCourt Social <address>`) so inboxes show the brand, not a bare address.
 - **Verified**: rendered all four templates (pending, confirmed, cancelled, admin) to standalone HTML and viewed them served through the dev server — confirmed the branded layout, the correct per-type CTA + destination, the red cancellation variant, and that the 520px card degrades cleanly to mobile width. Separately confirmed the Mailpit send path works (proven earlier this session) and that `getAdminEmails()`'s underlying query returns the 2 seeded admins with valid emails, so the notification reaches real recipients. `tsc`, `eslint`, and all 61 tests pass.
 
+## Multi-court / multi-slot booking cart (2026-08-25)
+
+Replaced the single-court, single-contiguous-range booking flow on `/book` with a cart: a
+customer can tap any mix of open slots — across different courts and non-contiguous times on
+one day — and book them all together with one payment.
+
+- **The grid is now multi-select.** Each tap toggles a tile; the client groups the selected
+  tiles into bookable segments — per court, a contiguous run of hours becomes **one** booking,
+  a gap starts another. So Court 1 at 9–11am is one 2-hour booking, while Court 3 at 2pm and
+  Court 5 at 6pm are separate bookings. Same live-availability refresh and stale-selection
+  pruning as before, generalised from a single range to a set of tiles.
+- **One atomic checkout.** A new DB function `create_bookings(segments jsonb, ...shared fields)`
+  wraps `create_booking` in a loop inside a single transaction, so a cart is **all-or-nothing**:
+  if any slot fails validation or was just taken, the whole batch rolls back and the customer is
+  never charged for a partial cart. It's a thin wrapper — every existing rule (lead time,
+  operating hours, closures, the no-double-booking exclusion constraint, pricing, pending status)
+  applies unchanged per segment. Per-segment idempotency keys derive from the caller's key so a
+  retried submit returns the same bookings instead of duplicating.
+- **One payment, one set of emails.** The checkout collects a single party size, guest details,
+  payment reference and receipt for the whole total (summed across segments). Instead of one email
+  per slot, `createBookings` sends **one** combined pending email to the booker and **one**
+  combined admin-review email, each listing every slot and its reference. Each booking still gets
+  its own reference code (they're independent bookings billed together); the confirmation screen
+  lists them all, and the WhatsApp share link summarises the cart.
+- **Scope**: the public `/book` flow only. The admin walk-in flow (`/admin/calendar`) still books
+  one slot at a time — a separate surface, left unchanged.
+- **Verified**: 4 DB tests (multi-court in one call, non-contiguous same-court, atomic rollback on
+  conflict, empty-cart rejection); full suite 65 green, `tsc` + `eslint` clean. Live: selected a
+  3-segment cart (Court 1 9–11am + Court 3 2pm + Court 5 6pm), confirmed the grid grouping, the
+  cart bar (4 hrs · 3 courts · ₱2,600), and the checkout summary; and confirmed the real online
+  path (guest + payment proof) creates one pending booking per segment via `create_bookings`.
 ## Admin booking reschedule — settle-up pricing, no refunds (2026-08-12)
 
 The venue owner's policy: the site takes **full payment only and never refunds** — instead of refunding, a booking can be **rescheduled**, and peak/off-peak price differences are **settled up**. Built an admin-only reschedule flow around that.
@@ -354,3 +385,21 @@ The venue owner's policy: the site takes **full payment only and never refunds**
 - **`adminRescheduleBooking`** calls the RPC and sends a new branded **`sendBookingRescheduledEmail`** (reusing the shared email template) to the member/guest with the updated details; reference code stays the same. Added `CANNOT_RESCHEDULE` and `SLOT_TAKEN` to the friendly-error map.
 - **Verified end-to-end**: 8 new DB tests (settle-up to the higher price, forfeit keeping the original, conflict/out-of-hours/already-started/cancelled/non-admin rejections) — full suite 69 green. Live: rescheduled a future booking Aug 15 → Aug 16 through the admin UI, the live preview showed the ₱200 forfeited difference, the booking moved and its total correctly **held at ₱600** (no refund), and the branded "Booking rescheduled" email was delivered to the guest via Mailpit.
 - **Deploy note**: the migration is applied to the **local** DB and validated; it still needs `supabase db push` to production (deferred here — was blocked by an environment lockout mid-session).
+
+## Sales metrics, simpler checkout, and calendar files (2026-08-25)
+
+Three small product changes bundled together.
+
+- **Sales tab metrics.** Renamed "Avg booking" → **"Avg check per booking"** (clearer that it's revenue ÷ realized bookings). Added an **"Avg daily sales"** stat for the selected range — realized revenue ÷ *days elapsed* in the range (capped at today, so an in-progress month/year isn't diluted by days that haven't happened) — with the same vs-previous-window % badge. Added an always-on **"Avg daily sales trends"** panel showing **month-over-month** and **year-over-year** avg daily sales (fixed to today's month/year, independent of the period picker), each with its % change. Computed in the page from `summarizeSales` output over four extra fixed windows (this/last month, this/last year); no change to the pure `summarizeSales`.
+- **Simpler checkout.** Removed the **party-size** field from the public booking sheet (it added friction and wasn't used downstream; bookings default to party size 1). Made the **payment reference number optional** — the proof-of-payment slip is still required (that's what an admin verifies), but a customer who doesn't have a reference handy can still book. Relaxed the DB rule in migration `20260825120000`: `create_booking` now raises `PAYMENT_PROOF_REQUIRED` only when the *slip* is missing, not the reference.
+- **Add-to-calendar.** After booking, the confirmation screen offers **"Add to calendar"**, which builds an `.ics` (RFC 5545) covering every slot in the cart — one VEVENT per booking, UTC times, reference in the description — and hands it to the browser as a download. New pure `src/lib/ics.ts` (`buildIcs`), unit-tested (5 cases); the action now returns each booking's court name + start/end so the client can build the file.
+- **Verified**: full suite 86 green (`tsc`/`eslint` clean). Live: Sales showed Avg daily ₱24 for a ₱600 month (÷25 days) with a +140% MoM badge vs ₱10/day last month; the booking sheet has no party-size field and an optional reference with the slip still required.
+
+## Coaches: roster, requests, and a booking add-on (2026-08-26)
+
+A coaches feature spanning the public site, admin, and the booking flow (scope confirmed with the owner: standalone = "request a coach"; add-on = one coach for the whole cart; rate charged per hour).
+
+- **Roster + public page.** New `coaches` table (name, bio/"profile", photo_url, hourly_rate_cents, is_active, sort_order) with a public `/coaches` tab showing each coach's picture, name, profile, and rate. Admins manage them at `/admin/coaches` (CRUD + photo upload to a new **public** `coach-photos` storage bucket; only admins may write). RLS: anyone reads active coaches, admins read/write all.
+- **Standalone = request, not a second calendar.** Rather than build coach availability/scheduling, a "Request coaching" form captures coach + optional preferred time + contact into a `coach_requests` table (insert allowed for anyone, admin-only read/manage). The admin coaches page lists requests with Confirm/Decline. Keeps the feature shippable and matches how a small venue actually coordinates coaching.
+- **Add-on folded into the existing cart.** `create_bookings` gains `p_coach_id`: one coach for the whole cart, fee = `coach.hourly_rate_cents × total booked hours`. The coach is tagged on every booking in the cart (so each slot shows it) and the fee is recorded on the first booking and folded into its `total_cents`, so realized revenue automatically includes coaching without touching `summarizeSales`. Signature change required an explicit drop-first (same overload pitfall as the payment-proof migration). `bookings` gains `coach_id` + `coach_fee_cents`.
+- **Verified live end-to-end**: `/coaches` renders picture/name/profile/rate; submitted a coaching request as a member and saw it in `/admin/coaches` with the preferred time converted to the venue zone; in checkout, adding Coach Rae (₱800/hr) to a 2-hour cart added a ₱1,600 line and the total became ₱2,500 (courts ₱900 + coach ₱1,600). 88 tests green (2 new for the coach add-on: fee math + unknown-coach rejection); `tsc` + `eslint` clean.

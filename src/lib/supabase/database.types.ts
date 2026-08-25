@@ -156,6 +156,8 @@ export type Database = {
       bookings: {
         Row: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -165,6 +167,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -175,6 +179,8 @@ export type Database = {
         }
         Insert: {
           booked_by?: string | null
+          coach_fee_cents?: number
+          coach_id?: string | null
           court_id: string
           created_at?: string
           guest_email?: string | null
@@ -184,6 +190,8 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
+          payment_reference?: string | null
+          payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string
           source?: string
@@ -194,6 +202,8 @@ export type Database = {
         }
         Update: {
           booked_by?: string | null
+          coach_fee_cents?: number
+          coach_id?: string | null
           court_id?: string
           created_at?: string
           guest_email?: string | null
@@ -203,6 +213,8 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
+          payment_reference?: string | null
+          payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string
           source?: string
@@ -217,6 +229,13 @@ export type Database = {
             columns: ["booked_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
             referencedColumns: ["id"]
           },
           {
@@ -269,6 +288,151 @@ export type Database = {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_requests: {
+        Row: {
+          coach_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          message: string | null
+          preferred_at: string | null
+          profile_id: string | null
+          status: string
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          id?: string
+          message?: string | null
+          preferred_at?: string | null
+          profile_id?: string | null
+          status?: string
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          id?: string
+          message?: string | null
+          preferred_at?: string | null
+          profile_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_requests_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coaches: {
+        Row: {
+          bio: string | null
+          created_at: string
+          email: string | null
+          hourly_rate_cents: number
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          photo_url: string | null
+          sort_order: number
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          email?: string | null
+          hourly_rate_cents?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          email?: string | null
+          hourly_rate_cents?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coaches_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      court_rate_periods: {
+        Row: {
+          court_id: string
+          created_at: string
+          end_time: string
+          hourly_rate_cents: number
+          id: string
+          member_rate_cents: number | null
+          start_time: string
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          end_time: string
+          hourly_rate_cents: number
+          id?: string
+          member_rate_cents?: number | null
+          start_time: string
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          end_time?: string
+          hourly_rate_cents?: number
+          id?: string
+          member_rate_cents?: number | null
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_rate_periods_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
             referencedColumns: ["id"]
           },
         ]
@@ -767,6 +931,8 @@ export type Database = {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -776,6 +942,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -795,6 +963,8 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -804,6 +974,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -830,12 +1002,16 @@ export type Database = {
           p_idempotency_key?: string
           p_notes?: string
           p_party_size?: number
+          p_payment_reference?: string
+          p_payment_slip_path?: string
           p_player_names?: string[]
           p_source?: string
           p_starts_at: string
         }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -845,6 +1021,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -858,6 +1036,52 @@ export type Database = {
           to: "bookings"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      create_bookings: {
+        Args: {
+          p_booked_by?: string
+          p_coach_id?: string
+          p_guest_email?: string
+          p_guest_name?: string
+          p_guest_phone?: string
+          p_idempotency_key?: string
+          p_notes?: string
+          p_party_size?: number
+          p_payment_reference?: string
+          p_payment_slip_path?: string
+          p_player_names?: string[]
+          p_segments: Json
+          p_source?: string
+        }
+        Returns: {
+          booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: false
+          isSetofReturn: true
         }
       }
       get_booking_by_reference: {
@@ -886,6 +1110,8 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -895,6 +1121,44 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      reschedule_booking: {
+        Args: {
+          p_booking_id: string
+          p_new_court_id: string
+          p_new_starts_at: string
+        }
+        Returns: {
+          booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string

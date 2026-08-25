@@ -173,6 +173,85 @@ export async function sendBookingRescheduledEmail(details: BookingEmailDetails) 
   });
 }
 
+export interface BookingLineItem {
+  courtName: string;
+  startsAt: Date;
+  endsAt: Date;
+  referenceCode: string;
+}
+
+interface BookingsEmailDetails {
+  to: string;
+  timezone: string;
+  bookings: BookingLineItem[];
+  totalCents: number;
+}
+
+/** One line per booking in a cart: "Court 1 · Sat, Aug 30 at 6:00 PM – 8:00 PM (ABC12345)". */
+function bookingLineRows(bookings: BookingLineItem[], timezone: string) {
+  return bookings.map((b) => {
+    const when = formatInTimezone(b.startsAt, "EEE, MMM d 'at' h:mm a", timezone);
+    const until = formatInTimezone(b.endsAt, "h:mm a", timezone);
+    return { label: b.courtName, value: `${when} – ${until} · ${b.referenceCode}`, mono: false };
+  });
+}
+
+/** Pending email for a cart of bookings created together (multiple courts/slots, one payment). */
+export async function sendBookingsPendingEmail(details: BookingsEmailDetails) {
+  const count = details.bookings.length;
+  await safeSend({
+    from: fromAddress(),
+    to: details.to,
+    subject: `Booking request received: ${count} slot${count > 1 ? "s" : ""}`,
+    html: renderEmail({
+      heading: "We've got your booking request",
+      intro: [
+        `Thanks! We received your ${count} booking${count > 1 ? "s" : ""} and payment reference. The venue is verifying your transfer before confirming — we'll email you again once it's approved.`,
+      ],
+      detailRows: [
+        ...bookingLineRows(details.bookings, details.timezone),
+        { label: "Total", value: pesos(details.totalCents) },
+      ],
+      button: { label: "Open iCourt Social", url: SITE_HOME() },
+    }),
+  });
+}
+
+export interface AdminBookingsRequestDetails {
+  to: string;
+  timezone: string;
+  bookings: BookingLineItem[];
+  totalCents: number;
+  bookerName: string;
+  bookerContact: string;
+  paymentReference: string | null;
+}
+
+/** Notifies an admin that a cart of bookings is awaiting review. */
+export async function sendAdminBookingsRequestEmail(details: AdminBookingsRequestDetails) {
+  const count = details.bookings.length;
+  await safeSend({
+    from: fromAddress(),
+    to: details.to,
+    subject: `New booking to review: ${count} slot${count > 1 ? "s" : ""} from ${details.bookerName}`,
+    html: renderEmail({
+      heading: "A booking is waiting for your review",
+      intro: [
+        `${details.bookerName} just requested ${count} slot${count > 1 ? "s" : ""} and submitted a payment reference. Verify the payment, then confirm or cancel the bookings.`,
+      ],
+      detailRows: [
+        { label: "Booked by", value: details.bookerName },
+        { label: "Contact", value: details.bookerContact },
+        ...bookingLineRows(details.bookings, details.timezone),
+        { label: "Payment ref", value: details.paymentReference ?? "—" },
+        { label: "Total", value: pesos(details.totalCents) },
+      ],
+      button: { label: "Review bookings", url: ADMIN_PENDING_URL() },
+      outro: ["Open the admin dashboard to view the payment proof and take action."],
+    }),
+  });
+}
+
 export interface AdminBookingRequestDetails {
   to: string;
   courtName: string;
@@ -226,5 +305,19 @@ export function buildWhatsAppShareLink(details: {
   const when = formatInTimezone(details.startsAt, "EEE, MMM d 'at' h:mm a", details.timezone);
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
   const text = `Court booked: ${details.courtName}, ${when}-${until}. Reference: ${details.referenceCode}`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+/** wa.me share for a cart of bookings — one message listing every slot and its reference. */
+export function buildWhatsAppShareLinkForBookings(details: {
+  timezone: string;
+  bookings: BookingLineItem[];
+}): string {
+  const lines = details.bookings.map((b) => {
+    const when = formatInTimezone(b.startsAt, "EEE, MMM d 'at' h:mm a", details.timezone);
+    const until = formatInTimezone(b.endsAt, "h:mm a", details.timezone);
+    return `${b.courtName}: ${when}-${until} (${b.referenceCode})`;
+  });
+  const text = `Courts booked:\n${lines.join("\n")}`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }

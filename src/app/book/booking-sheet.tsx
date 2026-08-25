@@ -13,48 +13,56 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createBooking } from "./actions";
-import { formatInTimezone } from "@/lib/time";
-import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
+import { createBookings, type CreatedBooking } from "./actions";
 import { createClient } from "@/lib/supabase/client";
+import { buildIcs } from "@/lib/ics";
 
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
 
-interface Court {
+// One bookable slot in the cart: a court + start + whole-hour duration, with its price estimate
+// and a display label. Built by the grid from the selected tiles.
+export interface CartSegment {
+  courtId: string;
+  courtName: string;
+  startsAtIso: string;
+  durationMinutes: number;
+  label: string;
+  estimateCents: number;
+}
+
+export interface CoachOption {
   id: string;
   name: string;
   hourly_rate_cents: number;
-  member_rate_cents: number | null;
 }
 
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
 
+const selectClass =
+  "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+
 export function BookingSheet({
   open,
   onOpenChange,
   onBookingConfirmed,
-  court,
-  ratePeriods,
-  startsAtIso,
-  durationMinutes,
-  timezone,
+  segments,
+  totalCents,
+  coaches,
   isLoggedIn,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBookingConfirmed?: () => void;
-  court: Court | null;
-  ratePeriods: RatePeriod[];
-  startsAtIso: string;
-  durationMinutes: number;
-  timezone: string;
+  segments: CartSegment[];
+  totalCents: number;
+  coaches: CoachOption[];
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
-  const [partySize, setPartySize] = useState("2");
+  const [coachId, setCoachId] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -62,39 +70,25 @@ export function BookingSheet({
   const [paymentSlipFile, setPaymentSlipFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
-    referenceCode: string;
+    bookings: CreatedBooking[];
     status: string;
     whatsAppShareLink: string;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  if (!court) return null;
+  if (segments.length === 0 && !confirmation) return null;
 
-  const durationHours = durationMinutes / 60;
-  const endsAtIso = startsAtIso
-    ? new Date(new Date(startsAtIso).getTime() + durationMinutes * 60_000).toISOString()
-    : "";
-
-  // Guests always pay the guest rate; only a logged-in user might qualify for the member
-  // rate (actual membership status is still verified server-side when the booking is created).
-  // Mirrors create_booking's per-hour pricing exactly, so this estimate always matches what
-  // gets charged — including courts with different rates at different times of day.
-  const estimateCents = startsAtIso
-    ? computeBookingTotalCents({
-        startsAtIso,
-        durationMinutes,
-        timezone,
-        ratePeriods,
-        baseHourlyRateCents: court.hourly_rate_cents,
-        baseMemberRateCents: court.member_rate_cents,
-        isMember: isLoggedIn,
-      })
-    : 0;
+  // Coaching add-on: one coach for the whole cart, charged per hour across all slots.
+  const totalMinutes = segments.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const selectedCoach = coaches.find((c) => c.id === coachId) ?? null;
+  const coachFeeCents = selectedCoach ? Math.round((selectedCoach.hourly_rate_cents * totalMinutes) / 60) : 0;
+  const grandTotalCents = totalCents + coachFeeCents;
 
   function handleClose(next: boolean) {
     if (!next) {
       setError(null);
       setConfirmation(null);
+      setCoachId("");
       setGuestName("");
       setGuestPhone("");
       setGuestEmail("");
@@ -126,27 +120,28 @@ export function BookingSheet({
         return;
       }
 
-      const result = await createBooking({
-        courtId: court!.id,
-        startsAt: startsAtIso,
-        durationMinutes,
-        partySize: Number(partySize),
+      const result = await createBookings({
+        segments: segments.map((s) => ({
+          courtId: s.courtId,
+          startsAt: s.startsAtIso,
+          durationMinutes: s.durationMinutes,
+        })),
         guestName: isLoggedIn ? undefined : guestName,
         guestPhone: isLoggedIn ? undefined : guestPhone,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
-        paymentReference,
+        coachId: coachId || null,
+        paymentReference: paymentReference.trim() || undefined,
         paymentSlipPath: path,
-        idempotencyKey: `${court!.id}-${startsAtIso}-${durationMinutes}-${Date.now()}`,
+        idempotencyKey: `cart-${segments.map((s) => `${s.courtId}@${s.startsAtIso}`).join(",")}-${Date.now()}`,
       });
+
       if (!result.success) {
         setError(result.message);
-        if (result.code === "SLOT_TAKEN") {
-          router.refresh();
-        }
+        if (result.code === "SLOT_TAKEN") router.refresh();
         return;
       }
       setConfirmation({
-        referenceCode: result.referenceCode,
+        bookings: result.bookings,
         status: result.status,
         whatsAppShareLink: result.whatsAppShareLink,
       });
@@ -155,9 +150,34 @@ export function BookingSheet({
     });
   }
 
+  // Build an .ics for the confirmed bookings and hand it to the browser as a download, so the
+  // customer can add every slot to their own calendar in one tap.
+  function downloadCalendar() {
+    if (!confirmation) return;
+    const ics = buildIcs(
+      confirmation.bookings.map((b) => ({
+        uid: `${b.referenceCode}@dinkdrop`,
+        start: new Date(b.startsAtIso),
+        end: new Date(b.endsAtIso),
+        title: `Pickleball — ${b.courtName}`,
+        description: `Booking reference: ${b.referenceCode}`,
+      })),
+      { calendarName: "DinkDrop bookings" }
+    );
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = confirmation.bookings.length > 1 ? "dinkdrop-bookings.ics" : "dinkdrop-booking.ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent side="bottom" className="mx-auto max-w-md">
+      <SheetContent side="bottom" className="mx-auto max-w-md overflow-y-auto max-h-[92svh]">
         {confirmation ? (
           <div className="flex flex-col items-center gap-3 p-6 text-center">
             <SheetTitle>
@@ -165,12 +185,19 @@ export function BookingSheet({
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
               {confirmation.status === "pending"
-                ? "The venue will confirm your booking once they verify your payment. We'll email you either way."
-                : "Show this reference at the venue."}
+                ? "The venue will confirm once they verify your payment. We'll email you either way."
+                : "Show these references at the venue."}
             </p>
-            <p className="rounded-md border bg-muted px-4 py-2 font-mono text-lg tracking-widest">
-              {confirmation.referenceCode}
-            </p>
+            <div className="flex w-full flex-col gap-1.5">
+              {confirmation.bookings.map((b) => (
+                <p key={b.bookingId} className="rounded-md border bg-muted px-4 py-2 font-mono text-sm tracking-widest">
+                  {b.referenceCode}
+                </p>
+              ))}
+            </div>
+            <Button type="button" variant="outline" onClick={downloadCalendar} className="w-full">
+              Add to calendar
+            </Button>
             <a
               href={confirmation.whatsAppShareLink}
               target="_blank"
@@ -184,45 +211,52 @@ export function BookingSheet({
         ) : (
           <form onSubmit={onSubmit} className="flex flex-col gap-4 p-4">
             <SheetHeader className="p-0">
-              <SheetTitle>{court.name}</SheetTitle>
+              <SheetTitle>Review your booking</SheetTitle>
               <SheetDescription>
-                {startsAtIso && endsAtIso && (
-                  <>
-                    {formatInTimezone(new Date(startsAtIso), "EEEE, MMM d", timezone)}
-                    {" · "}
-                    {formatInTimezone(new Date(startsAtIso), "h:mm a", timezone)}
-                    {"–"}
-                    {formatInTimezone(new Date(endsAtIso), "h:mm a", timezone)}
-                    {" · "}
-                    {durationHours} hr{durationHours > 1 ? "s" : ""}
-                  </>
-                )}
+                {segments.length} slot{segments.length > 1 ? "s" : ""} — pay once for all of them.
               </SheetDescription>
             </SheetHeader>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="partySize">Party size</Label>
-              <Input
-                id="partySize"
-                type="number"
-                min={1}
-                max={20}
-                value={partySize}
-                onChange={(e) => setPartySize(e.target.value)}
-                required
-              />
-            </div>
+            <ul className="flex flex-col divide-y divide-border/60 rounded-md border">
+              {segments.map((s) => (
+                <li key={`${s.courtId}-${s.startsAtIso}`} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">{s.courtName}</span>
+                    <span className="text-muted-foreground"> · {s.label}</span>
+                  </span>
+                  <span className="text-muted-foreground">{pesos(s.estimateCents)}</span>
+                </li>
+              ))}
+              {selectedCoach && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">Coaching — {selectedCoach.name}</span>
+                    <span className="text-muted-foreground"> · {totalMinutes / 60} hr</span>
+                  </span>
+                  <span className="text-muted-foreground">{pesos(coachFeeCents)}</span>
+                </li>
+              )}
+            </ul>
+
+            {coaches.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="coach">Add a coach (optional)</Label>
+                <select id="coach" className={selectClass} value={coachId} onChange={(e) => setCoachId(e.target.value)}>
+                  <option value="">No coach</option>
+                  {coaches.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} — {pesos(c.hourly_rate_cents)}/hr
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {!isLoggedIn && (
               <>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="guestName">Your name</Label>
-                  <Input
-                    id="guestName"
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    required
-                  />
+                  <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="guestPhone">Mobile number</Label>
@@ -252,20 +286,19 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(estimateCents)}</span>.{" "}
-              {isLoggedIn && court.member_rate_cents != null && "Member rate applied if you're an active member. "}
-              Transfer this amount via GCash or bank transfer, then enter your reference number and attach proof
-              below.
+              Total: <span className="font-medium text-foreground">{pesos(grandTotalCents)}</span>
+              {selectedCoach ? ` (courts ${pesos(totalCents)} + coach ${pesos(coachFeeCents)})` : ""}.{" "}
+              {isLoggedIn && "Member rates applied if you're an active member. "}
+              Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="paymentReference">Payment reference number</Label>
+              <Label htmlFor="paymentReference">Payment reference number (optional)</Label>
               <Input
                 id="paymentReference"
                 value={paymentReference}
                 onChange={(e) => setPaymentReference(e.target.value)}
                 placeholder="e.g. GCash reference number"
-                required
               />
             </div>
 
@@ -289,19 +322,15 @@ export function BookingSheet({
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Screenshot or photo of your GCash/bank transfer receipt.
+                One receipt for the whole total. Screenshot or photo of your GCash/bank transfer.
               </p>
             </div>
-
-            <p className="text-sm text-muted-foreground">
-              The venue will confirm your booking once they verify your payment.
-            </p>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <SheetFooter className="p-0">
               <Button type="submit" disabled={isPending}>
-                {isPending ? "Requesting..." : "Request booking"}
+                {isPending ? "Requesting..." : `Request ${segments.length} booking${segments.length > 1 ? "s" : ""}`}
               </Button>
             </SheetFooter>
           </form>

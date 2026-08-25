@@ -16,8 +16,10 @@ const MESSAGES: Record<string, string> = {
   NOT_STARTED_YET: "This booking hasn't started yet.",
   NOT_PENDING: "This booking is not awaiting confirmation.",
   PAYMENT_PROOF_REQUIRED: "Enter your payment reference and attach proof of payment.",
+  NO_SEGMENTS: "Pick at least one slot to book.",
   CANNOT_RESCHEDULE: "This booking can no longer be rescheduled.",
   SLOT_TAKEN: "Sorry, that slot was just taken. Pick another.",
+  COACH_NOT_FOUND: "That coach isn't available. Pick another or continue without one.",
 };
 
 /** Maps a Postgres/PostgREST error (from an RPC call) to a stable code + friendly message. */
