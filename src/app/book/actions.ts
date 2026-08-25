@@ -190,11 +190,17 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
   });
 
   if (error) {
+    // Log the real Postgres/PostgREST error server-side — the user only sees a friendly
+    // message, so without this a missing migration (PGRST202 "function not found") or any
+    // other RPC failure is invisible in the logs. A common cause here is the
+    // create_bookings migration not being applied to this environment's database.
+    console.error("create_bookings RPC failed:", error);
     return { success: false, ...mapBookingError(error) };
   }
 
   const created = (data ?? []) as unknown as BookingRow[];
   if (created.length === 0) {
+    console.error("create_bookings returned no rows for segments:", segments);
     return { success: false, code: "UNKNOWN", message: "Something went wrong. Please try again." };
   }
 
