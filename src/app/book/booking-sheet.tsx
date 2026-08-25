@@ -13,19 +13,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createBooking } from "./actions";
-import { formatInTimezone } from "@/lib/time";
-import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
+import { createBookings, type CreatedBooking } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
 
-interface Court {
-  id: string;
-  name: string;
-  hourly_rate_cents: number;
-  member_rate_cents: number | null;
+// One bookable slot in the cart: a court + start + whole-hour duration, with its price estimate
+// and a display label. Built by the grid from the selected tiles.
+export interface CartSegment {
+  courtId: string;
+  courtName: string;
+  startsAtIso: string;
+  durationMinutes: number;
+  label: string;
+  estimateCents: number;
 }
 
 function pesos(cents: number) {
@@ -36,21 +38,15 @@ export function BookingSheet({
   open,
   onOpenChange,
   onBookingConfirmed,
-  court,
-  ratePeriods,
-  startsAtIso,
-  durationMinutes,
-  timezone,
+  segments,
+  totalCents,
   isLoggedIn,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBookingConfirmed?: () => void;
-  court: Court | null;
-  ratePeriods: RatePeriod[];
-  startsAtIso: string;
-  durationMinutes: number;
-  timezone: string;
+  segments: CartSegment[];
+  totalCents: number;
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
@@ -62,34 +58,13 @@ export function BookingSheet({
   const [paymentSlipFile, setPaymentSlipFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
-    referenceCode: string;
+    bookings: CreatedBooking[];
     status: string;
     whatsAppShareLink: string;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  if (!court) return null;
-
-  const durationHours = durationMinutes / 60;
-  const endsAtIso = startsAtIso
-    ? new Date(new Date(startsAtIso).getTime() + durationMinutes * 60_000).toISOString()
-    : "";
-
-  // Guests always pay the guest rate; only a logged-in user might qualify for the member
-  // rate (actual membership status is still verified server-side when the booking is created).
-  // Mirrors create_booking's per-hour pricing exactly, so this estimate always matches what
-  // gets charged — including courts with different rates at different times of day.
-  const estimateCents = startsAtIso
-    ? computeBookingTotalCents({
-        startsAtIso,
-        durationMinutes,
-        timezone,
-        ratePeriods,
-        baseHourlyRateCents: court.hourly_rate_cents,
-        baseMemberRateCents: court.member_rate_cents,
-        isMember: isLoggedIn,
-      })
-    : 0;
+  if (segments.length === 0 && !confirmation) return null;
 
   function handleClose(next: boolean) {
     if (!next) {
@@ -126,27 +101,28 @@ export function BookingSheet({
         return;
       }
 
-      const result = await createBooking({
-        courtId: court!.id,
-        startsAt: startsAtIso,
-        durationMinutes,
+      const result = await createBookings({
+        segments: segments.map((s) => ({
+          courtId: s.courtId,
+          startsAt: s.startsAtIso,
+          durationMinutes: s.durationMinutes,
+        })),
         partySize: Number(partySize),
         guestName: isLoggedIn ? undefined : guestName,
         guestPhone: isLoggedIn ? undefined : guestPhone,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
         paymentReference,
         paymentSlipPath: path,
-        idempotencyKey: `${court!.id}-${startsAtIso}-${durationMinutes}-${Date.now()}`,
+        idempotencyKey: `cart-${segments.map((s) => `${s.courtId}@${s.startsAtIso}`).join(",")}-${Date.now()}`,
       });
+
       if (!result.success) {
         setError(result.message);
-        if (result.code === "SLOT_TAKEN") {
-          router.refresh();
-        }
+        if (result.code === "SLOT_TAKEN") router.refresh();
         return;
       }
       setConfirmation({
-        referenceCode: result.referenceCode,
+        bookings: result.bookings,
         status: result.status,
         whatsAppShareLink: result.whatsAppShareLink,
       });
@@ -157,7 +133,7 @@ export function BookingSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent side="bottom" className="mx-auto max-w-md">
+      <SheetContent side="bottom" className="mx-auto max-w-md overflow-y-auto max-h-[92svh]">
         {confirmation ? (
           <div className="flex flex-col items-center gap-3 p-6 text-center">
             <SheetTitle>
@@ -165,12 +141,16 @@ export function BookingSheet({
             </SheetTitle>
             <p className="text-sm text-muted-foreground">
               {confirmation.status === "pending"
-                ? "The venue will confirm your booking once they verify your payment. We'll email you either way."
-                : "Show this reference at the venue."}
+                ? "The venue will confirm once they verify your payment. We'll email you either way."
+                : "Show these references at the venue."}
             </p>
-            <p className="rounded-md border bg-muted px-4 py-2 font-mono text-lg tracking-widest">
-              {confirmation.referenceCode}
-            </p>
+            <div className="flex w-full flex-col gap-1.5">
+              {confirmation.bookings.map((b) => (
+                <p key={b.bookingId} className="rounded-md border bg-muted px-4 py-2 font-mono text-sm tracking-widest">
+                  {b.referenceCode}
+                </p>
+              ))}
+            </div>
             <a
               href={confirmation.whatsAppShareLink}
               target="_blank"
@@ -184,24 +164,26 @@ export function BookingSheet({
         ) : (
           <form onSubmit={onSubmit} className="flex flex-col gap-4 p-4">
             <SheetHeader className="p-0">
-              <SheetTitle>{court.name}</SheetTitle>
+              <SheetTitle>Review your booking</SheetTitle>
               <SheetDescription>
-                {startsAtIso && endsAtIso && (
-                  <>
-                    {formatInTimezone(new Date(startsAtIso), "EEEE, MMM d", timezone)}
-                    {" · "}
-                    {formatInTimezone(new Date(startsAtIso), "h:mm a", timezone)}
-                    {"–"}
-                    {formatInTimezone(new Date(endsAtIso), "h:mm a", timezone)}
-                    {" · "}
-                    {durationHours} hr{durationHours > 1 ? "s" : ""}
-                  </>
-                )}
+                {segments.length} slot{segments.length > 1 ? "s" : ""} — pay once for all of them.
               </SheetDescription>
             </SheetHeader>
 
+            <ul className="flex flex-col divide-y divide-border/60 rounded-md border">
+              {segments.map((s) => (
+                <li key={`${s.courtId}-${s.startsAtIso}`} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">{s.courtName}</span>
+                    <span className="text-muted-foreground"> · {s.label}</span>
+                  </span>
+                  <span className="text-muted-foreground">{pesos(s.estimateCents)}</span>
+                </li>
+              ))}
+            </ul>
+
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="partySize">Party size</Label>
+              <Label htmlFor="partySize">Party size (per court)</Label>
               <Input
                 id="partySize"
                 type="number"
@@ -217,12 +199,7 @@ export function BookingSheet({
               <>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="guestName">Your name</Label>
-                  <Input
-                    id="guestName"
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    required
-                  />
+                  <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="guestPhone">Mobile number</Label>
@@ -252,10 +229,9 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(estimateCents)}</span>.{" "}
-              {isLoggedIn && court.member_rate_cents != null && "Member rate applied if you're an active member. "}
-              Transfer this amount via GCash or bank transfer, then enter your reference number and attach proof
-              below.
+              Total: <span className="font-medium text-foreground">{pesos(totalCents)}</span>.{" "}
+              {isLoggedIn && "Member rates applied if you're an active member. "}
+              Transfer this amount via GCash or bank transfer, then enter your reference number and attach proof below.
             </p>
 
             <div className="flex flex-col gap-1.5">
@@ -289,19 +265,15 @@ export function BookingSheet({
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Screenshot or photo of your GCash/bank transfer receipt.
+                One receipt for the whole total. Screenshot or photo of your GCash/bank transfer.
               </p>
             </div>
-
-            <p className="text-sm text-muted-foreground">
-              The venue will confirm your booking once they verify your payment.
-            </p>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <SheetFooter className="p-0">
               <Button type="submit" disabled={isPending}>
-                {isPending ? "Requesting..." : "Request booking"}
+                {isPending ? "Requesting..." : `Request ${segments.length} booking${segments.length > 1 ? "s" : ""}`}
               </Button>
             </SheetFooter>
           </form>

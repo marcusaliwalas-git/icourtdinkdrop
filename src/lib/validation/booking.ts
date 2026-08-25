@@ -40,6 +40,36 @@ export const createBookingSchema = z
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
+// One slot in a multi-booking cart: a court + start time + whole-hour duration. The shared
+// fields (party, guest details, payment proof) live on createBookingsSchema, applied to every
+// segment. Each segment becomes its own booking via create_bookings (atomically).
+export const bookingSegmentSchema = z.object({
+  courtId: z.uuid(),
+  startsAt: z.iso.datetime({ offset: true }),
+  durationMinutes: z.number().int().min(60).max(1440).multipleOf(60),
+});
+
+export type BookingSegmentInput = z.infer<typeof bookingSegmentSchema>;
+
+export const createBookingsSchema = z
+  .object({
+    segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(24),
+    partySize: z.number().int().min(1).max(20).default(1),
+    guestName: z.string().trim().min(1).max(120).optional(),
+    guestPhone: phSchema.optional(),
+    guestEmail: z.email().optional().or(z.literal("")),
+    notes: z.string().trim().max(500).optional(),
+    idempotencyKey: z.string().trim().min(1).max(200).optional(),
+    paymentReference: z.string().trim().min(1).max(100).optional(),
+    paymentSlipPath: z.string().trim().min(1).max(300).optional(),
+  })
+  .refine((data) => !!data.guestName === !!data.guestPhone, {
+    message: "guestName and guestPhone must be provided together",
+    path: ["guestPhone"],
+  });
+
+export type CreateBookingsInput = z.infer<typeof createBookingsSchema>;
+
 export const cancelBookingSchema = z.object({
   bookingId: z.uuid(),
   referenceCode: z

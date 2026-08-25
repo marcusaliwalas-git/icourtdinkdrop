@@ -165,6 +165,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -184,6 +186,8 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
+          payment_reference?: string | null
+          payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string
           source?: string
@@ -203,6 +207,8 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
+          payment_reference?: string | null
+          payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string
           source?: string
@@ -269,6 +275,44 @@ export type Database = {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      court_rate_periods: {
+        Row: {
+          court_id: string
+          created_at: string
+          end_time: string
+          hourly_rate_cents: number
+          id: string
+          member_rate_cents: number | null
+          start_time: string
+        }
+        Insert: {
+          court_id: string
+          created_at?: string
+          end_time: string
+          hourly_rate_cents: number
+          id?: string
+          member_rate_cents?: number | null
+          start_time: string
+        }
+        Update: {
+          court_id?: string
+          created_at?: string
+          end_time?: string
+          hourly_rate_cents?: number
+          id?: string
+          member_rate_cents?: number | null
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_rate_periods_court_id_fkey"
+            columns: ["court_id"]
+            isOneToOne: false
+            referencedRelation: "courts"
             referencedColumns: ["id"]
           },
         ]
@@ -776,6 +820,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -804,6 +850,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -830,6 +878,8 @@ export type Database = {
           p_idempotency_key?: string
           p_notes?: string
           p_party_size?: number
+          p_payment_reference?: string
+          p_payment_slip_path?: string
           p_player_names?: string[]
           p_source?: string
           p_starts_at: string
@@ -845,6 +895,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string
@@ -858,6 +910,49 @@ export type Database = {
           to: "bookings"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      create_bookings: {
+        Args: {
+          p_booked_by?: string
+          p_guest_email?: string
+          p_guest_name?: string
+          p_guest_phone?: string
+          p_idempotency_key?: string
+          p_notes?: string
+          p_party_size?: number
+          p_payment_reference?: string
+          p_payment_slip_path?: string
+          p_player_names?: string[]
+          p_segments: Json
+          p_source?: string
+        }
+        Returns: {
+          booked_by: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: false
+          isSetofReturn: true
         }
       }
       get_booking_by_reference: {
@@ -895,6 +990,8 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
           payment_status: string
           reference_code: string
           source: string

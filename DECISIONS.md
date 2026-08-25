@@ -343,3 +343,35 @@ Two related asks: notify admins when a booking needs review, and make every emai
 - **Every email has a site link, per the request**: guest/member emails (pending / confirmed / cancelled) button through to the **main page** (`/`) — guests have no account, so that's their entry point; the admin email buttons to the **admin review page**. Links are absolute, built from a new `getSiteUrl()` (`src/lib/site-url.ts`): prefers `NEXT_PUBLIC_SITE_URL` (set to the real custom domain in prod), falls back to Vercel's per-deployment `VERCEL_URL`, then `http://localhost:3000`. Documented the new env var in `.env.local.example`. Server-side email code can't use `window.location.origin`, which is why this helper exists.
 - **`from` now carries a display name** (`iCourt Social <address>`) so inboxes show the brand, not a bare address.
 - **Verified**: rendered all four templates (pending, confirmed, cancelled, admin) to standalone HTML and viewed them served through the dev server — confirmed the branded layout, the correct per-type CTA + destination, the red cancellation variant, and that the 520px card degrades cleanly to mobile width. Separately confirmed the Mailpit send path works (proven earlier this session) and that `getAdminEmails()`'s underlying query returns the 2 seeded admins with valid emails, so the notification reaches real recipients. `tsc`, `eslint`, and all 61 tests pass.
+
+## Multi-court / multi-slot booking cart (2026-08-25)
+
+Replaced the single-court, single-contiguous-range booking flow on `/book` with a cart: a
+customer can tap any mix of open slots — across different courts and non-contiguous times on
+one day — and book them all together with one payment.
+
+- **The grid is now multi-select.** Each tap toggles a tile; the client groups the selected
+  tiles into bookable segments — per court, a contiguous run of hours becomes **one** booking,
+  a gap starts another. So Court 1 at 9–11am is one 2-hour booking, while Court 3 at 2pm and
+  Court 5 at 6pm are separate bookings. Same live-availability refresh and stale-selection
+  pruning as before, generalised from a single range to a set of tiles.
+- **One atomic checkout.** A new DB function `create_bookings(segments jsonb, ...shared fields)`
+  wraps `create_booking` in a loop inside a single transaction, so a cart is **all-or-nothing**:
+  if any slot fails validation or was just taken, the whole batch rolls back and the customer is
+  never charged for a partial cart. It's a thin wrapper — every existing rule (lead time,
+  operating hours, closures, the no-double-booking exclusion constraint, pricing, pending status)
+  applies unchanged per segment. Per-segment idempotency keys derive from the caller's key so a
+  retried submit returns the same bookings instead of duplicating.
+- **One payment, one set of emails.** The checkout collects a single party size, guest details,
+  payment reference and receipt for the whole total (summed across segments). Instead of one email
+  per slot, `createBookings` sends **one** combined pending email to the booker and **one**
+  combined admin-review email, each listing every slot and its reference. Each booking still gets
+  its own reference code (they're independent bookings billed together); the confirmation screen
+  lists them all, and the WhatsApp share link summarises the cart.
+- **Scope**: the public `/book` flow only. The admin walk-in flow (`/admin/calendar`) still books
+  one slot at a time — a separate surface, left unchanged.
+- **Verified**: 4 DB tests (multi-court in one call, non-contiguous same-court, atomic rollback on
+  conflict, empty-cart rejection); full suite 65 green, `tsc` + `eslint` clean. Live: selected a
+  3-segment cart (Court 1 9–11am + Court 3 2pm + Court 5 6pm), confirmed the grid grouping, the
+  cart bar (4 hrs · 3 courts · ₱2,600), and the checkout summary; and confirmed the real online
+  path (guest + payment proof) creates one pending booking per segment via `create_bookings`.

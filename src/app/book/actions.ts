@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createBookingSchema, cancelBookingSchema } from "@/lib/validation/booking";
+import { createBookingSchema, createBookingsSchema, cancelBookingSchema } from "@/lib/validation/booking";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import {
@@ -10,9 +10,16 @@ import {
   sendBookingPendingEmail,
   sendBookingCancellationEmail,
   sendAdminBookingRequestEmail,
+  sendBookingsPendingEmail,
+  sendAdminBookingsRequestEmail,
   buildWhatsAppShareLink,
+  buildWhatsAppShareLinkForBookings,
+  type BookingLineItem,
 } from "@/lib/email";
 import { getAdminEmails } from "@/lib/admin-recipients";
+import type { Database } from "@/lib/supabase/database.types";
+
+type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
 
 export type CreateBookingResult =
   | { success: true; bookingId: string; referenceCode: string; status: string; whatsAppShareLink: string }
@@ -135,6 +142,116 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
     referenceCode: data.reference_code,
     status: data.status,
     whatsAppShareLink,
+  };
+}
+
+export type CreatedBooking = { bookingId: string; referenceCode: string; status: string };
+
+export type CreateBookingsResult =
+  | { success: true; bookings: CreatedBooking[]; totalCents: number; status: string; whatsAppShareLink: string }
+  | { success: false; code: string; message: string };
+
+/**
+ * Create a cart of bookings (multiple courts and/or non-contiguous time slots on one day) in a
+ * single atomic call. All-or-nothing: if any slot fails or was just taken, nothing is booked.
+ * Sends one combined email to the booker and one to the admins, rather than one per slot.
+ */
+export async function createBookings(input: unknown): Promise<CreateBookingsResult> {
+  const parsed = createBookingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { segments, partySize, guestName, guestPhone, guestEmail, notes, idempotencyKey, paymentReference, paymentSlipPath } =
+    parsed.data;
+
+  const { data, error } = await supabase.rpc("create_bookings", {
+    p_segments: segments.map((s) => ({
+      court_id: s.courtId,
+      starts_at: s.startsAt,
+      duration_minutes: s.durationMinutes,
+    })),
+    p_party_size: partySize,
+    p_booked_by: user?.id ?? null,
+    p_guest_name: user ? null : guestName ?? null,
+    p_guest_phone: user ? null : guestPhone ?? null,
+    p_guest_email: user ? null : guestEmail || null,
+    p_source: "online",
+    p_notes: notes ?? null,
+    p_idempotency_key: idempotencyKey ?? null,
+    p_player_names: [],
+    p_payment_reference: paymentReference ?? null,
+    p_payment_slip_path: paymentSlipPath ?? null,
+  });
+
+  if (error) {
+    return { success: false, ...mapBookingError(error) };
+  }
+
+  const created = (data ?? []) as unknown as BookingRow[];
+  if (created.length === 0) {
+    return { success: false, code: "UNKNOWN", message: "Something went wrong. Please try again." };
+  }
+
+  // Court names + venue timezone for the combined emails and share link.
+  const courtIds = Array.from(new Set(created.map((b) => b.court_id)));
+  const { data: courtRows } = await supabase
+    .from("courts")
+    .select("id, name, venues(timezone)")
+    .in("id", courtIds);
+  const courtNameById = new Map((courtRows ?? []).map((c) => [c.id, c.name]));
+  const timezone =
+    ((courtRows ?? [])[0]?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
+
+  const lineItems: BookingLineItem[] = created.map((b) => {
+    const { start, end } = parseTstzRange(b.time_range as string);
+    return {
+      courtName: courtNameById.get(b.court_id) ?? "Court",
+      startsAt: start,
+      endsAt: end,
+      referenceCode: b.reference_code,
+    };
+  });
+  const totalCents = created.reduce((sum, b) => sum + b.total_cents, 0);
+  const status = created[0].status;
+
+  // One combined email to the booker (members always have an email; guests only if they gave one).
+  const recipientEmail = user?.email ?? created[0].guest_email;
+  if (recipientEmail && status === "pending") {
+    await sendBookingsPendingEmail({ to: recipientEmail, timezone, bookings: lineItems, totalCents });
+  }
+
+  // One combined admin notification (online carts are always 'pending').
+  if (status === "pending") {
+    const adminEmails = await getAdminEmails();
+    await Promise.all(
+      adminEmails.map((adminEmail) =>
+        sendAdminBookingsRequestEmail({
+          to: adminEmail,
+          timezone,
+          bookings: lineItems,
+          totalCents,
+          bookerName: created[0].guest_name ?? user?.email ?? "A member",
+          bookerContact: created[0].guest_phone ?? user?.email ?? "—",
+          paymentReference: created[0].payment_reference,
+        })
+      )
+    );
+  }
+
+  revalidatePath("/book");
+  revalidatePath("/bookings");
+  return {
+    success: true,
+    bookings: created.map((b) => ({ bookingId: b.id, referenceCode: b.reference_code, status: b.status })),
+    totalCents,
+    status,
+    whatsAppShareLink: buildWhatsAppShareLinkForBookings({ timezone, bookings: lineItems }),
   };
 }
 
