@@ -13,6 +13,8 @@ type Coach = {
   name: string;
   bio: string | null;
   photo_url: string | null;
+  email: string | null;
+  phone: string | null;
   hourly_rate_cents: number;
 };
 
@@ -33,7 +35,7 @@ export default async function CoachesPage() {
   const { data: coaches } = venue
     ? await supabase
         .from("coaches")
-        .select("id, name, bio, photo_url, hourly_rate_cents")
+        .select("id, name, bio, photo_url, email, phone, hourly_rate_cents")
         .eq("venue_id", venue.id)
         .eq("is_active", true)
         .order("sort_order")
@@ -75,6 +77,20 @@ export default async function CoachesPage() {
                   <span className="text-sm font-medium text-primary">{pesos(c.hourly_rate_cents)}/hr</span>
                 </div>
                 {c.bio && <p className="flex-1 text-sm text-muted-foreground">{c.bio}</p>}
+                {(c.email || c.phone) && (
+                  <div className="flex flex-col gap-0.5 text-sm">
+                    {c.phone && (
+                      <a href={`tel:${c.phone}`} className="text-muted-foreground hover:text-foreground">
+                        {c.phone}
+                      </a>
+                    )}
+                    {c.email && (
+                      <a href={`mailto:${c.email}`} className="text-muted-foreground hover:text-foreground break-all">
+                        {c.email}
+                      </a>
+                    )}
+                  </div>
+                )}
                 <div className="pt-1">
                   <RequestCoachDialog coachId={c.id} coachName={c.name} isLoggedIn={!!user} />
                 </div>

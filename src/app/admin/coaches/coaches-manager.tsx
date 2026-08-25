@@ -21,6 +21,8 @@ export type Coach = {
   name: string;
   bio: string | null;
   photo_url: string | null;
+  email: string | null;
+  phone: string | null;
   hourly_rate_cents: number;
   is_active: boolean;
   sort_order: number;
@@ -85,6 +87,8 @@ function CoachForm({ venueId, coach, onSaved }: { venueId: string; coach: Coach 
       name: String(formData.get("name") ?? ""),
       bio: (formData.get("bio") as string) || undefined,
       photoUrl: photoUrl || undefined,
+      email: (formData.get("email") as string) || undefined,
+      phone: (formData.get("phone") as string) || undefined,
       hourlyRateCents: Number.isFinite(rate) ? Math.round(rate * 100) : 0,
       isActive: formData.get("isActive") === "on",
       sortOrder: Number(formData.get("sortOrder")) || 0,
@@ -127,6 +131,17 @@ function CoachForm({ venueId, coach, onSaved }: { venueId: string; coach: Coach 
           placeholder="Experience, specialties, playing level…"
           className="rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input id="email" name="email" type="email" defaultValue={coach?.email ?? ""} placeholder="coach@example.com" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="phone">Contact number</Label>
+          <Input id="phone" name="phone" defaultValue={coach?.phone ?? ""} placeholder="09171234567" />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

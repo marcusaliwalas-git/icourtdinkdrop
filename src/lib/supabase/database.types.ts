@@ -350,10 +350,12 @@ export type Database = {
         Row: {
           bio: string | null
           created_at: string
+          email: string | null
           hourly_rate_cents: number
           id: string
           is_active: boolean
           name: string
+          phone: string | null
           photo_url: string | null
           sort_order: number
           updated_at: string
@@ -362,10 +364,12 @@ export type Database = {
         Insert: {
           bio?: string | null
           created_at?: string
+          email?: string | null
           hourly_rate_cents?: number
           id?: string
           is_active?: boolean
           name: string
+          phone?: string | null
           photo_url?: string | null
           sort_order?: number
           updated_at?: string
@@ -374,10 +378,12 @@ export type Database = {
         Update: {
           bio?: string | null
           created_at?: string
+          email?: string | null
           hourly_rate_cents?: number
           id?: string
           is_active?: boolean
           name?: string
+          phone?: string | null
           photo_url?: string | null
           sort_order?: number
           updated_at?: string

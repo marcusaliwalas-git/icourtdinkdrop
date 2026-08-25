@@ -20,6 +20,8 @@ export async function upsertCoach(coachId: string | null, input: unknown): Promi
     name: d.name,
     bio: d.bio ?? null,
     photo_url: d.photoUrl || null,
+    email: d.email || null,
+    phone: d.phone || null,
     hourly_rate_cents: d.hourlyRateCents,
     is_active: d.isActive,
     sort_order: d.sortOrder,

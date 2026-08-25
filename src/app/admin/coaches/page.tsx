@@ -35,7 +35,7 @@ export default async function AdminCoachesPage() {
   const [{ data: coaches }, { data: requests }] = await Promise.all([
     supabase
       .from("coaches")
-      .select("id, name, bio, photo_url, hourly_rate_cents, is_active, sort_order")
+      .select("id, name, bio, photo_url, email, phone, hourly_rate_cents, is_active, sort_order")
       .eq("venue_id", venue.id)
       .order("sort_order")
       .order("name")

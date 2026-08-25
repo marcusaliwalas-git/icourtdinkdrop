@@ -10,6 +10,8 @@ export const coachSchema = z.object({
   name: z.string().trim().min(1, "Enter the coach's name.").max(120),
   bio: z.string().trim().max(2000).optional(),
   photoUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  email: z.email("Enter a valid email.").max(200).optional().or(z.literal("")),
+  phone: z.string().trim().max(40).optional(),
   hourlyRateCents: z.number().int().min(0),
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().default(0),
