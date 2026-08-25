@@ -36,6 +36,24 @@ function pesosCompact(cents: number) {
 // A selected tile is keyed by court + row so a cart can span any mix of courts and times.
 const cellKey = (courtId: string, rowIdx: number) => `${courtId}:${rowIdx}`;
 
+// Rate tiers for open cells: cool = cheaper → warm = pricier, so a glance across the grid
+// shows where the peak/premium slots are. Rates are mapped onto these steps by their position
+// between the day's lowest and highest rate, so it adapts to any venue's pricing.
+const RATE_TIERS = [
+  "bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-500/10 dark:text-teal-300 dark:hover:bg-teal-500/20",
+  "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20",
+  "bg-amber-50 text-amber-800 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20",
+  "bg-orange-50 text-orange-800 hover:bg-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20",
+  "bg-rose-50 text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20",
+];
+const RATE_TIER_SWATCH = ["bg-teal-400", "bg-emerald-400", "bg-amber-400", "bg-orange-400", "bg-rose-400"];
+
+// Which tier a rate falls into. A single flat rate stays the familiar "available" green (tier 1).
+function rateTierIndex(cents: number, minCents: number, maxCents: number): number {
+  if (maxCents <= minCents) return 1;
+  return Math.round(((cents - minCents) / (maxCents - minCents)) * (RATE_TIERS.length - 1));
+}
+
 export function AvailabilityGrid({
   timezone,
   courts,
@@ -169,8 +187,8 @@ export function AvailabilityGrid({
   // Per-hour price for every open cell — the court's rate for that hour, honouring time-of-day
   // rate periods and the member rate. Same computation as the cart total and the server, so the
   // number shown on a tile is exactly what that hour costs.
-  const priceByCell = useMemo(() => {
-    const map = new Map<string, string>();
+  const rateByCell = useMemo(() => {
+    const map = new Map<string, number>();
     rows.forEach((row, rowIdx) => {
       for (const court of courts) {
         if (row.cells[court.id] !== "available") continue;
@@ -183,11 +201,19 @@ export function AvailabilityGrid({
           baseMemberRateCents: court.member_rate_cents,
           isMember: isLoggedIn,
         });
-        map.set(cellKey(court.id, rowIdx), pesosCompact(cents));
+        map.set(cellKey(court.id, rowIdx), cents);
       }
     });
     return map;
   }, [rows, courts, timezone, ratePeriodsByCourtId, isLoggedIn]);
+
+  // Distinct rates present today, low→high, and the min/max used to place each on the tier scale.
+  const distinctRates = useMemo(
+    () => Array.from(new Set(rateByCell.values())).sort((a, b) => a - b),
+    [rateByCell]
+  );
+  const minRate = distinctRates[0] ?? 0;
+  const maxRate = distinctRates[distinctRates.length - 1] ?? 0;
 
   return (
     <>
@@ -195,6 +221,18 @@ export function AvailabilityGrid({
         Each open slot shows its price per hour{isLoggedIn ? " (your member rate where it applies)" : ""}. Tap any
         slots — across courts and times — then review and book them together.
       </p>
+
+      {distinctRates.length > 1 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>Rate:</span>
+          {distinctRates.map((rate) => (
+            <span key={rate} className="flex items-center gap-1.5">
+              <span className={cn("h-2.5 w-2.5 rounded-sm", RATE_TIER_SWATCH[rateTierIndex(rate, minRate, maxRate)])} />
+              {pesosCompact(rate)}/hr
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className={cn("overflow-x-auto rounded-md border", segments.length > 0 && "mb-24")}>
         <table className="w-full min-w-max border-collapse text-sm">
@@ -220,7 +258,9 @@ export function AvailabilityGrid({
                   const status = row.cells[court.id];
                   const isAvailableCell = status === "available";
                   const isSelected = selected.has(cellKey(court.id, rowIdx));
-                  const price = priceByCell.get(cellKey(court.id, rowIdx));
+                  const cents = rateByCell.get(cellKey(court.id, rowIdx));
+                  const price = cents != null ? pesosCompact(cents) : undefined;
+                  const tierClass = cents != null ? RATE_TIERS[rateTierIndex(cents, minRate, maxRate)] : "";
                   return (
                     <td key={court.id} className="border-l p-1 align-top">
                       <button
@@ -233,8 +273,7 @@ export function AvailabilityGrid({
                         }${isSelected ? ", selected" : ""}`}
                         className={cn(
                           "h-11 w-full min-w-24 rounded-md text-xs font-medium transition-all duration-150",
-                          isAvailableCell &&
-                            "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20",
+                          isAvailableCell && tierClass,
                           status === "booked" && "bg-muted text-muted-foreground",
                           status === "closed" && "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
                           status === "past" && "bg-transparent text-transparent",
