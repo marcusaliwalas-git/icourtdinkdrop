@@ -414,25 +414,7 @@ describe("create_booking — pricing and rules", () => {
     });
   });
 
-  it("requires a payment reference and slip for an online booking", async () => {
-    await withRollback(async (client) => {
-      const { courtId } = await createVenueWithCourt(client);
-
-      await expect(
-        callCreateBooking(client, {
-          courtId,
-          startsAt: daysFromNow(2),
-          durationMinutes: 60,
-          guestName: "Juan Dela Cruz",
-          guestPhone: "+639171234567",
-          paymentReference: null,
-          paymentSlipPath: null,
-        })
-      ).rejects.toThrow(/PAYMENT_PROOF_REQUIRED/);
-    });
-  });
-
-  it("requires both a reference and a slip, not just one of them", async () => {
+  it("requires a payment slip for an online booking, even when a reference is given", async () => {
     await withRollback(async (client) => {
       const { courtId } = await createVenueWithCourt(client);
 
@@ -447,6 +429,25 @@ describe("create_booking — pricing and rules", () => {
           paymentSlipPath: null,
         })
       ).rejects.toThrow(/PAYMENT_PROOF_REQUIRED/);
+    });
+  });
+
+  it("allows an online booking with a slip but no reference (the reference is optional)", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Juan Dela Cruz",
+        guestPhone: "+639171234567",
+        paymentReference: null,
+        paymentSlipPath: "test-fixtures/slip.jpg",
+      });
+
+      expect(booking.status).toBe("pending");
+      expect(booking.payment_reference).toBeNull();
     });
   });
 

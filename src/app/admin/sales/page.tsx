@@ -30,6 +30,18 @@ function daysBetween(from: string, to: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
+// Days actually elapsed in a range, capped at today — so an in-progress month/year averages over
+// the days that have happened, not the full calendar span (which would understate it).
+function effectiveDays(from: string, to: string, today: string): number {
+  const end = to < today ? to : today;
+  if (end < from) return 1; // range hasn't started yet
+  return daysBetween(from, end) + 1;
+}
+
+function avgDailyCents(realizedCents: number, from: string, to: string, today: string): number {
+  return Math.round(realizedCents / effectiveDays(from, to, today));
+}
+
 interface SummaryResult {
   summary: ReturnType<typeof summarizeSales>;
   totalBookings: number;
@@ -106,13 +118,34 @@ export default async function AdminSalesPage({
         })()
       : periodBounds(period, shiftAnchor(period, anchor, -1));
 
-  const [current, previous] = await Promise.all([
+  // Fixed month/year windows (independent of the selected period) for the always-on trends panel.
+  const monthNow = periodBounds("month", today);
+  const monthPrev = periodBounds("month", shiftAnchor("month", today, -1));
+  const yearNow = periodBounds("year", today);
+  const yearPrev = periodBounds("year", shiftAnchor("year", today, -1));
+
+  const [current, previous, mNow, mPrev, yNow, yPrev] = await Promise.all([
     summarizeRange(supabase, venue.timezone, from, to),
     summarizeRange(supabase, venue.timezone, prev.from, prev.to),
+    summarizeRange(supabase, venue.timezone, monthNow.from, monthNow.to),
+    summarizeRange(supabase, venue.timezone, monthPrev.from, monthPrev.to),
+    summarizeRange(supabase, venue.timezone, yearNow.from, yearNow.to),
+    summarizeRange(supabase, venue.timezone, yearPrev.from, yearPrev.to),
   ]);
 
   const s = current.summary;
   const change = percentChange(s.realizedCents, previous.summary.realizedCents);
+
+  // Avg daily sales for the selected range, and vs the previous comparable window.
+  const avgDaily = avgDailyCents(s.realizedCents, from, to, today);
+  const avgDailyPrev = avgDailyCents(previous.summary.realizedCents, prev.from, prev.to, today);
+  const avgDailyChange = percentChange(avgDaily, avgDailyPrev);
+
+  // Month-over-month and year-over-year avg daily sales, always relative to today.
+  const momCurrent = avgDailyCents(mNow.summary.realizedCents, monthNow.from, monthNow.to, today);
+  const momPrevious = avgDailyCents(mPrev.summary.realizedCents, monthPrev.from, monthPrev.to, today);
+  const yoyCurrent = avgDailyCents(yNow.summary.realizedCents, yearNow.from, yearNow.to, today);
+  const yoyPrevious = avgDailyCents(yPrev.summary.realizedCents, yearPrev.from, yearPrev.to, today);
 
   function hrefFor(overrides: Record<string, string | undefined>): string {
     const next = new URLSearchParams();
@@ -209,7 +242,7 @@ export default async function AdminSalesPage({
       <p className="text-sm text-muted-foreground">{rangeLabel}</p>
 
       {/* Headline stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Realized revenue" value={pesos(s.realizedCents)}>
           {change != null && (
             <span className={change >= 0 ? "text-primary" : "text-destructive"}>
@@ -217,8 +250,15 @@ export default async function AdminSalesPage({
             </span>
           )}
         </StatCard>
+        <StatCard label="Avg daily sales" value={pesos(avgDaily)}>
+          {avgDailyChange != null && (
+            <span className={avgDailyChange >= 0 ? "text-primary" : "text-destructive"}>
+              {avgDailyChange >= 0 ? "▲" : "▼"} {Math.abs(avgDailyChange)}% vs previous {period === "custom" ? "period" : period}
+            </span>
+          )}
+        </StatCard>
+        <StatCard label="Avg check per booking" value={pesos(s.avgCents)} />
         <StatCard label="Bookings" value={String(s.bookingCount)} />
-        <StatCard label="Avg booking" value={pesos(s.avgCents)} />
         <StatCard label="Awaiting verification" value={pesos(s.awaitingCents)}>
           <span className="text-muted-foreground">
             {s.awaitingCount} pending — not yet counted
@@ -229,7 +269,19 @@ export default async function AdminSalesPage({
       <p className="text-xs text-muted-foreground">
         Realized revenue counts confirmed, completed, and no-show bookings (payment kept — no refunds). Pending
         bookings awaiting payment verification are shown separately and excluded; cancelled bookings count as zero.
+        Avg daily sales divides realized revenue by the number of days elapsed in the range.
       </p>
+
+      {/* Avg daily sales trends — fixed month/year comparisons, independent of the picker above */}
+      <div className="rounded-xl border border-white/[0.08] bg-card p-4">
+        <h2 className="mb-3 font-mono text-xs tracking-[0.15em] text-muted-foreground uppercase">
+          Avg daily sales trends
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TrendRow label="This month vs last month" current={momCurrent} previous={momPrevious} />
+          <TrendRow label="This year vs last year" current={yoyCurrent} previous={yoyPrevious} />
+        </div>
+      </div>
 
       {/* Breakdowns */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -247,6 +299,24 @@ function StatCard({ label, value, children }: { label: string; value: string; ch
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-xl font-bold">{value}</p>
       {children && <p className="mt-1 text-xs">{children}</p>}
+    </div>
+  );
+}
+
+function TrendRow({ label, current, previous }: { label: string; current: number; previous: number }) {
+  const change = percentChange(current, previous);
+  return (
+    <div className="rounded-lg border border-border/50 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="text-lg font-bold">{pesos(current)}</span>
+        {change != null && (
+          <span className={"text-xs " + (change >= 0 ? "text-primary" : "text-destructive")}>
+            {change >= 0 ? "▲" : "▼"} {Math.abs(change)}%
+          </span>
+        )}
+      </div>
+      <p className="mt-0.5 text-xs text-muted-foreground">was {pesos(previous)} / day</p>
     </div>
   );
 }

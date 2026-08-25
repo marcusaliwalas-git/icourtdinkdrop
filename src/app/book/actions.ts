@@ -145,7 +145,14 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
   };
 }
 
-export type CreatedBooking = { bookingId: string; referenceCode: string; status: string };
+export type CreatedBooking = {
+  bookingId: string;
+  referenceCode: string;
+  status: string;
+  courtName: string;
+  startsAtIso: string;
+  endsAtIso: string;
+};
 
 export type CreateBookingsResult =
   | { success: true; bookings: CreatedBooking[]; totalCents: number; status: string; whatsAppShareLink: string }
@@ -254,7 +261,14 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
   revalidatePath("/bookings");
   return {
     success: true,
-    bookings: created.map((b) => ({ bookingId: b.id, referenceCode: b.reference_code, status: b.status })),
+    bookings: created.map((b, i) => ({
+      bookingId: b.id,
+      referenceCode: b.reference_code,
+      status: b.status,
+      courtName: lineItems[i].courtName,
+      startsAtIso: lineItems[i].startsAt.toISOString(),
+      endsAtIso: lineItems[i].endsAt.toISOString(),
+    })),
     totalCents,
     status,
     whatsAppShareLink: buildWhatsAppShareLinkForBookings({ timezone, bookings: lineItems }),

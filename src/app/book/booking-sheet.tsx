@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createBookings, type CreatedBooking } from "./actions";
 import { createClient } from "@/lib/supabase/client";
+import { buildIcs } from "@/lib/ics";
 
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
@@ -50,7 +51,6 @@ export function BookingSheet({
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
-  const [partySize, setPartySize] = useState("2");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -107,11 +107,10 @@ export function BookingSheet({
           startsAt: s.startsAtIso,
           durationMinutes: s.durationMinutes,
         })),
-        partySize: Number(partySize),
         guestName: isLoggedIn ? undefined : guestName,
         guestPhone: isLoggedIn ? undefined : guestPhone,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
-        paymentReference,
+        paymentReference: paymentReference.trim() || undefined,
         paymentSlipPath: path,
         idempotencyKey: `cart-${segments.map((s) => `${s.courtId}@${s.startsAtIso}`).join(",")}-${Date.now()}`,
       });
@@ -129,6 +128,31 @@ export function BookingSheet({
       onBookingConfirmed?.();
       router.refresh();
     });
+  }
+
+  // Build an .ics for the confirmed bookings and hand it to the browser as a download, so the
+  // customer can add every slot to their own calendar in one tap.
+  function downloadCalendar() {
+    if (!confirmation) return;
+    const ics = buildIcs(
+      confirmation.bookings.map((b) => ({
+        uid: `${b.referenceCode}@dinkdrop`,
+        start: new Date(b.startsAtIso),
+        end: new Date(b.endsAtIso),
+        title: `Pickleball — ${b.courtName}`,
+        description: `Booking reference: ${b.referenceCode}`,
+      })),
+      { calendarName: "DinkDrop bookings" }
+    );
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = confirmation.bookings.length > 1 ? "dinkdrop-bookings.ics" : "dinkdrop-booking.ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -151,6 +175,9 @@ export function BookingSheet({
                 </p>
               ))}
             </div>
+            <Button type="button" variant="outline" onClick={downloadCalendar} className="w-full">
+              Add to calendar
+            </Button>
             <a
               href={confirmation.whatsAppShareLink}
               target="_blank"
@@ -181,19 +208,6 @@ export function BookingSheet({
                 </li>
               ))}
             </ul>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="partySize">Party size (per court)</Label>
-              <Input
-                id="partySize"
-                type="number"
-                min={1}
-                max={20}
-                value={partySize}
-                onChange={(e) => setPartySize(e.target.value)}
-                required
-              />
-            </div>
 
             {!isLoggedIn && (
               <>
@@ -231,17 +245,16 @@ export function BookingSheet({
             <p className="text-sm text-muted-foreground">
               Total: <span className="font-medium text-foreground">{pesos(totalCents)}</span>.{" "}
               {isLoggedIn && "Member rates applied if you're an active member. "}
-              Transfer this amount via GCash or bank transfer, then enter your reference number and attach proof below.
+              Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="paymentReference">Payment reference number</Label>
+              <Label htmlFor="paymentReference">Payment reference number (optional)</Label>
               <Input
                 id="paymentReference"
                 value={paymentReference}
                 onChange={(e) => setPaymentReference(e.target.value)}
                 placeholder="e.g. GCash reference number"
-                required
               />
             </div>
 
