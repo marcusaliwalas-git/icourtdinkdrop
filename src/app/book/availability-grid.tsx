@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatInTimezone } from "@/lib/time";
 import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
-import { BookingSheet, type CartSegment } from "./booking-sheet";
+import { BookingSheet, type CartSegment, type CoachOption } from "./booking-sheet";
 import type { TimeRow } from "@/lib/availability";
 
 interface Court {
@@ -42,6 +42,7 @@ export function AvailabilityGrid({
   rows,
   courtIds,
   ratePeriodsByCourtId,
+  coaches,
   isLoggedIn,
 }: {
   timezone: string;
@@ -49,6 +50,7 @@ export function AvailabilityGrid({
   rows: TimeRow[];
   courtIds: string[];
   ratePeriodsByCourtId: Record<string, RatePeriod[]>;
+  coaches: CoachOption[];
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
@@ -291,6 +293,7 @@ export function AvailabilityGrid({
         onBookingConfirmed={() => setBookingConfirmed(true)}
         segments={segments}
         totalCents={totalCents}
+        coaches={coaches}
         isLoggedIn={isLoggedIn}
       />
     </>

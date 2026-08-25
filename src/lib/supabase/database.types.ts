@@ -156,6 +156,8 @@ export type Database = {
       bookings: {
         Row: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -177,6 +179,8 @@ export type Database = {
         }
         Insert: {
           booked_by?: string | null
+          coach_fee_cents?: number
+          coach_id?: string | null
           court_id: string
           created_at?: string
           guest_email?: string | null
@@ -198,6 +202,8 @@ export type Database = {
         }
         Update: {
           booked_by?: string | null
+          coach_fee_cents?: number
+          coach_id?: string | null
           court_id?: string
           created_at?: string
           guest_email?: string | null
@@ -223,6 +229,13 @@ export type Database = {
             columns: ["booked_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
             referencedColumns: ["id"]
           },
           {
@@ -272,6 +285,107 @@ export type Database = {
           },
           {
             foreignKeyName: "closures_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_requests: {
+        Row: {
+          coach_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          message: string | null
+          preferred_at: string | null
+          profile_id: string | null
+          status: string
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          id?: string
+          message?: string | null
+          preferred_at?: string | null
+          profile_id?: string | null
+          status?: string
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          id?: string
+          message?: string | null
+          preferred_at?: string | null
+          profile_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_requests_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coaches: {
+        Row: {
+          bio: string | null
+          created_at: string
+          hourly_rate_cents: number
+          id: string
+          is_active: boolean
+          name: string
+          photo_url: string | null
+          sort_order: number
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          bio?: string | null
+          created_at?: string
+          hourly_rate_cents?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          bio?: string | null
+          created_at?: string
+          hourly_rate_cents?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coaches_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
@@ -811,6 +925,8 @@ export type Database = {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -841,6 +957,8 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -886,6 +1004,8 @@ export type Database = {
         }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -915,6 +1035,7 @@ export type Database = {
       create_bookings: {
         Args: {
           p_booked_by?: string
+          p_coach_id?: string
           p_guest_email?: string
           p_guest_name?: string
           p_guest_phone?: string
@@ -929,6 +1050,8 @@ export type Database = {
         }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -981,6 +1104,8 @@ export type Database = {
         Args: { p_booking_id: string }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null
@@ -1015,6 +1140,8 @@ export type Database = {
         }
         Returns: {
           booked_by: string | null
+          coach_fee_cents: number
+          coach_id: string | null
           court_id: string
           created_at: string
           guest_email: string | null

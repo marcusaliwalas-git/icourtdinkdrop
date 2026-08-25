@@ -21,6 +21,7 @@ export default async function AdminLayout({
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
           <AdminNavLink href="/admin/customers">Top Customers</AdminNavLink>
+          <AdminNavLink href="/admin/coaches">Coaches</AdminNavLink>
           <AdminNavLink href="/admin/sales">Sales</AdminNavLink>
           <AdminNavLink href="/admin/members">Members</AdminNavLink>
           <AdminNavLink href="/admin/audit">Audit Log</AdminNavLink>

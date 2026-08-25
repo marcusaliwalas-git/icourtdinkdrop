@@ -54,6 +54,7 @@ export type BookingSegmentInput = z.infer<typeof bookingSegmentSchema>;
 export const createBookingsSchema = z
   .object({
     segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(24),
+    coachId: z.uuid().nullable().optional(),
     partySize: z.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
     guestPhone: phSchema.optional(),

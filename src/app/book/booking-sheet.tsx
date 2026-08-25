@@ -31,9 +31,18 @@ export interface CartSegment {
   estimateCents: number;
 }
 
+export interface CoachOption {
+  id: string;
+  name: string;
+  hourly_rate_cents: number;
+}
+
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
+
+const selectClass =
+  "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export function BookingSheet({
   open,
@@ -41,6 +50,7 @@ export function BookingSheet({
   onBookingConfirmed,
   segments,
   totalCents,
+  coaches,
   isLoggedIn,
 }: {
   open: boolean;
@@ -48,9 +58,11 @@ export function BookingSheet({
   onBookingConfirmed?: () => void;
   segments: CartSegment[];
   totalCents: number;
+  coaches: CoachOption[];
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
+  const [coachId, setCoachId] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -66,10 +78,17 @@ export function BookingSheet({
 
   if (segments.length === 0 && !confirmation) return null;
 
+  // Coaching add-on: one coach for the whole cart, charged per hour across all slots.
+  const totalMinutes = segments.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const selectedCoach = coaches.find((c) => c.id === coachId) ?? null;
+  const coachFeeCents = selectedCoach ? Math.round((selectedCoach.hourly_rate_cents * totalMinutes) / 60) : 0;
+  const grandTotalCents = totalCents + coachFeeCents;
+
   function handleClose(next: boolean) {
     if (!next) {
       setError(null);
       setConfirmation(null);
+      setCoachId("");
       setGuestName("");
       setGuestPhone("");
       setGuestEmail("");
@@ -110,6 +129,7 @@ export function BookingSheet({
         guestName: isLoggedIn ? undefined : guestName,
         guestPhone: isLoggedIn ? undefined : guestPhone,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
+        coachId: coachId || null,
         paymentReference: paymentReference.trim() || undefined,
         paymentSlipPath: path,
         idempotencyKey: `cart-${segments.map((s) => `${s.courtId}@${s.startsAtIso}`).join(",")}-${Date.now()}`,
@@ -207,7 +227,30 @@ export function BookingSheet({
                   <span className="text-muted-foreground">{pesos(s.estimateCents)}</span>
                 </li>
               ))}
+              {selectedCoach && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">Coaching — {selectedCoach.name}</span>
+                    <span className="text-muted-foreground"> · {totalMinutes / 60} hr</span>
+                  </span>
+                  <span className="text-muted-foreground">{pesos(coachFeeCents)}</span>
+                </li>
+              )}
             </ul>
+
+            {coaches.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="coach">Add a coach (optional)</Label>
+                <select id="coach" className={selectClass} value={coachId} onChange={(e) => setCoachId(e.target.value)}>
+                  <option value="">No coach</option>
+                  {coaches.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} — {pesos(c.hourly_rate_cents)}/hr
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {!isLoggedIn && (
               <>
@@ -243,7 +286,8 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(totalCents)}</span>.{" "}
+              Total: <span className="font-medium text-foreground">{pesos(grandTotalCents)}</span>
+              {selectedCoach ? ` (courts ${pesos(totalCents)} + coach ${pesos(coachFeeCents)})` : ""}.{" "}
               {isLoggedIn && "Member rates applied if you're an active member. "}
               Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
             </p>

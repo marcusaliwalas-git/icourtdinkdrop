@@ -174,8 +174,18 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { segments, partySize, guestName, guestPhone, guestEmail, notes, idempotencyKey, paymentReference, paymentSlipPath } =
-    parsed.data;
+  const {
+    segments,
+    coachId,
+    partySize,
+    guestName,
+    guestPhone,
+    guestEmail,
+    notes,
+    idempotencyKey,
+    paymentReference,
+    paymentSlipPath,
+  } = parsed.data;
 
   const { data, error } = await supabase.rpc("create_bookings", {
     p_segments: segments.map((s) => ({
@@ -194,6 +204,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
     p_player_names: [],
     p_payment_reference: paymentReference ?? null,
     p_payment_slip_path: paymentSlipPath ?? null,
+    p_coach_id: coachId ?? null,
   });
 
   if (error) {

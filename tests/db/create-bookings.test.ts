@@ -123,4 +123,52 @@ describe("create_bookings (batch)", () => {
       await expect(createBookings(client, [], member)).rejects.toThrow(/NO_SEGMENTS/);
     });
   });
+
+  it("attaches a coach and adds a per-hour fee across the whole cart", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client);
+      const court2 = await addCourt(client, venueId, "Court 2");
+      const member = await createMemberProfile(client);
+      const { rows: coachRows } = await client.query(
+        `insert into coaches (venue_id, name, hourly_rate_cents) values ($1, 'Coach Rae', 50000) returning id`,
+        [venueId]
+      );
+      const coachId = coachRows[0].id;
+
+      // Cart = 1h on court1 + 2h on court2 = 3h total → coach fee = ₱500/hr × 3 = ₱1,500.
+      const { rows } = await client.query(
+        `select id, coach_id, coach_fee_cents from create_bookings(
+            p_segments => $1::jsonb, p_party_size => 2, p_booked_by => $2, p_source => 'walkin', p_coach_id => $3)`,
+        [
+          JSON.stringify([
+            { court_id: courtId, starts_at: slot(0), duration_minutes: 60 },
+            { court_id: court2, starts_at: slot(0), duration_minutes: 120 },
+          ]),
+          member,
+          coachId,
+        ]
+      );
+
+      expect(rows).toHaveLength(2);
+      expect(rows.every((r) => r.coach_id === coachId)).toBe(true);
+      // Fee lives on exactly one booking, summing to the whole cart's coaching cost.
+      const totalCoachFee = rows.reduce((sum, r) => sum + r.coach_fee_cents, 0);
+      expect(totalCoachFee).toBe(150000);
+    });
+  });
+
+  it("rejects an unknown coach", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client);
+      const member = await createMemberProfile(client);
+      await expect(
+        client.query(
+          `select create_bookings(
+              p_segments => $1::jsonb, p_party_size => 2, p_booked_by => $2, p_source => 'walkin',
+              p_coach_id => gen_random_uuid())`,
+          [JSON.stringify([{ court_id: courtId, starts_at: slot(0), duration_minutes: 60 }]), member]
+        )
+      ).rejects.toThrow(/COACH_NOT_FOUND/);
+    });
+  });
 });

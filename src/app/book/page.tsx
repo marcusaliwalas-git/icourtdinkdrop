@@ -57,6 +57,14 @@ export default async function BookPage({
     .eq("is_active", true)
     .order("name");
 
+  const { data: coaches } = await supabase
+    .from("coaches")
+    .select("id, name, hourly_rate_cents")
+    .eq("venue_id", venue.id)
+    .eq("is_active", true)
+    .order("sort_order")
+    .order("name");
+
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
   const dayEnd = endOfLocalDayUtc(date, venue.timezone);
@@ -149,6 +157,7 @@ export default async function BookPage({
           rows={grid.rows}
           courtIds={courtIds}
           ratePeriodsByCourtId={ratePeriodsByCourtId}
+          coaches={coaches ?? []}
           isLoggedIn={!!user}
         />
       )}
