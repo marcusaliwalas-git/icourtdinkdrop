@@ -28,6 +28,11 @@ function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
 
+// Compact form for the tight grid cells: "₱600" (no centavos, rates are whole pesos).
+function pesosCompact(cents: number) {
+  return `₱${(cents / 100).toLocaleString("en-PH", { maximumFractionDigits: 0 })}`;
+}
+
 // A selected tile is keyed by court + row so a cart can span any mix of courts and times.
 const cellKey = (courtId: string, rowIdx: number) => `${courtId}:${rowIdx}`;
 
@@ -159,10 +164,34 @@ export function AvailabilityGrid({
   const courtCount = new Set(segments.map((s) => s.courtId)).size;
   const slotCount = segments.reduce((sum, s) => sum + s.durationMinutes / 60, 0);
 
+  // Per-hour price for every open cell — the court's rate for that hour, honouring time-of-day
+  // rate periods and the member rate. Same computation as the cart total and the server, so the
+  // number shown on a tile is exactly what that hour costs.
+  const priceByCell = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((row, rowIdx) => {
+      for (const court of courts) {
+        if (row.cells[court.id] !== "available") continue;
+        const cents = computeBookingTotalCents({
+          startsAtIso: row.startsAtIso,
+          durationMinutes: 60,
+          timezone,
+          ratePeriods: ratePeriodsByCourtId[court.id] ?? [],
+          baseHourlyRateCents: court.hourly_rate_cents,
+          baseMemberRateCents: court.member_rate_cents,
+          isMember: isLoggedIn,
+        });
+        map.set(cellKey(court.id, rowIdx), pesosCompact(cents));
+      }
+    });
+    return map;
+  }, [rows, courts, timezone, ratePeriodsByCourtId, isLoggedIn]);
+
   return (
     <>
       <p className="text-xs text-muted-foreground">
-        Tap any open slots — across courts and times — then review and book them together.
+        Each open slot shows its price per hour{isLoggedIn ? " (your member rate where it applies)" : ""}. Tap any
+        slots — across courts and times — then review and book them together.
       </p>
 
       <div className={cn("overflow-x-auto rounded-md border", segments.length > 0 && "mb-24")}>
@@ -189,6 +218,7 @@ export function AvailabilityGrid({
                   const status = row.cells[court.id];
                   const isAvailableCell = status === "available";
                   const isSelected = selected.has(cellKey(court.id, rowIdx));
+                  const price = priceByCell.get(cellKey(court.id, rowIdx));
                   return (
                     <td key={court.id} className="border-l p-1 align-top">
                       <button
@@ -196,7 +226,9 @@ export function AvailabilityGrid({
                         disabled={!isAvailableCell}
                         onClick={() => toggleCell(court.id, rowIdx)}
                         aria-pressed={isSelected}
-                        aria-label={`${court.name} at ${row.label}, ${STATUS_LABEL[status] || "unavailable"}${isSelected ? ", selected" : ""}`}
+                        aria-label={`${court.name} at ${row.label}, ${
+                          isAvailableCell ? `${price} per hour` : STATUS_LABEL[status] || "unavailable"
+                        }${isSelected ? ", selected" : ""}`}
                         className={cn(
                           "h-11 w-full min-w-24 rounded-md text-xs font-medium transition-all duration-150",
                           isAvailableCell &&
@@ -208,7 +240,14 @@ export function AvailabilityGrid({
                             "bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(159,206,32,0.5),0_0_20px_-4px_rgba(159,206,32,0.6)] hover:bg-primary hover:text-primary-foreground dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground"
                         )}
                       >
-                        {isSelected ? "Selected" : STATUS_LABEL[status]}
+                        {isAvailableCell ? (
+                          <span className="flex flex-col leading-tight">
+                            <span>{price}</span>
+                            {isSelected && <span className="text-[0.6rem] font-normal opacity-90">Selected</span>}
+                          </span>
+                        ) : (
+                          STATUS_LABEL[status]
+                        )}
                       </button>
                     </td>
                   );
