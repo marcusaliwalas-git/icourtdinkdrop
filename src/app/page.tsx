@@ -4,6 +4,7 @@ import { computeLiveStatus } from "@/lib/home-status";
 import { minutesToLabel, timeToMinutes } from "@/lib/home-status";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { allRatesCents } from "@/lib/pricing";
+import { getTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return (

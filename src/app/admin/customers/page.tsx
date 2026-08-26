@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { periodBounds, shiftAnchor, type CalendarPeriod } from "@/lib/period-range";
+import { getTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +47,7 @@ export default async function AdminCustomersPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("id, timezone")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;

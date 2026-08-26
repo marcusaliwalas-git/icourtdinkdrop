@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatInTimezone } from "@/lib/time";
 import { CoachesManager, type Coach } from "./coaches-manager";
 import { RequestsList, type CoachRequest } from "./requests-list";
+import { getTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,7 @@ type RequestRow = {
 export default async function AdminCoachesPage() {
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("id, timezone")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;

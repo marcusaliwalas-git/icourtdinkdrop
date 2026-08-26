@@ -4,6 +4,7 @@ import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/ti
 import { parseTstzRange } from "@/lib/availability";
 import { periodBounds, shiftAnchor, type CalendarPeriod } from "@/lib/period-range";
 import { summarizeSales, percentChange, type SalesInputRow, type SalesBreakdown } from "@/lib/sales";
+import { getTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -85,12 +86,7 @@ export default async function AdminSalesPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("id, timezone")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;

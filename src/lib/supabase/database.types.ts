@@ -668,6 +668,7 @@ export type Database = {
           role: string
           skill_level: number | null
           updated_at: string
+          venue_id: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -680,6 +681,7 @@ export type Database = {
           role?: string
           skill_level?: number | null
           updated_at?: string
+          venue_id?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -692,8 +694,17 @@ export type Database = {
           role?: string
           skill_level?: number | null
           updated_at?: string
+          venue_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       session_signups: {
         Row: {
@@ -825,11 +836,13 @@ export type Database = {
           cancellation_cutoff_hours: number
           contact: string | null
           created_at: string
+          custom_domain: string | null
           id: string
           max_advance_days: number
           min_lead_minutes: number
           name: string
           photos: string[]
+          slug: string | null
           timezone: string
           updated_at: string
         }
@@ -839,11 +852,13 @@ export type Database = {
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string
+          custom_domain?: string | null
           id?: string
           max_advance_days?: number
           min_lead_minutes?: number
           name: string
           photos?: string[]
+          slug?: string | null
           timezone?: string
           updated_at?: string
         }
@@ -853,11 +868,13 @@ export type Database = {
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string
+          custom_domain?: string | null
           id?: string
           max_advance_days?: number
           min_lead_minutes?: number
           name?: string
           photos?: string[]
+          slug?: string | null
           timezone?: string
           updated_at?: string
         }
@@ -1084,6 +1101,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      current_user_venue: { Args: never; Returns: string }
       get_booking_by_reference: {
         Args: { p_reference_code: string }
         Returns: {

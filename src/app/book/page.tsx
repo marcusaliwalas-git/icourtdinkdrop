@@ -4,6 +4,7 @@ import { buildAvailabilityGrid } from "@/lib/availability";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { AvailabilityGrid } from "./availability-grid";
 import { DatePickerPopover } from "./date-picker-popover";
+import { getTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +25,13 @@ function nextSaturday(fromDateStr: string): string {
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; venue?: string }>;
+  searchParams: Promise<{ date?: string }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
 
-  const venueQuery = supabase.from("venues").select("*").order("created_at", { ascending: true }).limit(1);
-  const { data: venue } = params.venue
-    ? await supabase.from("venues").select("*").eq("id", params.venue).single()
-    : await venueQuery.maybeSingle();
+  // The tenant (venue) comes from the request hostname, not a query param.
+  const venue = await getTenant();
 
   if (!venue) {
     return (
@@ -120,7 +119,6 @@ export default async function BookPage({
 
   function hrefFor(d: string) {
     const qs = new URLSearchParams({ date: d });
-    if (params.venue) qs.set("venue", params.venue);
     return `/book?${qs.toString()}`;
   }
 
@@ -141,7 +139,7 @@ export default async function BookPage({
         <QuickFilterLink href={hrefFor(quickDates.weekend)} active={date === quickDates.weekend}>
           This weekend
         </QuickFilterLink>
-        <DatePickerPopover date={date} venueId={params.venue} />
+        <DatePickerPopover date={date} venueId={undefined} />
       </div>
 
       {grid.closedAllDay ? (

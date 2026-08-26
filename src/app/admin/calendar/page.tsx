@@ -3,6 +3,7 @@ import { buildAdminCalendarGrid } from "@/lib/availability";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { CalendarGrid } from "./calendar-grid";
 import { CalendarDatePicker } from "./date-picker";
+import { getTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +15,7 @@ export default async function AdminCalendarPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;

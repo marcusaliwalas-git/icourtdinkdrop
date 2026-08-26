@@ -4,16 +4,12 @@ import { VenueDetailsForm } from "./venue-details-form";
 import { CourtsManager } from "./courts-manager";
 import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
+import { getTenant } from "@/lib/tenant";
 
 export default async function AdminVenuePage() {
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return (
