@@ -11,6 +11,8 @@ import {
   sendBookingCancellationEmail,
   sendBookingRescheduledEmail,
 } from "@/lib/email";
+import { getTenant } from "@/lib/tenant";
+import { tenantSiteUrl } from "@/lib/site-url";
 import type { RatePeriod } from "@/lib/pricing";
 
 function hhmmToMinutes(t: string): number {
@@ -89,6 +91,7 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
       endsAt: end,
       timezone,
       referenceCode: data.reference_code,
+      siteUrl: tenantSiteUrl(await getTenant()),
     });
   }
 
@@ -123,6 +126,7 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      siteUrl: tenantSiteUrl(await getTenant()),
     });
   }
 
@@ -288,6 +292,7 @@ export async function adminRescheduleBooking(
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      siteUrl: tenantSiteUrl(await getTenant()),
     });
   }
 

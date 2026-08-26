@@ -2,7 +2,6 @@ import "server-only";
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { formatInTimezone } from "@/lib/time";
-import { getSiteUrl } from "@/lib/site-url";
 import { renderEmail } from "@/lib/email-template";
 
 let client: Resend | null = null;
@@ -41,6 +40,7 @@ interface BookingEmailDetails {
   timezone: string;
   referenceCode: string;
   totalCents: number;
+  siteUrl: string;
 }
 
 function pesos(cents: number) {
@@ -77,11 +77,11 @@ async function safeSend(payload: Parameters<Resend["emails"]["send"]>[0]) {
   console.warn("No email transport configured — skipping email send:", payload.subject);
 }
 
-// Guests have no account, so their booking emails point at the public home page (the
-// request's "main page for guests/members"); the members' view is reachable from there.
-const SITE_HOME = () => `${getSiteUrl()}/`;
+// Links are built from the tenant's own base URL (passed in as details.siteUrl), so each venue's
+// emails point at that venue's host rather than a single shared one.
+const homeUrl = (base: string) => `${base}/`;
 // Admins get sent straight to the pending-review queue they need to act on.
-const ADMIN_PENDING_URL = () => `${getSiteUrl()}/admin/bookings?status=pending`;
+const adminPendingUrl = (base: string) => `${base}/admin/bookings?status=pending`;
 
 export async function sendBookingConfirmationEmail(details: BookingEmailDetails) {
   const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
@@ -100,7 +100,7 @@ export async function sendBookingConfirmationEmail(details: BookingEmailDetails)
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total paid", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: SITE_HOME() },
+      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -123,7 +123,7 @@ export async function sendBookingPendingEmail(details: BookingEmailDetails) {
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: SITE_HOME() },
+      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -145,7 +145,7 @@ export async function sendBookingCancellationEmail(details: Omit<BookingEmailDet
         { label: "When", value: `${when} – ${until}` },
         { label: "Reference", value: details.referenceCode, mono: true },
       ],
-      button: { label: "Book another court", url: SITE_HOME() },
+      button: { label: "Book another court", url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -168,7 +168,7 @@ export async function sendBookingRescheduledEmail(details: BookingEmailDetails) 
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: SITE_HOME() },
+      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -185,6 +185,7 @@ interface BookingsEmailDetails {
   timezone: string;
   bookings: BookingLineItem[];
   totalCents: number;
+  siteUrl: string;
 }
 
 /** One line per booking in a cart: "Court 1 · Sat, Aug 30 at 6:00 PM – 8:00 PM (ABC12345)". */
@@ -212,7 +213,7 @@ export async function sendBookingsPendingEmail(details: BookingsEmailDetails) {
         ...bookingLineRows(details.bookings, details.timezone),
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: SITE_HOME() },
+      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -225,6 +226,7 @@ export interface AdminBookingsRequestDetails {
   bookerName: string;
   bookerContact: string;
   paymentReference: string | null;
+  siteUrl: string;
 }
 
 /** Notifies an admin that a cart of bookings is awaiting review. */
@@ -246,7 +248,7 @@ export async function sendAdminBookingsRequestEmail(details: AdminBookingsReques
         { label: "Payment ref", value: details.paymentReference ?? "—" },
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Review bookings", url: ADMIN_PENDING_URL() },
+      button: { label: "Review bookings", url: adminPendingUrl(details.siteUrl) },
       outro: ["Open the admin dashboard to view the payment proof and take action."],
     }),
   });
@@ -263,6 +265,7 @@ export interface AdminBookingRequestDetails {
   bookerName: string;
   bookerContact: string;
   paymentReference: string | null;
+  siteUrl: string;
 }
 
 /** Notifies an admin that a new online booking is awaiting their review/confirmation. */
@@ -288,7 +291,7 @@ export async function sendAdminBookingRequestEmail(details: AdminBookingRequestD
         { label: "Payment ref", value: details.paymentReference ?? "—" },
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Review booking", url: ADMIN_PENDING_URL() },
+      button: { label: "Review booking", url: adminPendingUrl(details.siteUrl) },
       outro: ["Open the admin dashboard to view the payment proof and take action."],
     }),
   });

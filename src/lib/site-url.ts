@@ -12,3 +12,18 @@ export function getSiteUrl(): string {
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:3000";
 }
+
+/**
+ * The public base URL for a specific tenant (venue), for links inside its emails — so a booking
+ * confirmation points at that tenant's own host, not a single shared one. Prefers the venue's
+ * custom domain, then its `‹slug›.‹root domain›` subdomain, falling back to getSiteUrl() for a
+ * not-yet-configured single-tenant deployment (slug still "default").
+ */
+export function tenantSiteUrl(venue: { slug: string | null; custom_domain: string | null } | null): string {
+  if (venue?.custom_domain) return `https://${venue.custom_domain.replace(/\/+$/, "")}`;
+  if (venue?.slug && venue.slug !== "default") {
+    const root = (process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "dinkdrop.live").toLowerCase();
+    return `https://${venue.slug}.${root}`;
+  }
+  return getSiteUrl();
+}
