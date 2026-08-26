@@ -119,6 +119,43 @@ describe("multi-tenant isolation (RLS)", () => {
     });
   });
 
+  it("an admin cannot cancel another venue's booking via the RPC", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+
+      await actAs(client, a.adminId);
+      await expect(client.query(`select cancel_booking(p_booking_id => $1)`, [b.bookingId])).rejects.toThrow(
+        /NOT_AUTHORIZED/
+      );
+    });
+  });
+
+  it("an admin cannot reschedule another venue's booking via the RPC", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+
+      await actAs(client, a.adminId);
+      await expect(
+        client.query(
+          `select reschedule_booking(p_booking_id => $1, p_new_court_id => $2, p_new_starts_at => now() + interval '2 days')`,
+          [b.bookingId, b.courtId]
+        )
+      ).rejects.toThrow(/NOT_AUTHORIZED/);
+    });
+  });
+
+  it("an admin can cancel their own venue's booking via the RPC", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+
+      await actAs(client, a.adminId);
+      const { rows } = await client.query(`select status from cancel_booking(p_booking_id => $1)`, [a.bookingId]);
+      expect(rows[0].status).toBe("cancelled");
+    });
+  });
+
   it("a member cannot move themselves to another tenant", async () => {
     await withRollback(async (client) => {
       const a = await seedTenant(client, "Venue A");

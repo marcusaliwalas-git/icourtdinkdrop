@@ -82,10 +82,20 @@ export async function createMemberProfile(
   return profileId;
 }
 
-/** Same as createMemberProfile, but promotes the resulting profile to admin. */
-export async function createAdminProfile(client: PoolClient): Promise<string> {
+/**
+ * Same as createMemberProfile, but promotes the resulting profile to admin and pins them to a
+ * venue (the given one, or the most recently created — these single-venue tests make the venue
+ * first). Admin operations are now tenant-scoped, so the admin must belong to the booking's venue.
+ */
+export async function createAdminProfile(client: PoolClient, venueId?: string): Promise<string> {
   const profileId = await createMemberProfile(client);
-  await client.query(`update profiles set role = 'admin' where id = $1`, [profileId]);
+  await client.query(
+    `update profiles
+       set role = 'admin',
+           venue_id = coalesce($2, (select id from venues order by created_at desc limit 1))
+     where id = $1`,
+    [profileId, venueId ?? null]
+  );
   return profileId;
 }
 
