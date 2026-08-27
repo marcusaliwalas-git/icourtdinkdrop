@@ -837,6 +837,7 @@ export type Database = {
           contact: string | null
           created_at: string
           custom_domain: string | null
+          email_from: string | null
           id: string
           max_advance_days: number
           min_lead_minutes: number
@@ -853,6 +854,7 @@ export type Database = {
           contact?: string | null
           created_at?: string
           custom_domain?: string | null
+          email_from?: string | null
           id?: string
           max_advance_days?: number
           min_lead_minutes?: number
@@ -869,6 +871,7 @@ export type Database = {
           contact?: string | null
           created_at?: string
           custom_domain?: string | null
+          email_from?: string | null
           id?: string
           max_advance_days?: number
           min_lead_minutes?: number
@@ -944,6 +947,7 @@ export type Database = {
     }
     Functions: {
       booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
+      booking_venue: { Args: { p_booking: string }; Returns: string }
       cancel_booking: {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
@@ -976,6 +980,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      coach_venue: { Args: { p_coach: string }; Returns: string }
       confirm_booking: {
         Args: { p_booking_id: string }
         Returns: {
@@ -1008,6 +1013,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      court_venue: { Args: { p_court: string }; Returns: string }
       create_booking: {
         Args: {
           p_booked_by?: string
@@ -1156,6 +1162,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      profile_venue: { Args: { p_profile: string }; Returns: string }
       reschedule_booking: {
         Args: {
           p_booking_id: string
@@ -1192,6 +1199,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      session_venue: { Args: { p_session: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

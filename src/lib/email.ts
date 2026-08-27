@@ -26,10 +26,12 @@ function getLocalTransport(): nodemailer.Transporter | null {
   return localTransport;
 }
 
-/** Adds a display name so the inbox shows "iCourt Social", not a bare address. */
-function fromAddress(): string {
-  const email = process.env.RESEND_FROM_EMAIL ?? "bookings@example.com";
-  return `iCourt Social <${email}>`;
+/** Sends with the tenant's own display name (its venue name) and, if it has one, its own verified
+ * address — otherwise the shared platform address. So the inbox shows "Acme Pickleball", not one
+ * shared brand. */
+function fromAddress(brandName: string, fromEmail: string | null): string {
+  const email = fromEmail || process.env.RESEND_FROM_EMAIL || "bookings@example.com";
+  return `${brandName} <${email}>`;
 }
 
 interface BookingEmailDetails {
@@ -41,6 +43,8 @@ interface BookingEmailDetails {
   referenceCode: string;
   totalCents: number;
   siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
 }
 
 function pesos(cents: number) {
@@ -88,7 +92,7 @@ export async function sendBookingConfirmationEmail(details: BookingEmailDetails)
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from: fromAddress(),
+    from: fromAddress(details.brandName, details.fromEmail),
     to: details.to,
     subject: `Booking confirmed: ${details.courtName}, ${when}`,
     html: renderEmail({
@@ -100,7 +104,7 @@ export async function sendBookingConfirmationEmail(details: BookingEmailDetails)
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total paid", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
+      button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -111,7 +115,7 @@ export async function sendBookingPendingEmail(details: BookingEmailDetails) {
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from: fromAddress(),
+    from: fromAddress(details.brandName, details.fromEmail),
     to: details.to,
     subject: `Booking request received: ${details.courtName}, ${when}`,
     html: renderEmail({
@@ -123,7 +127,7 @@ export async function sendBookingPendingEmail(details: BookingEmailDetails) {
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
+      button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -133,7 +137,7 @@ export async function sendBookingCancellationEmail(details: Omit<BookingEmailDet
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from: fromAddress(),
+    from: fromAddress(details.brandName, details.fromEmail),
     to: details.to,
     subject: `Booking cancelled: ${details.courtName}, ${when}`,
     html: renderEmail({
@@ -156,7 +160,7 @@ export async function sendBookingRescheduledEmail(details: BookingEmailDetails) 
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from: fromAddress(),
+    from: fromAddress(details.brandName, details.fromEmail),
     to: details.to,
     subject: `Booking rescheduled: ${details.courtName}, ${when}`,
     html: renderEmail({
@@ -168,7 +172,7 @@ export async function sendBookingRescheduledEmail(details: BookingEmailDetails) 
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
+      button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -186,6 +190,8 @@ interface BookingsEmailDetails {
   bookings: BookingLineItem[];
   totalCents: number;
   siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
 }
 
 /** One line per booking in a cart: "Court 1 · Sat, Aug 30 at 6:00 PM – 8:00 PM (ABC12345)". */
@@ -201,7 +207,7 @@ function bookingLineRows(bookings: BookingLineItem[], timezone: string) {
 export async function sendBookingsPendingEmail(details: BookingsEmailDetails) {
   const count = details.bookings.length;
   await safeSend({
-    from: fromAddress(),
+    from: fromAddress(details.brandName, details.fromEmail),
     to: details.to,
     subject: `Booking request received: ${count} slot${count > 1 ? "s" : ""}`,
     html: renderEmail({
@@ -213,7 +219,7 @@ export async function sendBookingsPendingEmail(details: BookingsEmailDetails) {
         ...bookingLineRows(details.bookings, details.timezone),
         { label: "Total", value: pesos(details.totalCents) },
       ],
-      button: { label: "Open iCourt Social", url: homeUrl(details.siteUrl) },
+      button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
 }
@@ -227,13 +233,15 @@ export interface AdminBookingsRequestDetails {
   bookerContact: string;
   paymentReference: string | null;
   siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
 }
 
 /** Notifies an admin that a cart of bookings is awaiting review. */
 export async function sendAdminBookingsRequestEmail(details: AdminBookingsRequestDetails) {
   const count = details.bookings.length;
   await safeSend({
-    from: fromAddress(),
+    from: fromAddress(details.brandName, details.fromEmail),
     to: details.to,
     subject: `New booking to review: ${count} slot${count > 1 ? "s" : ""} from ${details.bookerName}`,
     html: renderEmail({
@@ -266,6 +274,8 @@ export interface AdminBookingRequestDetails {
   bookerContact: string;
   paymentReference: string | null;
   siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
 }
 
 /** Notifies an admin that a new online booking is awaiting their review/confirmation. */
@@ -274,7 +284,7 @@ export async function sendAdminBookingRequestEmail(details: AdminBookingRequestD
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
   await safeSend({
-    from: fromAddress(),
+    from: fromAddress(details.brandName, details.fromEmail),
     to: details.to,
     subject: `New booking to review: ${details.courtName}, ${when}`,
     html: renderEmail({

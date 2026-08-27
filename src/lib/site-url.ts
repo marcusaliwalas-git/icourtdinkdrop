@@ -27,3 +27,21 @@ export function tenantSiteUrl(venue: { slug: string | null; custom_domain: strin
   }
   return getSiteUrl();
 }
+
+/** Per-tenant email branding: the sender display name (the venue's own name), its optional custom
+ * sending address (else the shared platform address is used), and its base URL for links. */
+export interface EmailBrand {
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+}
+
+export function tenantEmailBrand(
+  venue: { name?: string | null; slug: string | null; custom_domain: string | null; email_from?: string | null } | null
+): EmailBrand {
+  return {
+    siteUrl: tenantSiteUrl(venue),
+    brandName: venue?.name?.trim() || "Bookings",
+    fromEmail: venue?.email_from ?? null,
+  };
+}

@@ -18,7 +18,7 @@ import {
 } from "@/lib/email";
 import { getAdminEmails } from "@/lib/admin-recipients";
 import { getTenant } from "@/lib/tenant";
-import { tenantSiteUrl } from "@/lib/site-url";
+import { tenantEmailBrand } from "@/lib/site-url";
 import type { Database } from "@/lib/supabase/database.types";
 
 type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
@@ -86,7 +86,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
   // Tenant-scoped: the link in the email points at this venue's own host, and only this venue's
   // admins are notified.
   const tenant = await getTenant();
-  const siteUrl = tenantSiteUrl(tenant);
+  const brand = tenantEmailBrand(tenant);
   const venueId = tenant?.id ?? court?.venue_id ?? null;
 
   // Members always have an email; guests only get one if they chose to give it (it's optional
@@ -101,7 +101,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
-      siteUrl,
+      ...brand,
     };
     // Online bookings start 'pending'; only walk-in/admin-created bookings come back
     // already 'confirmed'.
@@ -130,7 +130,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
           bookerName: data.guest_name ?? user?.email ?? "A member",
           bookerContact: data.guest_phone ?? user?.email ?? "—",
           paymentReference: data.payment_reference,
-          siteUrl,
+          ...brand,
         })
       )
     );
@@ -244,7 +244,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
 
   // Tenant-scoped links + admin recipients (all cart courts belong to the one tenant).
   const tenant = await getTenant();
-  const siteUrl = tenantSiteUrl(tenant);
+  const brand = tenantEmailBrand(tenant);
   const venueId = tenant?.id ?? (courtRows ?? [])[0]?.venue_id ?? null;
 
   const lineItems: BookingLineItem[] = created.map((b) => {
@@ -262,7 +262,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
   // One combined email to the booker (members always have an email; guests only if they gave one).
   const recipientEmail = user?.email ?? created[0].guest_email;
   if (recipientEmail && status === "pending") {
-    await sendBookingsPendingEmail({ to: recipientEmail, timezone, bookings: lineItems, totalCents, siteUrl });
+    await sendBookingsPendingEmail({ to: recipientEmail, timezone, bookings: lineItems, totalCents, ...brand });
   }
 
   // One combined admin notification (online carts are always 'pending').
@@ -278,7 +278,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
           bookerName: created[0].guest_name ?? user?.email ?? "A member",
           bookerContact: created[0].guest_phone ?? user?.email ?? "—",
           paymentReference: created[0].payment_reference,
-          siteUrl,
+          ...brand,
         })
       )
     );
@@ -341,7 +341,7 @@ export async function cancelBooking(input: unknown): Promise<CancelBookingResult
       endsAt: end,
       timezone,
       referenceCode: data.reference_code,
-      siteUrl: tenantSiteUrl(await getTenant()),
+      ...tenantEmailBrand(await getTenant()),
     });
   }
 
