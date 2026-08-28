@@ -829,6 +829,53 @@ export type Database = {
           },
         ]
       }
+      venue_sections: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          is_visible: boolean
+          media_type: string | null
+          media_url: string | null
+          sort_order: number
+          title: string | null
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          media_type?: string | null
+          media_url?: string | null
+          sort_order?: number
+          title?: string | null
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          media_type?: string | null
+          media_url?: string | null
+          sort_order?: number
+          title?: string | null
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_sections_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venues: {
         Row: {
           address: string | null
@@ -838,6 +885,10 @@ export type Database = {
           created_at: string
           custom_domain: string | null
           email_from: string | null
+          hero_heading: string | null
+          hero_media_type: string | null
+          hero_media_url: string | null
+          hero_subheading: string | null
           id: string
           logo_url: string | null
           max_advance_days: number
@@ -856,6 +907,10 @@ export type Database = {
           created_at?: string
           custom_domain?: string | null
           email_from?: string | null
+          hero_heading?: string | null
+          hero_media_type?: string | null
+          hero_media_url?: string | null
+          hero_subheading?: string | null
           id?: string
           logo_url?: string | null
           max_advance_days?: number
@@ -874,6 +929,10 @@ export type Database = {
           created_at?: string
           custom_domain?: string | null
           email_from?: string | null
+          hero_heading?: string | null
+          hero_media_type?: string | null
+          hero_media_url?: string | null
+          hero_subheading?: string | null
           id?: string
           logo_url?: string | null
           max_advance_days?: number

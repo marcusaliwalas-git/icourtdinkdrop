@@ -1,8 +1,14 @@
 import { z } from "zod";
 
+const mediaType = z.enum(["image", "video"]).optional().or(z.literal(""));
+
 export const venueSchema = z.object({
   name: z.string().trim().min(1).max(120),
   logoUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  heroHeading: z.string().trim().max(200).optional().or(z.literal("")),
+  heroSubheading: z.string().trim().max(600).optional().or(z.literal("")),
+  heroMediaUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  heroMediaType: mediaType,
   address: z.string().trim().max(300).optional(),
   timezone: z.string().trim().min(1).default("Asia/Manila"),
   contact: z.string().trim().max(120).optional(),
@@ -12,6 +18,18 @@ export const venueSchema = z.object({
 });
 
 export type VenueInput = z.infer<typeof venueSchema>;
+
+export const venueSectionSchema = z.object({
+  venueId: z.uuid(),
+  title: z.string().trim().max(200).optional().or(z.literal("")),
+  body: z.string().trim().max(5000).optional().or(z.literal("")),
+  mediaUrl: z.string().trim().max(500).optional().or(z.literal("")),
+  mediaType: mediaType,
+  sortOrder: z.number().int().default(0),
+  isVisible: z.boolean().default(true),
+});
+
+export type VenueSectionInput = z.infer<typeof venueSectionSchema>;
 
 export const courtSchema = z.object({
   venueId: z.uuid(),

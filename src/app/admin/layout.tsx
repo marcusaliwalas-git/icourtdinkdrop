@@ -27,6 +27,7 @@ export default async function AdminLayout({
             <span className="font-mono text-[0.65rem] tracking-[0.15em] text-muted-foreground uppercase">Admin</span>
           </AdminNavLink>
           <AdminNavLink href="/admin/venue">Venue &amp; Courts</AdminNavLink>
+          <AdminNavLink href="/admin/homepage">Home page</AdminNavLink>
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
           <AdminNavLink href="/admin/customers">Top Customers</AdminNavLink>
