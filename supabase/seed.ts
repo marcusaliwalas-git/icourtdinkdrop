@@ -40,6 +40,9 @@ async function main() {
     .from("venues")
     .insert({
       name: "DinkDrop Pickleball Club — BGC",
+      // Matches the migration backfill for the default venue. The backfill runs before this seed,
+      // so set it here too or a fresh local reset shows the venue name instead of the logo.
+      logo_url: "/icourt-social-logo.png",
       address: "9th Ave corner 31st St, Bonifacio Global City, Taguig",
       timezone: "Asia/Manila",
       contact: "+639171234567",
