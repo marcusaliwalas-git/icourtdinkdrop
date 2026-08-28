@@ -102,6 +102,10 @@ async function main() {
         phone: `+639${String(170000000 + i).padStart(9, "0")}`,
         skill_level: skillLevel(),
         role,
+        // Tag every seeded profile with the venue. The one-time migration backfill runs before
+        // this seed, so without this the admin lands with a null venue_id and RLS silently
+        // blocks all venue-admin writes.
+        venue_id: venue.id,
       })
       .eq("id", profileId);
 

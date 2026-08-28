@@ -28,7 +28,7 @@ export async function updateHero(input: unknown): Promise<Result> {
   const tenant = await getTenant();
   if (!tenant) return { error: "No venue resolved for this host." };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("venues")
     .update({
       hero_heading: parsed.data.heroHeading || null,
@@ -36,8 +36,12 @@ export async function updateHero(input: unknown): Promise<Result> {
       hero_media_url: parsed.data.heroMediaUrl || null,
       hero_media_type: parsed.data.heroMediaType || null,
     })
-    .eq("id", tenant.id);
+    .eq("id", tenant.id)
+    .select("id");
   if (error) return { error: error.message };
+  // RLS scopes the write to the admin's own venue; a 0-row result means the account isn't
+  // linked to this venue, so the update was silently dropped rather than saved.
+  if (!data?.length) return { error: "Couldn't save — your account isn't linked to this venue." };
 
   revalidateHome();
   return { success: true };
@@ -63,10 +67,12 @@ export async function upsertSection(sectionId: string | null, input: unknown): P
     is_visible: d.isVisible,
   };
 
-  const { error } = sectionId
-    ? await supabase.from("venue_sections").update(row).eq("id", sectionId)
-    : await supabase.from("venue_sections").insert(row);
+  const { data, error } = sectionId
+    ? await supabase.from("venue_sections").update(row).eq("id", sectionId).select("id")
+    : await supabase.from("venue_sections").insert(row).select("id");
   if (error) return { error: error.message };
+  // A 0-row update means the section belongs to another venue (RLS dropped it silently).
+  if (!data?.length) return { error: "That section isn't for your venue." };
 
   revalidateHome();
   return { success: true };
@@ -74,8 +80,10 @@ export async function upsertSection(sectionId: string | null, input: unknown): P
 
 export async function deleteSection(sectionId: string): Promise<Result> {
   const { supabase } = await requireAdmin();
-  const { error } = await supabase.from("venue_sections").delete().eq("id", sectionId);
+  const { data, error } = await supabase.from("venue_sections").delete().eq("id", sectionId).select("id");
   if (error) return { error: error.message };
+  // RLS restricts deletes to the admin's own venue; a 0-row result means it matched nothing there.
+  if (!data?.length) return { error: "That section isn't for your venue." };
   revalidateHome();
   return { success: true };
 }
