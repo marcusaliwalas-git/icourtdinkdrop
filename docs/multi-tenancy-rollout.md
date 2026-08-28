@@ -141,6 +141,42 @@ Then:
 - (Optional) Confirm an Acme admin can't act on a default-venue booking: any admin action is
   venue-scoped by RLS and the RPC guards.
 
+## Adding another tenant later — no new deployment
+
+> **There is one Vercel deployment and one Supabase database for every tenant.** You do **not**
+> create a new Vercel project (or a new database) per venue/court. The running deployment already
+> serves all tenants; a tenant is just a `venues` row plus a hostname pointed at that deployment.
+
+A tenant boundary is a **venue** (one customer/organization), not a single court — a venue holds its
+own courts, coaches, members, and bookings.
+
+To add one, repeat just two things (Steps 6–7 above):
+
+1. **Create the venue + its admin** in the shared database — no deploy:
+   ```bash
+   npx tsx --env-file=.env.prod supabase/create-tenant.ts \
+     --name "Beta Padel" --slug beta \
+     --admin-email owner@betapadel.com --admin-password '<strong>' \
+     --timezone Asia/Manila   # add --domain betapadel.com for a custom domain
+   ```
+2. **Point a hostname** at the *existing* deployment:
+   - **Subdomain** (`beta.dinkdrop.live`): nothing to do — the `*.<root domain>` wildcard from Step 4
+     already routes it.
+   - **Custom domain** (`betapadel.com`): add it in **Vercel → Domains**, have the tenant CNAME it to
+     Vercel. `create-tenant.ts --domain` already set `venues.custom_domain`.
+
+Then smoke-test isolation on the new host (Step 7). Shipping a fix or feature is a single deploy that
+reaches **every** tenant at once — never one deploy per tenant.
+
+Everything that differs between tenants lives in the `venues` row — `slug`, `custom_domain`, `name`,
+`email_from`, timezone, rates, etc. — **not** in Vercel env vars (those are one shared set:
+`NEXT_PUBLIC_ROOT_DOMAIN`, the Supabase URL/keys, `RESEND_*`).
+
+**When a separate deployment *would* make sense:** only if a customer genuinely needs isolated
+infrastructure — their own database or a forked codebase (e.g. a strict enterprise/compliance
+requirement). That reintroduces the per-tenant database this whole setup avoids, so it's the rare
+exception, not the norm.
+
 ## Rollback
 
 - **Code:** revert the deploy. With the multi-tenancy code gone, `getTenant` isn't used and the app
