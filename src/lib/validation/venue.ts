@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const venueSchema = z.object({
   name: z.string().trim().min(1).max(120),
+  logoUrl: z.string().trim().max(500).optional().or(z.literal("")),
   address: z.string().trim().max(300).optional(),
   timezone: z.string().trim().min(1).default("Asia/Manila"),
   contact: z.string().trim().max(120).optional(),

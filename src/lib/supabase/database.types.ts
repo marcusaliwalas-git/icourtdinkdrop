@@ -839,6 +839,7 @@ export type Database = {
           custom_domain: string | null
           email_from: string | null
           id: string
+          logo_url: string | null
           max_advance_days: number
           min_lead_minutes: number
           name: string
@@ -856,6 +857,7 @@ export type Database = {
           custom_domain?: string | null
           email_from?: string | null
           id?: string
+          logo_url?: string | null
           max_advance_days?: number
           min_lead_minutes?: number
           name: string
@@ -873,6 +875,7 @@ export type Database = {
           custom_domain?: string | null
           email_from?: string | null
           id?: string
+          logo_url?: string | null
           max_advance_days?: number
           min_lead_minutes?: number
           name?: string

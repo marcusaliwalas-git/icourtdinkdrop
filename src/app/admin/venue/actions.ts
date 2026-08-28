@@ -36,6 +36,7 @@ export async function upsertVenue(
 ): Promise<ActionResult> {
   const parsed = venueSchema.safeParse({
     name: formData.get("name"),
+    logoUrl: formData.get("logoUrl") || undefined,
     address: formData.get("address") || undefined,
     timezone: formData.get("timezone") || "Asia/Manila",
     contact: formData.get("contact") || undefined,
@@ -54,6 +55,7 @@ export async function upsertVenue(
 
   const row = {
     name: parsed.data.name,
+    logo_url: parsed.data.logoUrl || null,
     address: parsed.data.address ?? null,
     timezone: parsed.data.timezone,
     contact: parsed.data.contact ?? null,

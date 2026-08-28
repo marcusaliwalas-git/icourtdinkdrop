@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { Toaster } from "@/components/ui/sonner";
+import { getTenant } from "@/lib/tenant";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,18 +26,19 @@ export const metadata: Metadata = {
   description: "See what's open and book a pickleball court in under a minute.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const tenant = await getTenant();
   return (
     <html
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SiteHeader />
+        <SiteHeader logoUrl={tenant?.logo_url} brandName={tenant?.name} />
         <div className="flex-1">{children}</div>
         <Toaster />
       </body>
