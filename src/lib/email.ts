@@ -45,6 +45,7 @@ interface BookingEmailDetails {
   siteUrl: string;
   brandName: string;
   fromEmail: string | null;
+  logoUrl: string | null;
 }
 
 function pesos(cents: number) {
@@ -104,6 +105,8 @@ export async function sendBookingConfirmationEmail(details: BookingEmailDetails)
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total paid", value: pesos(details.totalCents) },
       ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
       button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
@@ -127,6 +130,8 @@ export async function sendBookingPendingEmail(details: BookingEmailDetails) {
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total", value: pesos(details.totalCents) },
       ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
       button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
@@ -149,6 +154,8 @@ export async function sendBookingCancellationEmail(details: Omit<BookingEmailDet
         { label: "When", value: `${when} – ${until}` },
         { label: "Reference", value: details.referenceCode, mono: true },
       ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
       button: { label: "Book another court", url: homeUrl(details.siteUrl) },
     }),
   });
@@ -172,6 +179,8 @@ export async function sendBookingRescheduledEmail(details: BookingEmailDetails) 
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total", value: pesos(details.totalCents) },
       ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
       button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
@@ -192,6 +201,7 @@ interface BookingsEmailDetails {
   siteUrl: string;
   brandName: string;
   fromEmail: string | null;
+  logoUrl: string | null;
 }
 
 /** One line per booking in a cart: "Court 1 · Sat, Aug 30 at 6:00 PM – 8:00 PM (ABC12345)". */
@@ -219,6 +229,8 @@ export async function sendBookingsPendingEmail(details: BookingsEmailDetails) {
         ...bookingLineRows(details.bookings, details.timezone),
         { label: "Total", value: pesos(details.totalCents) },
       ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
       button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
     }),
   });
@@ -235,6 +247,7 @@ export interface AdminBookingsRequestDetails {
   siteUrl: string;
   brandName: string;
   fromEmail: string | null;
+  logoUrl: string | null;
 }
 
 /** Notifies an admin that a cart of bookings is awaiting review. */
@@ -256,6 +269,8 @@ export async function sendAdminBookingsRequestEmail(details: AdminBookingsReques
         { label: "Payment ref", value: details.paymentReference ?? "—" },
         { label: "Total", value: pesos(details.totalCents) },
       ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
       button: { label: "Review bookings", url: adminPendingUrl(details.siteUrl) },
       outro: ["Open the admin dashboard to view the payment proof and take action."],
     }),
@@ -276,6 +291,7 @@ export interface AdminBookingRequestDetails {
   siteUrl: string;
   brandName: string;
   fromEmail: string | null;
+  logoUrl: string | null;
 }
 
 /** Notifies an admin that a new online booking is awaiting their review/confirmation. */
@@ -301,6 +317,8 @@ export async function sendAdminBookingRequestEmail(details: AdminBookingRequestD
         { label: "Payment ref", value: details.paymentReference ?? "—" },
         { label: "Total", value: pesos(details.totalCents) },
       ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
       button: { label: "Review booking", url: adminPendingUrl(details.siteUrl) },
       outro: ["Open the admin dashboard to view the payment proof and take action."],
     }),

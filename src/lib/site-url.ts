@@ -34,14 +34,26 @@ export interface EmailBrand {
   siteUrl: string;
   brandName: string;
   fromEmail: string | null;
+  /** Absolute URL of the tenant's logo for the email header, or null. A stored relative path
+   * (e.g. the default venue's /icourt-social-logo.png) is resolved against the tenant's site URL. */
+  logoUrl: string | null;
 }
 
 export function tenantEmailBrand(
-  venue: { name?: string | null; slug: string | null; custom_domain: string | null; email_from?: string | null } | null
+  venue: {
+    name?: string | null;
+    slug: string | null;
+    custom_domain: string | null;
+    email_from?: string | null;
+    logo_url?: string | null;
+  } | null
 ): EmailBrand {
+  const siteUrl = tenantSiteUrl(venue);
+  const rawLogo = venue?.logo_url ?? null;
   return {
-    siteUrl: tenantSiteUrl(venue),
+    siteUrl,
     brandName: venue?.name?.trim() || "Bookings",
     fromEmail: venue?.email_from ?? null,
+    logoUrl: rawLogo ? (rawLogo.startsWith("http") ? rawLogo : `${siteUrl}${rawLogo}`) : null,
   };
 }
