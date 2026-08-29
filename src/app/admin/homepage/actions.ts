@@ -15,6 +15,11 @@ const heroSchema = z.object({
   heroMediaType: z.enum(["image", "video"]).optional().or(z.literal("")),
 });
 
+const howItWorksSchema = z.object({
+  steps: z.array(z.string().trim().max(80)).max(6),
+  note: z.string().trim().max(300).optional().or(z.literal("")),
+});
+
 function revalidateHome() {
   revalidatePath("/");
   revalidatePath("/admin/homepage");
@@ -41,6 +46,31 @@ export async function updateHero(input: unknown): Promise<Result> {
   if (error) return { error: error.message };
   // RLS scopes the write to the admin's own venue; a 0-row result means the account isn't
   // linked to this venue, so the update was silently dropped rather than saved.
+  if (!data?.length) return { error: "Couldn't save — your account isn't linked to this venue." };
+
+  revalidateHome();
+  return { success: true };
+}
+
+export async function updateHowItWorks(input: unknown): Promise<Result> {
+  const parsed = howItWorksSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const steps = parsed.data.steps.map((s) => s.trim()).filter(Boolean);
+
+  const { supabase } = await requireAdmin();
+  const tenant = await getTenant();
+  if (!tenant) return { error: "No venue resolved for this host." };
+
+  const { data, error } = await supabase
+    .from("venues")
+    .update({
+      how_steps: steps.length ? steps : null,
+      how_note: parsed.data.note || null,
+    })
+    .eq("id", tenant.id)
+    .select("id");
+  if (error) return { error: error.message };
   if (!data?.length) return { error: "Couldn't save — your account isn't linked to this venue." };
 
   revalidateHome();

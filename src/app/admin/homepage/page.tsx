@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getTenant } from "@/lib/tenant";
+import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS } from "@/lib/home-defaults";
 import { HeroEditor } from "./hero-editor";
+import { HowItWorksEditor } from "./how-it-works-editor";
 import { SectionsManager, type Section } from "./sections-manager";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +46,16 @@ export default async function AdminHomepagePage() {
             mediaUrl: venue.hero_media_url,
             mediaType: venue.hero_media_type,
           }}
+        />
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-lg border border-border/60 p-4">
+        <h2 className="font-medium">How it works</h2>
+        <HowItWorksEditor
+          steps={venue.how_steps}
+          note={venue.how_note}
+          defaultSteps={DEFAULT_HOW_STEPS}
+          defaultNote={DEFAULT_HOW_NOTE}
         />
       </section>
 

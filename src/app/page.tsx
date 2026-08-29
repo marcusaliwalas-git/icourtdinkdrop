@@ -5,6 +5,7 @@ import { minutesToLabel, timeToMinutes } from "@/lib/home-status";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { allRatesCents } from "@/lib/pricing";
 import { getTenant } from "@/lib/tenant";
+import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS } from "@/lib/home-defaults";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,9 @@ export default async function HomePage() {
     .eq("venue_id", venue.id)
     .eq("is_visible", true)
     .order("sort_order");
+
+  const howSteps = venue.how_steps?.length ? venue.how_steps : DEFAULT_HOW_STEPS;
+  const howNote = venue.how_note ?? DEFAULT_HOW_NOTE;
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(today, venue.timezone);
@@ -270,18 +274,14 @@ export default async function HomePage() {
           How it works
         </h2>
         <div className="font-heading flex flex-wrap items-center gap-x-3 gap-y-2 text-xl font-medium sm:text-2xl">
-          <span>Pick a time</span>
-          <span className="text-primary">→</span>
-          <span>Send your request</span>
-          <span className="text-primary">→</span>
-          <span>Pay via transfer</span>
-          <span className="text-primary">→</span>
-          <span>Wait for confirmation</span>
+          {howSteps.map((step: string, i: number) => (
+            <span key={i} className="flex items-center gap-x-3">
+              {i > 0 && <span className="text-primary">→</span>}
+              <span>{step}</span>
+            </span>
+          ))}
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">
-          The venue confirms every booking before it&apos;s final — you&apos;ll get a reference
-          code either way.
-        </p>
+        {howNote && <p className="mt-3 text-sm text-muted-foreground">{howNote}</p>}
       </section>
 
       <CourtLineDivider />

@@ -889,6 +889,8 @@ export type Database = {
           hero_media_type: string | null
           hero_media_url: string | null
           hero_subheading: string | null
+          how_note: string | null
+          how_steps: string[] | null
           id: string
           logo_url: string | null
           max_advance_days: number
@@ -911,6 +913,8 @@ export type Database = {
           hero_media_type?: string | null
           hero_media_url?: string | null
           hero_subheading?: string | null
+          how_note?: string | null
+          how_steps?: string[] | null
           id?: string
           logo_url?: string | null
           max_advance_days?: number
@@ -933,6 +937,8 @@ export type Database = {
           hero_media_type?: string | null
           hero_media_url?: string | null
           hero_subheading?: string | null
+          how_note?: string | null
+          how_steps?: string[] | null
           id?: string
           logo_url?: string | null
           max_advance_days?: number
