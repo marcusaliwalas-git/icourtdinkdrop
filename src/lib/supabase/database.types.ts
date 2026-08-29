@@ -890,6 +890,7 @@ export type Database = {
           hero_media_url: string | null
           hero_subheading: string | null
           how_note: string | null
+          how_note_hidden: boolean
           how_steps: string[] | null
           id: string
           logo_url: string | null
@@ -914,6 +915,7 @@ export type Database = {
           hero_media_url?: string | null
           hero_subheading?: string | null
           how_note?: string | null
+          how_note_hidden?: boolean
           how_steps?: string[] | null
           id?: string
           logo_url?: string | null
@@ -938,6 +940,7 @@ export type Database = {
           hero_media_url?: string | null
           hero_subheading?: string | null
           how_note?: string | null
+          how_note_hidden?: boolean
           how_steps?: string[] | null
           id?: string
           logo_url?: string | null

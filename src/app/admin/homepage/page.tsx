@@ -54,6 +54,7 @@ export default async function AdminHomepagePage() {
         <HowItWorksEditor
           steps={venue.how_steps}
           note={venue.how_note}
+          noteHidden={venue.how_note_hidden}
           defaultSteps={DEFAULT_HOW_STEPS}
           defaultNote={DEFAULT_HOW_NOTE}
         />

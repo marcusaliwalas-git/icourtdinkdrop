@@ -10,17 +10,20 @@ import { updateHowItWorks } from "./actions";
 export function HowItWorksEditor({
   steps,
   note,
+  noteHidden,
   defaultSteps,
   defaultNote,
 }: {
   steps: string[] | null;
   note: string | null;
+  noteHidden: boolean;
   defaultSteps: string[];
   defaultNote: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [showNote, setShowNote] = useState(!noteHidden);
 
   function onSubmit(formData: FormData) {
     setMessage(null);
@@ -32,6 +35,7 @@ export function HowItWorksEditor({
       const result = await updateHowItWorks({
         steps: stepLines,
         note: String(formData.get("note") ?? ""),
+        noteHidden: !showNote,
       });
       setMessage(result.error ?? "Saved");
       if (!result.error) router.refresh();
@@ -53,8 +57,17 @@ export function HowItWorksEditor({
         <p className="text-xs text-muted-foreground">One step per line, shown left to right with arrows between. Up to 6.</p>
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="note">Note (optional)</Label>
-        <Input id="note" name="note" defaultValue={note ?? ""} placeholder={defaultNote} />
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={showNote} onChange={(e) => setShowNote(e.target.checked)} />
+          Show a note under the steps
+        </label>
+        <Input
+          id="note"
+          name="note"
+          defaultValue={note ?? ""}
+          placeholder={defaultNote}
+          className={showNote ? "" : "hidden"}
+        />
       </div>
       <Button type="submit" disabled={isPending} className="w-fit">
         {isPending ? "Saving…" : "Save how it works"}

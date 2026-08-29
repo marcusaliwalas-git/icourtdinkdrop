@@ -57,7 +57,7 @@ export default async function HomePage() {
     .order("sort_order");
 
   const howSteps = venue.how_steps?.length ? venue.how_steps : DEFAULT_HOW_STEPS;
-  const howNote = venue.how_note ?? DEFAULT_HOW_NOTE;
+  const howNote = venue.how_note_hidden ? null : (venue.how_note ?? DEFAULT_HOW_NOTE);
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(today, venue.timezone);

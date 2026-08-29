@@ -18,6 +18,7 @@ const heroSchema = z.object({
 const howItWorksSchema = z.object({
   steps: z.array(z.string().trim().max(80)).max(6),
   note: z.string().trim().max(300).optional().or(z.literal("")),
+  noteHidden: z.boolean().default(false),
 });
 
 function revalidateHome() {
@@ -67,6 +68,7 @@ export async function updateHowItWorks(input: unknown): Promise<Result> {
     .update({
       how_steps: steps.length ? steps : null,
       how_note: parsed.data.note || null,
+      how_note_hidden: parsed.data.noteHidden,
     })
     .eq("id", tenant.id)
     .select("id");
