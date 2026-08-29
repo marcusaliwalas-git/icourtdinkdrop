@@ -274,7 +274,9 @@ export default async function HomePage() {
           <span className="text-primary">→</span>
           <span>Send your request</span>
           <span className="text-primary">→</span>
-          <span>Pay at the venue</span>
+          <span>Pay via transfer</span>
+          <span className="text-primary">→</span>
+          <span>Wait for confirmation</span>
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
           The venue confirms every booking before it&apos;s final — you&apos;ll get a reference
