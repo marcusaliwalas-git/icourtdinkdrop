@@ -52,6 +52,32 @@ function pesos(cents: number) {
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
+// The account number, click-to-copy with a brief "Copied" confirmation. The number is also
+// select-all so it stays copyable by hand if the clipboard API is blocked.
+function CopyableAccountNumber({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context) — the text stays selectable.
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy account number"
+      className="inline-flex items-center gap-1.5 font-mono text-foreground transition-colors hover:text-primary"
+    >
+      <span className="select-all">{value}</span>
+      <span className="font-sans text-xs text-muted-foreground">{copied ? "Copied ✓" : "Copy"}</span>
+    </button>
+  );
+}
+
 export function BookingSheet({
   open,
   onOpenChange,
@@ -311,7 +337,7 @@ export function BookingSheet({
                   <div key={i} className="text-sm">
                     <p className="font-medium">{acct.bank_name}</p>
                     <p className="text-muted-foreground">{acct.account_name}</p>
-                    <p className="font-mono text-foreground">{acct.account_number}</p>
+                    <CopyableAccountNumber value={acct.account_number} />
                     {acct.remarks && <p className="text-xs text-muted-foreground">{acct.remarks}</p>}
                   </div>
                 ))}
