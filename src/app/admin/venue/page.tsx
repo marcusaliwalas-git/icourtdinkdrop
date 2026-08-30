@@ -13,6 +13,46 @@ export default async function AdminVenuePage() {
   const venue = await getTenant();
 
   if (!venue) {
+    // The host didn't resolve to a venue. If this admin already belongs to one, they're just on
+    // the wrong address — point them to their venue's own host instead of the (misleading)
+    // "create your venue" form, which is only for an admin who genuinely has no venue yet.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: profile } = user
+      ? await supabase.from("profiles").select("venue_id").eq("id", user.id).single()
+      : { data: null };
+
+    if (profile?.venue_id) {
+      const { data: myVenue } = await supabase
+        .from("venues")
+        .select("name, slug, custom_domain")
+        .eq("id", profile.venue_id)
+        .single();
+      if (myVenue) {
+        const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "dinkdrop.live";
+        const host = myVenue.custom_domain || `${myVenue.slug}.${rootDomain}`;
+        return (
+          <div className="flex max-w-lg flex-col gap-3">
+            <h1 className="text-xl font-semibold">You&rsquo;re on a different address</h1>
+            <p className="text-sm text-muted-foreground">
+              Your venue <strong>{myVenue.name}</strong> is managed at its own address — this URL doesn&rsquo;t map to
+              it, so there&rsquo;s nothing to show here.
+            </p>
+            <a
+              href={`https://${host}/admin/venue`}
+              className="w-fit rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-transform hover:scale-[1.03]"
+            >
+              Go to {host} →
+            </a>
+            <p className="text-xs text-muted-foreground">
+              If that address isn&rsquo;t loading yet, its DNS or custom domain may still be propagating.
+            </p>
+          </div>
+        );
+      }
+    }
+
     return (
       <div className="max-w-lg">
         <h1 className="mb-4 text-xl font-semibold">Create your venue</h1>
