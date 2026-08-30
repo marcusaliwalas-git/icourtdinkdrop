@@ -6,14 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createTenant } from "./actions";
+import { slugify } from "@/lib/validation/tenant";
 
 export function CreateTenantForm({ rootDomain }: { rootDomain: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [customDomain, setCustomDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ slug: string; customDomain: string } | null>(null);
+
+  // What the slug will be if the field is left blank — derived from the name, same as the server.
+  const effectiveSlug = slug.trim() || slugify(name);
 
   function onSubmit(formData: FormData) {
     setError(null);
@@ -30,7 +35,8 @@ export function CreateTenantForm({ rootDomain }: { rootDomain: string }) {
         setError(result.error);
         return;
       }
-      setDone({ slug: String(formData.get("slug") ?? ""), customDomain: String(formData.get("customDomain") ?? "") });
+      setDone({ slug: result.slug ?? "", customDomain: String(formData.get("customDomain") ?? "") });
+      setName("");
       setSlug("");
       setCustomDomain("");
       router.refresh();
@@ -65,25 +71,32 @@ export function CreateTenantForm({ rootDomain }: { rootDomain: string }) {
     <form action={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="name">Venue name</Label>
-        <Input id="name" name="name" placeholder="Acme Pickleball" required />
+        <Input
+          id="name"
+          name="name"
+          placeholder="Acme Pickleball"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="timezone">Timezone</Label>
         <Input id="timezone" name="timezone" defaultValue="Asia/Manila" required />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="slug">Subdomain (slug)</Label>
+        <Label htmlFor="slug">Subdomain (slug) — optional</Label>
         <Input
           id="slug"
           name="slug"
-          placeholder="acme"
+          placeholder="auto from name"
           value={slug}
           onChange={(e) => setSlug(e.target.value.toLowerCase())}
-          required
         />
         <p className="font-mono text-xs text-muted-foreground">
-          {slug ? `${slug}.${rootDomain}` : `<slug>.${rootDomain}`}
+          {effectiveSlug ? `${effectiveSlug}.${rootDomain}` : `<slug>.${rootDomain}`}
         </p>
+        <p className="text-xs text-muted-foreground">Leave blank to auto-generate from the venue name.</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="customDomain">Custom domain (optional)</Label>

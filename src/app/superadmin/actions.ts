@@ -3,9 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createTenantSchema } from "@/lib/validation/tenant";
+import { createTenantSchema, slugify } from "@/lib/validation/tenant";
 
-type Result = { error?: string; success?: boolean; venueId?: string };
+type Result = { error?: string; success?: boolean; venueId?: string; slug?: string };
+
+// Find a free slug: `base`, else `base-2`, `base-3`, … (slugs are UNIQUE). The insert's own unique
+// constraint is the real backstop against a race; this just avoids the obvious collision.
+async function uniqueSlug(admin: ReturnType<typeof createAdminClient>, base: string): Promise<string> {
+  for (let i = 1; i < 50; i++) {
+    const candidate = i === 1 ? base : `${base}-${i}`;
+    const { data } = await admin.from("venues").select("id").eq("slug", candidate).maybeSingle();
+    if (!data) return candidate;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
 
 /**
  * Onboard a new tenant + its first admin — the UI equivalent of supabase/create-tenant.ts.
@@ -21,10 +32,16 @@ export async function createTenant(input: unknown): Promise<Result> {
   await requireSuperAdmin();
   const admin = createAdminClient();
 
+  // Slug is optional: blank means derive it from the venue name (e.g. a custom-domain-only venue).
+  // Still store one — it gives a free <slug>.<root> fallback URL that works while custom-domain DNS
+  // propagates. If the name has no usable characters, fall back to "venue".
+  const base = (d.slug && d.slug.trim()) || slugify(d.name) || "venue";
+  const slug = await uniqueSlug(admin, base);
+
   // 1. The venue (tenant).
   const { data: venue, error: venueErr } = await admin
     .from("venues")
-    .insert({ name: d.name, slug: d.slug, custom_domain: d.customDomain || null, timezone: d.timezone })
+    .insert({ name: d.name, slug, custom_domain: d.customDomain || null, timezone: d.timezone })
     .select("id")
     .single();
   if (venueErr) {
@@ -70,5 +87,5 @@ export async function createTenant(input: unknown): Promise<Result> {
   if (roleErr) return { error: `Venue created, but promoting the admin failed: ${roleErr.message}` };
 
   revalidatePath("/superadmin");
-  return { success: true, venueId };
+  return { success: true, venueId, slug };
 }
