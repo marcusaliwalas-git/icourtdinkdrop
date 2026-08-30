@@ -95,6 +95,18 @@ export async function createTenant(input: unknown): Promise<Result> {
   return { success: true, venueId, slug };
 }
 
+/** Take a venue offline (or bring it back). Deactivated venues keep all their data but stop
+ * resolving from their hostname, so the public site and booking flow go dark. Reversible. */
+export async function setVenueActive(venueId: string, active: boolean): Promise<Result> {
+  await requireSuperAdmin();
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("venues").update({ is_active: active }).eq("id", venueId).select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Venue not found." };
+  revalidatePath("/superadmin");
+  return { success: true };
+}
+
 /**
  * Delete a tenant. Guarded: refuses a venue that has any bookings (deactivate those instead), and
  * won't delete the venue the caller's own account belongs to. Otherwise removes the tenant's member

@@ -33,25 +33,46 @@ export const getTenant = cache(async () => {
   const isLocal =
     host === "" || host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
 
+  // A deactivated venue must not resolve — its site goes offline until it's reactivated.
   if (!isLocal) {
-    const { data: byDomain } = await supabase.from("venues").select("*").eq("custom_domain", host).maybeSingle();
+    const { data: byDomain } = await supabase
+      .from("venues")
+      .select("*")
+      .eq("custom_domain", host)
+      .eq("is_active", true)
+      .maybeSingle();
     if (byDomain) return byDomain;
 
     const slug = hostToSlug(host);
     if (slug) {
-      const { data: bySlug } = await supabase.from("venues").select("*").eq("slug", slug).maybeSingle();
+      const { data: bySlug } = await supabase
+        .from("venues")
+        .select("*")
+        .eq("slug", slug)
+        .eq("is_active", true)
+        .maybeSingle();
       if (bySlug) return bySlug;
     }
   }
 
-  // Fallbacks. A single-venue database is unambiguous, so serve it regardless of host.
-  const { data: venues } = await supabase.from("venues").select("*").order("created_at").limit(2);
+  // Fallbacks (active venues only). A single active venue is unambiguous, so serve it regardless.
+  const { data: venues } = await supabase
+    .from("venues")
+    .select("*")
+    .eq("is_active", true)
+    .order("created_at")
+    .limit(2);
   if (venues && venues.length === 1) return venues[0];
 
   if (isLocal) {
     const devSlug = process.env.DEV_TENANT_SLUG;
     if (devSlug) {
-      const { data: dev } = await supabase.from("venues").select("*").eq("slug", devSlug).maybeSingle();
+      const { data: dev } = await supabase
+        .from("venues")
+        .select("*")
+        .eq("slug", devSlug)
+        .eq("is_active", true)
+        .maybeSingle();
       if (dev) return dev;
     }
     if (venues && venues.length) return venues[0];

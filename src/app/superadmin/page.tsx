@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatInTimezone } from "@/lib/time";
 import { CreateTenantForm } from "./create-tenant-form";
 import { DeleteVenueButton } from "./delete-venue-button";
+import { VenueActiveToggle } from "./venue-active-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export default async function SuperAdminPage() {
   const supabase = await createClient();
   const { data: venues } = await supabase
     .from("venues")
-    .select("id, name, slug, custom_domain, timezone, created_at")
+    .select("id, name, slug, custom_domain, timezone, created_at, is_active")
     .order("created_at", { ascending: false });
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "dinkdrop.live";
@@ -38,8 +39,15 @@ export default async function SuperAdminPage() {
           </thead>
           <tbody>
             {(venues ?? []).map((v) => (
-              <tr key={v.id} className="border-b border-border/40 last:border-0">
-                <td className="p-3 font-medium">{v.name}</td>
+              <tr key={v.id} className={`border-b border-border/40 last:border-0 ${v.is_active ? "" : "opacity-60"}`}>
+                <td className="p-3 font-medium">
+                  {v.name}
+                  {!v.is_active && (
+                    <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[0.65rem] font-normal tracking-wide text-muted-foreground uppercase">
+                      Inactive
+                    </span>
+                  )}
+                </td>
                 <td className="p-3">
                   <div className="flex flex-col gap-0.5 font-mono text-xs">
                     <span>
@@ -52,8 +60,11 @@ export default async function SuperAdminPage() {
                 <td className="p-3 text-muted-foreground">
                   {formatInTimezone(new Date(v.created_at), "MMM d, yyyy", v.timezone)}
                 </td>
-                <td className="p-3 text-right">
-                  <DeleteVenueButton venueId={v.id} venueName={v.name} />
+                <td className="p-3">
+                  <div className="flex items-center justify-end gap-1">
+                    <VenueActiveToggle venueId={v.id} active={v.is_active} />
+                    <DeleteVenueButton venueId={v.id} venueName={v.name} />
+                  </div>
                 </td>
               </tr>
             ))}

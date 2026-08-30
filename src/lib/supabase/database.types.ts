@@ -940,6 +940,7 @@ export type Database = {
           how_note_hidden: boolean
           how_steps: string[] | null
           id: string
+          is_active: boolean
           logo_url: string | null
           max_advance_days: number
           min_lead_minutes: number
@@ -965,6 +966,7 @@ export type Database = {
           how_note_hidden?: boolean
           how_steps?: string[] | null
           id?: string
+          is_active?: boolean
           logo_url?: string | null
           max_advance_days?: number
           min_lead_minutes?: number
@@ -990,6 +992,7 @@ export type Database = {
           how_note_hidden?: boolean
           how_steps?: string[] | null
           id?: string
+          is_active?: boolean
           logo_url?: string | null
           max_advance_days?: number
           min_lead_minutes?: number
