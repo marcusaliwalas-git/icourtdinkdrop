@@ -37,6 +37,14 @@ export interface CoachOption {
   hourly_rate_cents: number;
 }
 
+// A venue receiving account, shown so the customer knows where to transfer the fee.
+export interface PaymentAccount {
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  remarks: string | null;
+}
+
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
@@ -51,6 +59,7 @@ export function BookingSheet({
   segments,
   totalCents,
   coaches,
+  paymentAccounts,
   isLoggedIn,
 }: {
   open: boolean;
@@ -59,6 +68,7 @@ export function BookingSheet({
   segments: CartSegment[];
   totalCents: number;
   coaches: CoachOption[];
+  paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
@@ -291,6 +301,22 @@ export function BookingSheet({
               {isLoggedIn && "Member rates applied if you're an active member. "}
               Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
+
+            {paymentAccounts.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Send payment to
+                </p>
+                {paymentAccounts.map((acct, i) => (
+                  <div key={i} className="text-sm">
+                    <p className="font-medium">{acct.bank_name}</p>
+                    <p className="text-muted-foreground">{acct.account_name}</p>
+                    <p className="font-mono text-foreground">{acct.account_number}</p>
+                    {acct.remarks && <p className="text-xs text-muted-foreground">{acct.remarks}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="paymentReference">Payment reference number (optional)</Label>

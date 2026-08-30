@@ -79,7 +79,7 @@ export default async function BookPage({
     (ratePeriodsByCourtId[period.court_id] ??= []).push(period);
   }
 
-  const [{ data: dayHours }, { data: bookedSlots }, { data: closures }] = await Promise.all([
+  const [{ data: dayHours }, { data: bookedSlots }, { data: closures }, { data: paymentAccounts }] = await Promise.all([
     supabase
       .from("operating_hours")
       .select("open_time, close_time, closes_next_day")
@@ -98,6 +98,11 @@ export default async function BookPage({
       .eq("venue_id", venue.id)
       .lt("starts_at", dayEnd.toISOString())
       .gt("ends_at", dayStart.toISOString()),
+    supabase
+      .from("payment_accounts")
+      .select("bank_name, account_name, account_number, remarks")
+      .eq("venue_id", venue.id)
+      .order("sort_order"),
   ]);
 
   const grid = buildAvailabilityGrid({
@@ -158,6 +163,7 @@ export default async function BookPage({
           courtIds={courtIds}
           ratePeriodsByCourtId={ratePeriodsByCourtId}
           coaches={coaches ?? []}
+          paymentAccounts={paymentAccounts ?? []}
           isLoggedIn={!!user}
         />
       )}

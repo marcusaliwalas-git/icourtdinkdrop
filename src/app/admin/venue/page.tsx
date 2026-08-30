@@ -4,6 +4,7 @@ import { VenueDetailsForm } from "./venue-details-form";
 import { CourtsManager } from "./courts-manager";
 import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
+import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { getTenant } from "@/lib/tenant";
 
 export default async function AdminVenuePage() {
@@ -20,7 +21,7 @@ export default async function AdminVenuePage() {
     );
   }
 
-  const [{ data: courts }, { data: hours }, { data: closures }] = await Promise.all([
+  const [{ data: courts }, { data: hours }, { data: closures }, { data: paymentAccounts }] = await Promise.all([
     supabase.from("courts").select("*").eq("venue_id", venue.id).order("name"),
     supabase
       .from("operating_hours")
@@ -32,6 +33,11 @@ export default async function AdminVenuePage() {
       .select("*, courts(name)")
       .eq("venue_id", venue.id)
       .order("starts_at", { ascending: false }),
+    supabase
+      .from("payment_accounts")
+      .select("id, bank_name, account_name, account_number, remarks, sort_order")
+      .eq("venue_id", venue.id)
+      .order("sort_order"),
   ]);
 
   const courtIds = (courts ?? []).map((c) => c.id);
@@ -53,6 +59,7 @@ export default async function AdminVenuePage() {
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="courts">Courts</TabsTrigger>
           <TabsTrigger value="hours">Hours</TabsTrigger>
+          <TabsTrigger value="payment">Payment</TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="max-w-lg">
@@ -67,6 +74,9 @@ export default async function AdminVenuePage() {
         </TabsContent>
         <TabsContent value="hours">
           <HoursManager venueId={venue.id} hours={hours ?? []} />
+        </TabsContent>
+        <TabsContent value="payment">
+          <PaymentAccountsManager venueId={venue.id} accounts={paymentAccounts ?? []} />
         </TabsContent>
         <TabsContent value="closures">
           <ClosuresManager

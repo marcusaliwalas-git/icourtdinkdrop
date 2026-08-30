@@ -9,6 +9,8 @@ import {
   operatingHoursUpdateSchema,
   closureSchema,
   ratePeriodSchema,
+  paymentAccountSchema,
+  paymentAccountUpdateSchema,
 } from "@/lib/validation/venue";
 
 type ActionResult = { error?: string; success?: boolean };
@@ -184,6 +186,73 @@ export async function deleteOperatingHours(id: string): Promise<ActionResult> {
   const { error } = await supabase.from("operating_hours").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin/venue");
+  return { success: true };
+}
+
+// ── Payment accounts (shown to customers in the booking review) ────────────────
+function revalidatePaymentAccounts() {
+  revalidatePath("/admin/venue");
+  revalidatePath("/book");
+}
+
+export async function addPaymentAccount(formData: FormData): Promise<ActionResult> {
+  const parsed = paymentAccountSchema.safeParse({
+    venueId: formData.get("venueId"),
+    bankName: formData.get("bankName"),
+    accountName: formData.get("accountName"),
+    accountNumber: formData.get("accountNumber"),
+    remarks: formData.get("remarks") ?? "",
+    sortOrder: Number(formData.get("sortOrder")) || 0,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("payment_accounts").insert({
+    venue_id: parsed.data.venueId,
+    bank_name: parsed.data.bankName,
+    account_name: parsed.data.accountName,
+    account_number: parsed.data.accountNumber,
+    remarks: parsed.data.remarks || null,
+    sort_order: parsed.data.sortOrder,
+  });
+  if (error) return { error: error.message };
+  revalidatePaymentAccounts();
+  return { success: true };
+}
+
+export async function updatePaymentAccount(id: string, formData: FormData): Promise<ActionResult> {
+  const parsed = paymentAccountUpdateSchema.safeParse({
+    bankName: formData.get("bankName"),
+    accountName: formData.get("accountName"),
+    accountNumber: formData.get("accountNumber"),
+    remarks: formData.get("remarks") ?? "",
+    sortOrder: Number(formData.get("sortOrder")) || 0,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("payment_accounts")
+    .update({
+      bank_name: parsed.data.bankName,
+      account_name: parsed.data.accountName,
+      account_number: parsed.data.accountNumber,
+      remarks: parsed.data.remarks || null,
+      sort_order: parsed.data.sortOrder,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That account isn't for your venue." };
+  revalidatePaymentAccounts();
+  return { success: true };
+}
+
+export async function deletePaymentAccount(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("payment_accounts").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePaymentAccounts();
   return { success: true };
 }
 

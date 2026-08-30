@@ -67,6 +67,21 @@ export const operatingHoursUpdateSchema = operatingHoursSchema.omit({ venueId: t
 
 export type OperatingHoursUpdateInput = z.infer<typeof operatingHoursUpdateSchema>;
 
+export const paymentAccountSchema = z.object({
+  venueId: z.uuid(),
+  bankName: z.string().trim().min(1, "Enter the bank or e-wallet name.").max(120),
+  accountName: z.string().trim().min(1, "Enter the account name.").max(120),
+  accountNumber: z.string().trim().min(1, "Enter the account number.").max(60),
+  remarks: z.string().trim().max(300).optional().or(z.literal("")),
+  sortOrder: z.number().int().default(0),
+});
+
+export type PaymentAccountInput = z.infer<typeof paymentAccountSchema>;
+
+export const paymentAccountUpdateSchema = paymentAccountSchema.omit({ venueId: true });
+
+export type PaymentAccountUpdateInput = z.infer<typeof paymentAccountUpdateSchema>;
+
 export const closureSchema = z.object({
   venueId: z.uuid(),
   courtId: z.uuid().nullable().optional(),
