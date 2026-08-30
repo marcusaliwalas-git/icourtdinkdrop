@@ -63,12 +63,17 @@ export default async function HomePage() {
   const dayStart = startOfLocalDayUtc(today, venue.timezone);
   const dayEnd = endOfLocalDayUtc(today, venue.timezone);
 
-  const [{ data: dayHours }, { data: bookedSlots }, { data: ratePeriods }] = await Promise.all([
+  const [{ data: dayHours }, { data: prevDayHours }, { data: bookedSlots }, { data: ratePeriods }] = await Promise.all([
     supabase
       .from("operating_hours")
-      .select("open_time, close_time")
+      .select("open_time, close_time, closes_next_day")
       .eq("venue_id", venue.id)
       .eq("day_of_week", dayOfWeek),
+    supabase
+      .from("operating_hours")
+      .select("open_time, close_time, closes_next_day")
+      .eq("venue_id", venue.id)
+      .eq("day_of_week", (dayOfWeek + 6) % 7),
     courtIds.length
       ? supabase
           .from("booking_slots")
@@ -90,6 +95,7 @@ export default async function HomePage() {
     now,
     timezone: venue.timezone,
     dayHours: dayHours ?? [],
+    prevDayHours: prevDayHours ?? [],
     courts: (courts ?? []).map((c) => ({ id: c.id, name: c.name, is_indoor: c.is_indoor })),
     bookedSlots: bookedSlots ?? [],
   });

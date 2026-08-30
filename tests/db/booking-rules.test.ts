@@ -180,6 +180,69 @@ describe("create_booking — pricing and rules", () => {
     });
   });
 
+  // A Manila (UTC+8) wall-clock time `daysAhead` days out, as a UTC Date.
+  function manilaFuture(daysAhead: number, hhmm: string): Date {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + daysAhead);
+    return new Date(`${d.toISOString().slice(0, 10)}T${hhmm}:00+08:00`);
+  }
+
+  async function makeOvernightVenue(client: import("pg").PoolClient) {
+    const fixture = await createVenueWithCourt(client);
+    // Every day: open 6 PM, close 2 AM the next day.
+    await client.query(
+      `update operating_hours set open_time = '18:00', close_time = '02:00', closes_next_day = true where venue_id = $1`,
+      [fixture.venueId]
+    );
+    return fixture;
+  }
+
+  it("allows an overnight booking that crosses midnight", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await makeOvernightVenue(client);
+      // 11 PM → 2 AM: starts on the open day, ends at the overnight close.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: manilaFuture(4, "23:00"),
+        durationMinutes: 180,
+        guestName: "NightOwl",
+        guestPhone: "+639170000040",
+      });
+      expect(booking.status).toBe("pending");
+    });
+  });
+
+  it("allows a booking in the early-morning tail of the previous day's overnight session", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await makeOvernightVenue(client);
+      // 1 AM → 2 AM belongs to the prior day's 6 PM–2 AM session.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: manilaFuture(4, "01:00"),
+        durationMinutes: 60,
+        guestName: "AfterMidnight",
+        guestPhone: "+639170000041",
+      });
+      expect(booking.status).toBe("pending");
+    });
+  });
+
+  it("rejects a booking after the overnight session has closed", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await makeOvernightVenue(client);
+      // 3 AM is past the 2 AM close and before the 6 PM open — outside hours.
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: manilaFuture(4, "03:00"),
+          durationMinutes: 60,
+          guestName: "TooLate",
+          guestPhone: "+639170000042",
+        })
+      ).rejects.toThrow(/OUTSIDE_OPERATING_HOURS/);
+    });
+  });
+
   it("uses the member rate when the booker has an active membership", async () => {
     await withRollback(async (client) => {
       const { courtId } = await createVenueWithCourt(client, {

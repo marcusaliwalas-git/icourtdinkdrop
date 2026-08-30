@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { buildAvailabilityGrid } from "@/lib/availability";
-import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
+import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
 import { AvailabilityGrid } from "./availability-grid";
 import { DatePickerPopover } from "./date-picker-popover";
 import { getTenant } from "@/lib/tenant";
@@ -66,7 +66,9 @@ export default async function BookPage({
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
-  const dayEnd = endOfLocalDayUtc(date, venue.timezone);
+  // Reach into the next calendar day so an overnight session's early-morning slots (rendered on
+  // this day's grid) still see their booked slots and closures.
+  const dayEnd = endOfLocalDayUtc(nextLocalDate(date), venue.timezone);
 
   const { data: ratePeriods } = courtIds.length
     ? await supabase.from("court_rate_periods").select("*").in("court_id", courtIds)
@@ -80,7 +82,7 @@ export default async function BookPage({
   const [{ data: dayHours }, { data: bookedSlots }, { data: closures }] = await Promise.all([
     supabase
       .from("operating_hours")
-      .select("open_time, close_time")
+      .select("open_time, close_time, closes_next_day")
       .eq("venue_id", venue.id)
       .eq("day_of_week", dayOfWeek),
     courtIds.length

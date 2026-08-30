@@ -627,6 +627,7 @@ export type Database = {
       operating_hours: {
         Row: {
           close_time: string
+          closes_next_day: boolean
           day_of_week: number
           id: string
           open_time: string
@@ -634,6 +635,7 @@ export type Database = {
         }
         Insert: {
           close_time: string
+          closes_next_day?: boolean
           day_of_week: number
           id?: string
           open_time: string
@@ -641,6 +643,7 @@ export type Database = {
         }
         Update: {
           close_time?: string
+          closes_next_day?: boolean
           day_of_week?: number
           id?: string
           open_time?: string

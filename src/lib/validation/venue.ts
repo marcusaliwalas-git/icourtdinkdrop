@@ -56,6 +56,9 @@ export const operatingHoursSchema = z.object({
     .string()
     .regex(/^\d{2}:\d{2}$/)
     .transform((t) => (t === "00:00" ? "24:00" : t)),
+  // Overnight hours: the close time lands on the following calendar day (e.g. open 18:00,
+  // close 02:00, closesNextDay). When set, close may be earlier than open.
+  closesNextDay: z.boolean().default(false),
 });
 
 export type OperatingHoursInput = z.infer<typeof operatingHoursSchema>;

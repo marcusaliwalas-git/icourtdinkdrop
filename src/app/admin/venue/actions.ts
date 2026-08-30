@@ -126,9 +126,13 @@ export async function addOperatingHours(formData: FormData): Promise<ActionResul
     dayOfWeek: Number(formData.get("dayOfWeek")),
     openTime: formData.get("openTime"),
     closeTime: formData.get("closeTime"),
+    closesNextDay: formData.get("closesNextDay") === "on",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  if (!parsed.data.closesNextDay && parsed.data.closeTime <= parsed.data.openTime) {
+    return { error: "Close time must be after open time (or mark it as closing the next day)." };
   }
 
   const supabase = await createClient();
@@ -137,6 +141,7 @@ export async function addOperatingHours(formData: FormData): Promise<ActionResul
     day_of_week: parsed.data.dayOfWeek,
     open_time: parsed.data.openTime,
     close_time: parsed.data.closeTime,
+    closes_next_day: parsed.data.closesNextDay,
   });
 
   if (error) return { error: error.message };
@@ -149,12 +154,13 @@ export async function updateOperatingHours(id: string, formData: FormData): Prom
     dayOfWeek: Number(formData.get("dayOfWeek")),
     openTime: formData.get("openTime"),
     closeTime: formData.get("closeTime"),
+    closesNextDay: formData.get("closesNextDay") === "on",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  if (parsed.data.closeTime <= parsed.data.openTime) {
-    return { error: "Close time must be after open time." };
+  if (!parsed.data.closesNextDay && parsed.data.closeTime <= parsed.data.openTime) {
+    return { error: "Close time must be after open time (or mark it as closing the next day)." };
   }
 
   const supabase = await createClient();
@@ -164,6 +170,7 @@ export async function updateOperatingHours(id: string, formData: FormData): Prom
       day_of_week: parsed.data.dayOfWeek,
       open_time: parsed.data.openTime,
       close_time: parsed.data.closeTime,
+      closes_next_day: parsed.data.closesNextDay,
     })
     .eq("id", id);
 

@@ -1,4 +1,4 @@
-import { localDateTimeToUtc, formatInTimezone } from "@/lib/time";
+import { localDateTimeToUtc, formatInTimezone, nextLocalDate } from "@/lib/time";
 
 export type SlotStatus = "available" | "booked" | "closed" | "past";
 
@@ -34,12 +34,28 @@ function overlaps(aStart: Date, aEnd: Date, b: RangeLike): boolean {
   return aStart < b.end && b.start < aEnd;
 }
 
+type DayHour = { open_time: string; close_time: string; closes_next_day?: boolean | null };
+
+/** Minutes past the open day's midnight that the day's session closes — adds 24h for a row that
+ * spills past midnight, so an overnight session (e.g. 18:00 → 02:00) reads as 1080 → 1560. */
+function effectiveCloseMinutes(dayHours: DayHour[]): number {
+  return Math.max(...dayHours.map((h) => timeToMinutes(h.close_time) + (h.closes_next_day ? 1440 : 0)));
+}
+
+/** The UTC start of the slot `m` minutes past the open day's midnight. Minutes ≥ 1440 belong to
+ * the next calendar date (the early-morning tail of an overnight session). */
+function slotStart(date: string, m: number, timezone: string): Date {
+  const onNextDay = m >= 1440;
+  const localDate = onNextDay ? nextLocalDate(date) : date;
+  return localDateTimeToUtc(localDate, minutesToTime(m - (onNextDay ? 1440 : 0)), timezone);
+}
+
 export function buildAvailabilityGrid(params: {
   date: string;
   timezone: string;
   slotMinutes: number;
   courts: CourtSummary[];
-  dayHours: { open_time: string; close_time: string }[];
+  dayHours: DayHour[];
   bookedSlots: { court_id: string; time_range: string }[];
   closures: { court_id: string | null; starts_at: string; ends_at: string }[];
   now?: Date;
@@ -52,7 +68,7 @@ export function buildAvailabilityGrid(params: {
   }
 
   const openMinutes = Math.min(...dayHours.map((h) => timeToMinutes(h.open_time)));
-  const closeMinutes = Math.max(...dayHours.map((h) => timeToMinutes(h.close_time)));
+  const closeMinutes = effectiveCloseMinutes(dayHours);
 
   const bookedRanges = bookedSlots.map((b) => ({
     courtId: b.court_id,
@@ -65,8 +81,7 @@ export function buildAvailabilityGrid(params: {
 
   const rows: TimeRow[] = [];
   for (let m = openMinutes; m + slotMinutes <= closeMinutes; m += slotMinutes) {
-    const timeStr = minutesToTime(m);
-    const startsAt = localDateTimeToUtc(date, timeStr, timezone);
+    const startsAt = slotStart(date, m, timezone);
     const endsAt = new Date(startsAt.getTime() + slotMinutes * 60_000);
 
     const cells: Record<string, SlotStatus> = {};
@@ -117,7 +132,7 @@ export function buildAdminCalendarGrid(params: {
   timezone: string;
   slotMinutes: number;
   courts: CourtSummary[];
-  dayHours: { open_time: string; close_time: string }[];
+  dayHours: DayHour[];
   bookings: {
     id: string;
     court_id: string;
@@ -137,7 +152,7 @@ export function buildAdminCalendarGrid(params: {
   }
 
   const openMinutes = Math.min(...dayHours.map((h) => timeToMinutes(h.open_time)));
-  const closeMinutes = Math.max(...dayHours.map((h) => timeToMinutes(h.close_time)));
+  const closeMinutes = effectiveCloseMinutes(dayHours);
 
   const bookingRanges = bookings.map((b) => ({
     id: b.id,
@@ -153,8 +168,7 @@ export function buildAdminCalendarGrid(params: {
 
   const rows: AdminTimeRow[] = [];
   for (let m = openMinutes; m + slotMinutes <= closeMinutes; m += slotMinutes) {
-    const timeStr = minutesToTime(m);
-    const startsAt = localDateTimeToUtc(date, timeStr, timezone);
+    const startsAt = slotStart(date, m, timezone);
     const endsAt = new Date(startsAt.getTime() + slotMinutes * 60_000);
 
     const cells: Record<string, AdminCell> = {};

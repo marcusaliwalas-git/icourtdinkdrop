@@ -20,6 +20,13 @@ export function formatInTimezone(
   return formatTz(toZonedTime(date, timezone), pattern, { timeZone: timezone });
 }
 
+/** The calendar date one day after `dateStr` ("2026-08-30" → "2026-08-31"), date-only math. */
+export function nextLocalDate(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function startOfLocalDayUtc(
   dateStr: string,
   timezone: string = DEFAULT_TIMEZONE
