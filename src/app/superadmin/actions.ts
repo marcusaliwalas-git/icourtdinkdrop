@@ -94,3 +94,49 @@ export async function createTenant(input: unknown): Promise<Result> {
   revalidatePath("/superadmin");
   return { success: true, venueId, slug };
 }
+
+/**
+ * Delete a tenant. Guarded: refuses a venue that has any bookings (deactivate those instead), and
+ * won't delete the venue the caller's own account belongs to. Otherwise removes the tenant's member
+ * accounts, then the venue (which cascades its courts, hours, closures, coaches, payment accounts,
+ * and sections).
+ */
+export async function deleteTenant(venueId: string): Promise<Result> {
+  const { user } = await requireSuperAdmin();
+  const admin = createAdminClient();
+
+  const { data: me } = await admin.from("profiles").select("venue_id").eq("id", user.id).single();
+  if (me?.venue_id === venueId) {
+    return { error: "You can't delete the venue your own account belongs to." };
+  }
+
+  // Never delete a venue with real bookings — that's business/financial history.
+  const { data: courtRows } = await admin.from("courts").select("id").eq("venue_id", venueId);
+  const courtIds = (courtRows ?? []).map((c) => c.id);
+  if (courtIds.length) {
+    const { count } = await admin
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .in("court_id", courtIds);
+    if (count && count > 0) {
+      return { error: `This venue has ${count} booking(s), so it can't be deleted. Deactivate it instead.` };
+    }
+  }
+
+  // profiles.venue_id blocks the venue delete (NO ACTION), so remove the tenant's own accounts
+  // first. deleteUser cascades each profile; it fails if a member has other history (e.g. audit
+  // entries), which shouldn't happen for a bookingless venue.
+  const { data: members } = await admin.from("profiles").select("id").eq("venue_id", venueId);
+  for (const m of members ?? []) {
+    const { error } = await admin.auth.admin.deleteUser(m.id);
+    if (error) {
+      return { error: `Couldn't remove a member account (${error.message}). Clear the venue's members first.` };
+    }
+  }
+
+  const { error: delErr } = await admin.from("venues").delete().eq("id", venueId);
+  if (delErr) return { error: delErr.message };
+
+  revalidatePath("/superadmin");
+  return { success: true };
+}

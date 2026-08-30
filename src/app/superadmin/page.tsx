@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatInTimezone } from "@/lib/time";
 import { CreateTenantForm } from "./create-tenant-form";
+import { DeleteVenueButton } from "./delete-venue-button";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export default async function SuperAdminPage() {
               <th className="p-3 font-medium">Reachable at</th>
               <th className="p-3 font-medium">Timezone</th>
               <th className="p-3 font-medium">Created</th>
+              <th className="p-3 font-medium"></th>
             </tr>
           </thead>
           <tbody>
@@ -50,11 +52,14 @@ export default async function SuperAdminPage() {
                 <td className="p-3 text-muted-foreground">
                   {formatInTimezone(new Date(v.created_at), "MMM d, yyyy", v.timezone)}
                 </td>
+                <td className="p-3 text-right">
+                  <DeleteVenueButton venueId={v.id} venueName={v.name} />
+                </td>
               </tr>
             ))}
             {(venues ?? []).length === 0 && (
               <tr>
-                <td colSpan={4} className="p-4 text-center text-muted-foreground">
+                <td colSpan={5} className="p-4 text-center text-muted-foreground">
                   No venues yet. Onboard the first one below.
                 </td>
               </tr>
