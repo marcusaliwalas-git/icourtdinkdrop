@@ -33,17 +33,23 @@ export const getTenant = cache(async () => {
   const isLocal =
     host === "" || host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
 
+  // Registrars/Vercel often redirect apex↔www, so the host we receive may carry (or drop) a
+  // "www." the stored custom_domain doesn't. Match either form so that never breaks resolution.
+  const bareHost = host.replace(/^www\./, "");
+  const domainCandidates = Array.from(new Set([host, bareHost, `www.${bareHost}`]));
+
   // A deactivated venue must not resolve — its site goes offline until it's reactivated.
   if (!isLocal) {
     const { data: byDomain } = await supabase
       .from("venues")
       .select("*")
-      .eq("custom_domain", host)
+      .in("custom_domain", domainCandidates)
       .eq("is_active", true)
-      .maybeSingle();
-    if (byDomain) return byDomain;
+      .order("custom_domain")
+      .limit(1);
+    if (byDomain && byDomain.length) return byDomain[0];
 
-    const slug = hostToSlug(host);
+    const slug = hostToSlug(bareHost);
     if (slug) {
       const { data: bySlug } = await supabase
         .from("venues")
