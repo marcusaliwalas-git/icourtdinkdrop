@@ -104,6 +104,24 @@ export async function upsertVenue(
   }
   const { data, error } = await admin.from("venues").insert({ ...row, slug }).select("id").single();
   if (error) return { error: error.message };
+
+  // Seed the same starter defaults as super-admin onboarding, so the venue isn't created empty:
+  // a full week of 6 AM–10 PM hours and one court to edit. (This is why venues made here used to
+  // show up with zero courts/hours.)
+  const { error: hoursError } = await admin.from("operating_hours").insert(
+    Array.from({ length: 7 }, (_, day) => ({
+      venue_id: data.id,
+      day_of_week: day,
+      open_time: "06:00",
+      close_time: "22:00",
+    }))
+  );
+  if (hoursError) return { error: `Venue created, but adding hours failed: ${hoursError.message}` };
+  const { error: courtError } = await admin
+    .from("courts")
+    .insert({ venue_id: data.id, name: "Court 1", hourly_rate_cents: 50000, is_active: true });
+  if (courtError) return { error: `Venue created, but adding the starter court failed: ${courtError.message}` };
+
   // Tie the creator to their new venue (only if they weren't already), so current_user_venue()
   // resolves and RLS lets them manage it from here on.
   if (!profile.venue_id) {

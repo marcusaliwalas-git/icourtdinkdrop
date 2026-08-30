@@ -56,8 +56,9 @@ export async function createTenant(input: unknown): Promise<Result> {
   }
   const venueId = venue.id as string;
 
-  // 2. Sensible defaults so the new site isn't empty.
-  await admin.from("operating_hours").insert(
+  // 2. Sensible defaults so the new site isn't empty — surface failures instead of silently
+  //    leaving a venue with no courts/hours.
+  const { error: hoursErr } = await admin.from("operating_hours").insert(
     Array.from({ length: 7 }, (_, day) => ({
       venue_id: venueId,
       day_of_week: day,
@@ -65,7 +66,11 @@ export async function createTenant(input: unknown): Promise<Result> {
       close_time: "22:00",
     }))
   );
-  await admin.from("courts").insert({ venue_id: venueId, name: "Court 1", hourly_rate_cents: 50000, is_active: true });
+  if (hoursErr) return { error: `Venue created, but adding hours failed: ${hoursErr.message}` };
+  const { error: courtErr } = await admin
+    .from("courts")
+    .insert({ venue_id: venueId, name: "Court 1", hourly_rate_cents: 50000, is_active: true });
+  if (courtErr) return { error: `Venue created, but adding the starter court failed: ${courtErr.message}` };
 
   // 3. The venue's first admin — venue_id in metadata pins them via handle_new_user, then promote.
   const { data: created, error: userErr } = await admin.auth.admin.createUser({
