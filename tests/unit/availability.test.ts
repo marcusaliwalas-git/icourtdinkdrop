@@ -39,6 +39,8 @@ describe("buildAvailabilityGrid", () => {
 
     // 10 PM → 2 AM: the last two rows are after midnight, still on the opening day's grid.
     expect(grid.rows.map((r) => r.label)).toEqual(["10:00 PM", "11:00 PM", "12:00 AM", "1:00 AM"]);
+    // The after-midnight rows are flagged so the UI can mark them as the next day.
+    expect(grid.rows.map((r) => r.nextDay)).toEqual([false, false, true, true]);
     // The 1 AM row's actual instant is the next calendar date (Aug 11 at 01:00 Manila = 17:00 UTC Aug 10).
     expect(grid.rows[3].startsAtIso).toBe("2026-08-10T17:00:00.000Z");
   });

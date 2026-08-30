@@ -253,6 +253,11 @@ export function AvailabilityGrid({
               <tr key={row.startsAtIso} className="border-t">
                 <td className="sticky left-0 z-10 bg-background p-2 text-xs whitespace-nowrap text-muted-foreground">
                   {row.label}
+                  {row.nextDay && (
+                    <span className="ml-1 rounded bg-primary/15 px-1 py-0.5 font-mono text-[0.6rem] text-primary">
+                      +1 day
+                    </span>
+                  )}
                 </td>
                 {courts.map((court) => {
                   const status = row.cells[court.id];

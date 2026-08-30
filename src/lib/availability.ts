@@ -10,6 +10,9 @@ export interface CourtSummary {
 export interface TimeRow {
   startsAtIso: string;
   label: string;
+  /** True for a slot that falls after midnight — the tail of an overnight session, on the next
+   * calendar date. Lets the UI flag it so a 1:00 AM row isn't mistaken for the same day. */
+  nextDay: boolean;
   cells: Record<string, SlotStatus>; // courtId -> status
 }
 
@@ -106,6 +109,7 @@ export function buildAvailabilityGrid(params: {
     rows.push({
       startsAtIso: startsAt.toISOString(),
       label: formatInTimezone(startsAt, "h:mm a", timezone),
+      nextDay: m >= 1440,
       cells,
     });
   }
@@ -123,6 +127,7 @@ export interface AdminCell {
 export interface AdminTimeRow {
   startsAtIso: string;
   label: string;
+  nextDay: boolean;
   cells: Record<string, AdminCell>;
 }
 
@@ -196,6 +201,7 @@ export function buildAdminCalendarGrid(params: {
     rows.push({
       startsAtIso: startsAt.toISOString(),
       label: formatInTimezone(startsAt, "h:mm a", timezone),
+      nextDay: m >= 1440,
       cells,
     });
   }
