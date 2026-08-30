@@ -707,6 +707,7 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          is_super_admin: boolean
           no_show_count: number
           phone: string | null
           role: string
@@ -720,6 +721,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id: string
+          is_super_admin?: boolean
           no_show_count?: number
           phone?: string | null
           role?: string
@@ -733,6 +735,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          is_super_admin?: boolean
           no_show_count?: number
           phone?: string | null
           role?: string

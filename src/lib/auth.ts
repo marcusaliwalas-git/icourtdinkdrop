@@ -30,3 +30,39 @@ export async function requireAdmin() {
 
   return { supabase, user };
 }
+
+/** Gate for platform-level pages (tenant onboarding). A super admin operates the whole
+ * deployment and is not scoped to any single venue. */
+export async function requireSuperAdmin() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/superadmin");
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_super_admin")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.is_super_admin) {
+    redirect("/");
+  }
+
+  return { supabase, user };
+}
+
+/** Whether the current user is a platform super admin — for conditionally showing the link. */
+export async function isSuperAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase.from("profiles").select("is_super_admin").eq("id", user.id).single();
+  return !!data?.is_super_admin;
+}

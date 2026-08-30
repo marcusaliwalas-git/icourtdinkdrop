@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, isSuperAdmin } from "@/lib/auth";
 import { getTenant } from "@/lib/tenant";
 import { AdminNavLink } from "./nav-link";
 
@@ -10,6 +10,7 @@ export default async function AdminLayout({
 }) {
   await requireAdmin();
   const tenant = await getTenant();
+  const superAdmin = await isSuperAdmin();
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -35,7 +36,8 @@ export default async function AdminLayout({
           <AdminNavLink href="/admin/sales">Sales</AdminNavLink>
           <AdminNavLink href="/admin/members">Members</AdminNavLink>
           <AdminNavLink href="/admin/audit">Audit Log</AdminNavLink>
-          <AdminNavLink href="/" className="ml-auto">Back to site</AdminNavLink>
+          {superAdmin && <AdminNavLink href="/superadmin" className="ml-auto text-primary">Platform ↗</AdminNavLink>}
+          <AdminNavLink href="/" className={superAdmin ? "" : "ml-auto"}>Back to site</AdminNavLink>
         </nav>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 p-4">{children}</main>
