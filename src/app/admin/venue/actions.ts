@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { slugify } from "@/lib/validation/tenant";
 import {
   venueSchema,
   courtSchema,
@@ -66,13 +68,54 @@ export async function upsertVenue(
     cancellation_cutoff_hours: parsed.data.cancellationCutoffHours,
   };
 
-  const { data, error } = venueId
-    ? await supabase.from("venues").update(row).eq("id", venueId).select("id").single()
-    : await supabase.from("venues").insert(row).select("id").single();
+  // Editing an existing venue: RLS lets an admin update their own venue.
+  if (venueId) {
+    const { data, error } = await supabase.from("venues").update(row).eq("id", venueId).select("id").single();
+    if (error) return { error: error.message };
+    await logAudit(supabase, user?.id, "venue_updated", "venue", data.id, row);
+    revalidatePath("/admin/venue");
+    return { success: true };
+  }
 
+  // Creating a venue can't go through RLS — the new row's id can't equal the creator's current
+  // venue (venues_admin_write requires id = current_user_venue()). So verify the caller is a
+  // bootstrapping admin, then create it with the service-role client and link them to it so
+  // their later edits pass RLS. (Multiple venues at once are a super-admin job via /superadmin.)
+  if (!user) return { error: "You need to be signed in." };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, venue_id, is_super_admin")
+    .eq("id", user.id)
+    .single();
+  if (!profile || (profile.role !== "admin" && !profile.is_super_admin)) {
+    return { error: "Only an admin can create a venue." };
+  }
+  if (profile.venue_id && !profile.is_super_admin) {
+    return { error: "Your account already has a venue. A platform admin can add more from /superadmin." };
+  }
+
+  const admin = createAdminClient();
+  const base = slugify(row.name) || "venue";
+  let slug = base;
+  for (let i = 2; i < 50; i++) {
+    const { data: taken } = await admin.from("venues").select("id").eq("slug", slug).maybeSingle();
+    if (!taken) break;
+    slug = `${base}-${i}`;
+  }
+  const { data, error } = await admin.from("venues").insert({ ...row, slug }).select("id").single();
   if (error) return { error: error.message };
-
-  await logAudit(supabase, user?.id, venueId ? "venue_updated" : "venue_created", "venue", data.id, row);
+  // Tie the creator to their new venue (only if they weren't already), so current_user_venue()
+  // resolves and RLS lets them manage it from here on.
+  if (!profile.venue_id) {
+    await admin.from("profiles").update({ venue_id: data.id }).eq("id", user.id);
+  }
+  await admin.from("audit_log").insert({
+    actor_id: user.id,
+    action: "venue_created",
+    entity: "venue",
+    entity_id: data.id,
+    after: row,
+  });
   revalidatePath("/admin/venue");
   return { success: true };
 }
