@@ -57,7 +57,7 @@ export async function createVenueWithCourt(
  */
 export async function createMemberProfile(
   client: PoolClient,
-  options: { active?: boolean } = {}
+  options: { active?: boolean; venueId?: string } = {}
 ): Promise<string> {
   const profileId = randomUUID();
   const email = `${profileId}@test.dinkdrop.local`;
@@ -78,6 +78,11 @@ export async function createMemberProfile(
      values ($1, 'standard', current_date - 30, current_date + 30, $2)`,
     [profileId, options.active === false ? "expired" : "active"]
   );
+
+  // A member belongs to a venue; member pricing only applies at that venue.
+  if (options.venueId) {
+    await client.query(`update profiles set venue_id = $2 where id = $1`, [profileId, options.venueId]);
+  }
 
   return profileId;
 }

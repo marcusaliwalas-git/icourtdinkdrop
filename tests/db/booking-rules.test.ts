@@ -243,13 +243,13 @@ describe("create_booking — pricing and rules", () => {
     });
   });
 
-  it("uses the member rate when the booker has an active membership", async () => {
+  it("uses the member rate when the booker is an active member of that venue", async () => {
     await withRollback(async (client) => {
-      const { courtId } = await createVenueWithCourt(client, {
+      const { courtId, venueId } = await createVenueWithCourt(client, {
         hourlyRateCents: 120000,
         memberRateCents: 90000,
       });
-      const profileId = await createMemberProfile(client);
+      const profileId = await createMemberProfile(client, { venueId });
 
       const booking = await callCreateBooking(client, {
         courtId,
@@ -259,6 +259,26 @@ describe("create_booking — pricing and rules", () => {
       });
 
       expect(booking.total_cents).toBe(90000);
+    });
+  });
+
+  it("charges the guest rate when a member books at a DIFFERENT venue", async () => {
+    await withRollback(async (client) => {
+      // The member belongs to venue A…
+      const venueA = await createVenueWithCourt(client, { hourlyRateCents: 100000, memberRateCents: 70000 });
+      const profileId = await createMemberProfile(client, { venueId: venueA.venueId });
+      // …but books at venue B, which also offers a member rate.
+      const venueB = await createVenueWithCourt(client, { hourlyRateCents: 120000, memberRateCents: 90000 });
+
+      const booking = await callCreateBooking(client, {
+        courtId: venueB.courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        bookedBy: profileId,
+      });
+
+      // Not a member of B → guest rate, not B's 90000 member rate.
+      expect(booking.total_cents).toBe(120000);
     });
   });
 
