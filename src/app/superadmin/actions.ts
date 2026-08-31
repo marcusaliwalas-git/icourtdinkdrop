@@ -80,10 +80,22 @@ export async function createTenant(input: unknown): Promise<Result> {
     user_metadata: { venue_id: venueId },
   });
   if (userErr || !created.user) {
-    // Roll back the orphaned venue (cascades to the hours/court) so a retry is clean.
-    await admin.from("venues").delete().eq("id", venueId);
+    // If the email already has an account, link that existing person as an admin of this new venue
+    // (multi-venue: one account can administer several venues) instead of failing.
     const dup = userErr?.message?.toLowerCase().includes("already");
-    return { error: dup ? "That admin email already has an account." : userErr?.message ?? "Could not create the admin." };
+    if (dup) {
+      const { data: existingId } = await admin.rpc("admin_user_id_by_email", { p_email: d.adminEmail });
+      if (existingId) {
+        await admin
+          .from("venue_memberships")
+          .upsert({ profile_id: existingId, venue_id: venueId, role: "admin" }, { onConflict: "profile_id,venue_id" });
+        revalidatePath("/superadmin");
+        return { success: true, venueId, slug };
+      }
+    }
+    // Otherwise roll back the orphaned venue (cascades to the hours/court) so a retry is clean.
+    await admin.from("venues").delete().eq("id", venueId);
+    return { error: userErr?.message ?? "Could not create the admin." };
   }
   const { error: roleErr } = await admin
     .from("profiles")

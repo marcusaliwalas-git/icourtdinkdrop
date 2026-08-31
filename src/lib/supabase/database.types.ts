@@ -1117,6 +1117,7 @@ export type Database = {
     }
     Functions: {
       admin_shares_venue_with: { Args: { p_profile: string }; Returns: boolean }
+      admin_user_id_by_email: { Args: { p_email: string }; Returns: string }
       booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
       booking_venue: { Args: { p_booking: string }; Returns: string }
       cancel_booking: {
