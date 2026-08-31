@@ -90,6 +90,13 @@ export async function createTenant(input: unknown): Promise<Result> {
     .update({ role: "admin", venue_id: venueId })
     .eq("id", created.user.id);
   if (roleErr) return { error: `Venue created, but promoting the admin failed: ${roleErr.message}` };
+  // Dual-write the join table (Step 2): the first admin is an admin member of the new venue.
+  await admin
+    .from("venue_memberships")
+    .upsert(
+      { profile_id: created.user.id, venue_id: venueId, role: "admin" },
+      { onConflict: "profile_id,venue_id" }
+    );
 
   revalidatePath("/superadmin");
   return { success: true, venueId, slug };

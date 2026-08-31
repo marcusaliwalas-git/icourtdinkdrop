@@ -129,6 +129,10 @@ export async function upsertVenue(
   if (!profile.venue_id) {
     await admin.from("profiles").update({ venue_id: data.id }).eq("id", user.id);
   }
+  // Dual-write the join table (Step 2): the creator is an admin member of the venue.
+  await admin
+    .from("venue_memberships")
+    .upsert({ profile_id: user.id, venue_id: data.id, role: "admin" }, { onConflict: "profile_id,venue_id" });
   await admin.from("audit_log").insert({
     actor_id: user.id,
     action: "venue_created",

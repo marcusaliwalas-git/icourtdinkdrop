@@ -24,6 +24,13 @@ export async function GET(request: NextRequest) {
       if (user && tenant) {
         const admin = createAdminClient();
         await admin.from("profiles").update({ venue_id: tenant.id }).eq("id", user.id).is("venue_id", null);
+        // Dual-write the join table (Step 2) so this user is a member of the tenant they signed in on.
+        await admin
+          .from("venue_memberships")
+          .upsert(
+            { profile_id: user.id, venue_id: tenant.id, role: "player" },
+            { onConflict: "profile_id,venue_id", ignoreDuplicates: true }
+          );
       }
       return NextResponse.redirect(`${origin}${next}`);
     }

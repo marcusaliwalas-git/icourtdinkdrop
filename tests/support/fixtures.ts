@@ -82,6 +82,11 @@ export async function createMemberProfile(
   // A member belongs to a venue; member pricing only applies at that venue.
   if (options.venueId) {
     await client.query(`update profiles set venue_id = $2 where id = $1`, [profileId, options.venueId]);
+    await client.query(
+      `insert into venue_memberships (profile_id, venue_id, role) values ($1, $2, 'player')
+       on conflict (profile_id, venue_id) do nothing`,
+      [profileId, options.venueId]
+    );
   }
 
   return profileId;
@@ -99,6 +104,13 @@ export async function createAdminProfile(client: PoolClient, venueId?: string): 
        set role = 'admin',
            venue_id = coalesce($2, (select id from venues order by created_at desc limit 1))
      where id = $1`,
+    [profileId, venueId ?? null]
+  );
+  // Dual-write the admin membership row for the same venue.
+  await client.query(
+    `insert into venue_memberships (profile_id, venue_id, role)
+     select $1, coalesce($2, (select id from venues order by created_at desc limit 1)), 'admin'
+     on conflict (profile_id, venue_id) do update set role = 'admin'`,
     [profileId, venueId ?? null]
   );
   return profileId;
