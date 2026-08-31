@@ -90,13 +90,47 @@ Redeploy so the new env var takes effect.
 **DNS (at your DNS provider for `dinkdrop.live`):**
 - `*.dinkdrop.live` → `CNAME cname.vercel-dns.com` (or the A/ALIAS target Vercel shows).
 
-**Supabase → Authentication → URL Configuration → Redirect URLs** (so magic-link / OAuth / reset
-land on the right tenant host):
+### Auth redirect URLs (OAuth / magic-link / password reset) — required for multi-tenant sign-in
 
-```
-https://*.dinkdrop.live/**
-https://www.icourt.dinkdrop.live/**
-# …plus each custom domain you add, e.g. https://acmepickleball.com/**
+**Symptom if you skip this:** signing in with Google (or a magic link / reset link) from a tenant's
+host **always bounces back to the default host** (e.g. `icourt.dinkdrop.live`) instead of the tenant
+they started on — and a first-time Google user gets pinned to the **wrong** venue (the default),
+because the OAuth callback runs on the default host.
+
+**Why:** the app already asks Supabase to return to the current host
+(`redirectTo = <current-origin>/auth/callback`). But Supabase only honors a `redirectTo` that
+matches its **allowed Redirect URLs**; if it doesn't match, Supabase falls back to the **Site URL**.
+So every tenant host must be in the allowlist.
+
+**Supabase → Authentication → URL Configuration:**
+
+- **Redirect URLs** — add a wildcard for every tenant host (`*` = one subdomain label, `**` = any path):
+  ```
+  https://*.dinkdrop.live/**          # all subdomain tenants (<slug>.dinkdrop.live)
+  https://dinkdrop.live/**            # the apex (if a tenant uses it as custom_domain)
+  https://www.icourt.dinkdrop.live/** # the existing prod host
+  # …plus each custom-domain tenant you add, e.g. https://acmepickleball.com/**
+  ```
+- **Site URL** — keep as your canonical default (e.g. `https://dinkdrop.live`). It's only the
+  fallback now that the allowlist matches real tenant hosts.
+
+**Google Cloud Console: no per-tenant change.** Google's authorized redirect URI stays the fixed
+Supabase one (`https://<project-ref>.supabase.co/auth/v1/callback`). Per-tenant routing happens at
+Supabase's `redirectTo` step, not Google's — never add tenant URLs to Google.
+
+**Cleaning up users mis-pinned before the fix:** a Google user who signed in while the allowlist was
+wrong got `venue_id` = the default venue. The callback only sets `venue_id` when it's null, so this
+does **not** self-correct. Reassign them:
+```sql
+-- Google users and the venue they're on:
+select u.email, v.name as venue
+from auth.users u join profiles p on p.id = u.id
+left join venues v on v.id = p.venue_id
+where u.raw_app_meta_data->>'provider' = 'google';
+
+-- move one to the right venue:
+update profiles set venue_id = (select id from venues where slug = 'acme')
+where id = (select id from auth.users where email = 'them@gmail.com');
 ```
 
 ## 5. Verify the existing site still works
@@ -163,7 +197,10 @@ To add one, repeat just two things (Steps 6–7 above):
    - **Subdomain** (`beta.dinkdrop.live`): nothing to do — the `*.<root domain>` wildcard from Step 4
      already routes it.
    - **Custom domain** (`betapadel.com`): add it in **Vercel → Domains**, have the tenant CNAME it to
-     Vercel. `create-tenant.ts --domain` already set `venues.custom_domain`.
+     Vercel. `create-tenant.ts --domain` already set `venues.custom_domain`. **Also add
+     `https://betapadel.com/**` to Supabase → Auth → Redirect URLs** (Step 4), or Google/magic-link
+     sign-in from that domain will bounce to the default host. Subdomain tenants are already covered
+     by the `https://*.dinkdrop.live/**` wildcard.
 
 Then smoke-test isolation on the new host (Step 7). Shipping a fix or feature is a single deploy that
 reaches **every** tenant at once — never one deploy per tenant.
