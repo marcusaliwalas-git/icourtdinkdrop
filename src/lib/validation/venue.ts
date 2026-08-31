@@ -12,6 +12,8 @@ export const venueSchema = z.object({
   address: z.string().trim().max(300).optional(),
   timezone: z.string().trim().min(1).default("Asia/Manila"),
   contact: z.string().trim().max(120).optional(),
+  // Sender address for this venue's emails — must be on a domain you've verified in Resend.
+  emailFrom: z.email("Enter a valid sender email, e.g. bookings@yourvenue.com").optional().or(z.literal("")),
   minLeadMinutes: z.number().int().min(0).max(1440).default(60),
   maxAdvanceDays: z.number().int().min(1).max(180).default(14),
   cancellationCutoffHours: z.number().int().min(0).max(168).default(3),

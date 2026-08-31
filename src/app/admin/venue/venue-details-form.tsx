@@ -14,6 +14,7 @@ type Venue = {
   address: string | null;
   timezone: string;
   contact: string | null;
+  email_from: string | null;
   min_lead_minutes: number;
   max_advance_days: number;
   cancellation_cutoff_hours: number;
@@ -101,6 +102,20 @@ export function VenueDetailsForm({ venue }: { venue: Venue }) {
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="contact">Contact number</Label>
         <Input id="contact" name="contact" defaultValue={venue?.contact ?? ""} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="emailFrom">Sender email</Label>
+        <Input
+          id="emailFrom"
+          name="emailFrom"
+          type="email"
+          placeholder="bookings@yourvenue.com"
+          defaultValue={venue?.email_from ?? ""}
+        />
+        <p className="text-xs text-muted-foreground">
+          Address your booking emails are sent from. Must be on a domain you&rsquo;ve verified in Resend. Leave blank to
+          use the platform default.
+        </p>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="timezone">Timezone</Label>
