@@ -74,9 +74,9 @@ export async function createMemberProfile(
   );
 
   await client.query(
-    `insert into memberships (profile_id, tier, starts_on, ends_on, status)
-     values ($1, 'standard', current_date - 30, current_date + 30, $2)`,
-    [profileId, options.active === false ? "expired" : "active"]
+    `insert into memberships (profile_id, venue_id, tier, starts_on, ends_on, status)
+     values ($1, $3, 'standard', current_date - 30, current_date + 30, $2)`,
+    [profileId, options.active === false ? "expired" : "active", options.venueId ?? null]
   );
 
   // A member belongs to a venue; member pricing only applies at that venue.

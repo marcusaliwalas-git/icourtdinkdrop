@@ -115,6 +115,7 @@ async function main() {
     if (i % 2 === 0) {
       await supabase.from("memberships").insert({
         profile_id: profileId,
+        venue_id: venue.id,
         tier: i % 4 === 0 ? "premium" : "standard",
         starts_on: new Date(Date.now() - 60 * 86400_000).toISOString().slice(0, 10),
         ends_on: new Date(Date.now() + 300 * 86400_000).toISOString().slice(0, 10),

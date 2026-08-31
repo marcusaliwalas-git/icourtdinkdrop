@@ -1293,10 +1293,12 @@ export type Database = {
           total_cents: number
         }[]
       }
-      has_active_membership: {
-        Args: { p_profile_id: string }
-        Returns: boolean
-      }
+      has_active_membership:
+        | { Args: { p_profile_id: string }; Returns: boolean }
+        | {
+            Args: { p_profile_id: string; p_venue_id: string }
+            Returns: boolean
+          }
       is_admin: { Args: never; Returns: boolean }
       is_admin_of: { Args: { p_venue: string }; Returns: boolean }
       is_booking_owner: { Args: { p_booking_id: string }; Returns: boolean }
