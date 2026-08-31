@@ -1116,6 +1116,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_shares_venue_with: { Args: { p_profile: string }; Returns: boolean }
       booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
       booking_venue: { Args: { p_booking: string }; Returns: string }
       cancel_booking: {
@@ -1300,6 +1301,7 @@ export type Database = {
             Returns: boolean
           }
       is_admin: { Args: never; Returns: boolean }
+      is_admin_anywhere: { Args: never; Returns: boolean }
       is_admin_of: { Args: { p_venue: string }; Returns: boolean }
       is_booking_owner: { Args: { p_booking_id: string }; Returns: boolean }
       is_member_of: { Args: { p_venue: string }; Returns: boolean }

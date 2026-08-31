@@ -27,8 +27,18 @@ async function seedTenant(client: PoolClient, name: string): Promise<Tenant> {
   );
   const adminId = await createMemberProfile(client);
   await client.query(`update profiles set venue_id = $1, role = 'admin' where id = $2`, [venueId, adminId]);
+  await client.query(
+    `insert into venue_memberships (profile_id, venue_id, role) values ($1, $2, 'admin')
+     on conflict (profile_id, venue_id) do nothing`,
+    [adminId, venueId]
+  );
   const memberId = await createMemberProfile(client);
   await client.query(`update profiles set venue_id = $1 where id = $2`, [venueId, memberId]);
+  await client.query(
+    `insert into venue_memberships (profile_id, venue_id, role) values ($1, $2, 'player')
+     on conflict (profile_id, venue_id) do nothing`,
+    [memberId, venueId]
+  );
   const bookingId = randomUUID();
   await client.query(
     `insert into bookings (id, court_id, guest_name, guest_phone, time_range, status, party_size, total_cents, payment_status, source)
