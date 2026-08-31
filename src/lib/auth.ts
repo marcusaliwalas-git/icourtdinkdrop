@@ -12,19 +12,24 @@ export async function requireAdmin() {
     redirect("/login?next=/admin");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, venue_id")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "admin") {
-    redirect("/");
-  }
-
-  // Admins are scoped to their own tenant: on another venue's host, they're not an admin here.
+  // Admin of the *current* venue (the host they're on). Prefer the venue_memberships join table
+  // (multi-venue Step 3), fall back to the legacy profiles.role + venue_id while both models coexist.
   const tenant = await getTenant();
-  if (tenant && profile.venue_id && profile.venue_id !== tenant.id) {
+  let ok = false;
+  if (tenant) {
+    const { data: vm } = await supabase
+      .from("venue_memberships")
+      .select("role")
+      .eq("profile_id", user.id)
+      .eq("venue_id", tenant.id)
+      .maybeSingle();
+    ok = vm?.role === "admin";
+  }
+  if (!ok) {
+    const { data: profile } = await supabase.from("profiles").select("role, venue_id").eq("id", user.id).single();
+    ok = profile?.role === "admin" && (!tenant || !profile.venue_id || profile.venue_id === tenant.id);
+  }
+  if (!ok) {
     redirect("/");
   }
 
