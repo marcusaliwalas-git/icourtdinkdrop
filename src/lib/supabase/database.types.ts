@@ -554,6 +554,7 @@ export type Database = {
           starts_on: string
           status: string
           tier: string
+          venue_id: string | null
         }
         Insert: {
           created_at?: string
@@ -563,6 +564,7 @@ export type Database = {
           starts_on: string
           status?: string
           tier: string
+          venue_id?: string | null
         }
         Update: {
           created_at?: string
@@ -572,6 +574,7 @@ export type Database = {
           starts_on?: string
           status?: string
           tier?: string
+          venue_id?: string | null
         }
         Relationships: [
           {
@@ -579,6 +582,13 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]
@@ -869,6 +879,45 @@ export type Database = {
           },
           {
             foreignKeyName: "sessions_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_memberships: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string
+          role: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          role?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          role?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_memberships_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_memberships_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
@@ -1249,7 +1298,9 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_admin_of: { Args: { p_venue: string }; Returns: boolean }
       is_booking_owner: { Args: { p_booking_id: string }; Returns: boolean }
+      is_member_of: { Args: { p_venue: string }; Returns: boolean }
       is_organizer_or_admin: { Args: never; Returns: boolean }
       mark_no_show: {
         Args: { p_booking_id: string }
