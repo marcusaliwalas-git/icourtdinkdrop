@@ -21,10 +21,16 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "iCourt Social — Book a Pickleball Court",
-  description: "See what's open and book a pickleball court in under a minute.",
-};
+// Per-tenant browser title/description: resolve the venue for the current host so each tenant's
+// tab shows their own name. getTenant() is request-cached, so this doesn't double-query.
+export async function generateMetadata(): Promise<Metadata> {
+  const tenant = await getTenant();
+  const name = tenant?.name ?? "iCourt Social";
+  return {
+    title: `${name} — Book a Pickleball Court`,
+    description: `See what's open and book a court at ${name} in under a minute.`,
+  };
+}
 
 export default async function RootLayout({
   children,
