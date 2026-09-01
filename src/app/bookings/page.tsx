@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getTenant } from "@/lib/tenant";
 import { BookingCard } from "./booking-card";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +28,18 @@ export default async function MyBookingsPage() {
     );
   }
 
-  const { data: bookings } = await supabase
+  // Scope to the venue whose site they're on: on Venue A's host, show only their Venue A bookings,
+  // not everything the (shared) account has booked across venues. `courts!inner` makes the
+  // courts.venue_id filter narrow the bookings themselves. (Not a security boundary — RLS already
+  // limits to their own bookings; this keeps each venue's site feeling like its own.)
+  const tenant = await getTenant();
+  let query = supabase
     .from("bookings")
-    .select("id, status, party_size, total_cents, payment_status, reference_code, time_range, courts(name, venues(timezone))")
+    .select("id, status, party_size, total_cents, payment_status, reference_code, time_range, courts!inner(name, venue_id, venues(timezone))")
     .eq("booked_by", user.id)
     .order("time_range", { ascending: false });
+  if (tenant) query = query.eq("courts.venue_id", tenant.id);
+  const { data: bookings } = await query;
 
   return (
     <div className="mx-auto max-w-2xl p-4">
