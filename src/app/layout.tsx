@@ -4,6 +4,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
+import { isVenueAdmin } from "@/lib/auth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,14 +38,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const tenant = await getTenant();
+  const [tenant, isAdmin] = await Promise.all([getTenant(), isVenueAdmin()]);
   return (
     <html
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SiteHeader logoUrl={tenant?.logo_url} brandName={tenant?.name} />
+        <SiteHeader logoUrl={tenant?.logo_url} brandName={tenant?.name} isAdmin={isAdmin} />
         <div className="flex-1">{children}</div>
         <Toaster />
       </body>

@@ -3,8 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 function NavLink({
@@ -34,32 +32,19 @@ function NavLink({
   );
 }
 
-export function SiteHeader({ logoUrl, brandName }: { logoUrl?: string | null; brandName?: string | null }) {
+// `isAdmin` is resolved server-side (see RootLayout → isVenueAdmin) and means "admin of THIS
+// venue" — so the shortcut never shows on a venue you don't administer. It's only a convenience;
+// /admin is independently guarded by requireAdmin server-side.
+export function SiteHeader({
+  logoUrl,
+  brandName,
+  isAdmin = false,
+}: {
+  logoUrl?: string | null;
+  brandName?: string | null;
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  // Show the "Admin" shortcut only to a signed-in admin. Checked client-side (the header is
-  // already a client component) — a user can read their own profile.role under RLS, and the
-  // /admin routes are still independently guarded server-side by requireAdmin, so this link
-  // is only a convenience, never the access-control boundary.
-  useEffect(() => {
-    let active = true;
-    const supabase = createClient();
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        if (active) setIsAdmin(false);
-        return;
-      }
-      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-      if (active) setIsAdmin(profile?.role === "admin");
-    })();
-    return () => {
-      active = false;
-    };
-  }, [pathname]);
 
   // Admin has its own layout/nav entirely.
   if (pathname?.startsWith("/admin")) return null;
