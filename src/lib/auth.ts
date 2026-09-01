@@ -26,8 +26,11 @@ export async function requireAdmin() {
     ok = vm?.role === "admin";
   }
   if (!ok) {
+    // Legacy fallback: a profiles-level admin whose venue_id matches this host. A null venue_id no
+    // longer grants access — an admin tied to no single venue must have a venue_memberships row for
+    // the venue they administer (that's the check above), or they aren't an admin of it.
     const { data: profile } = await supabase.from("profiles").select("role, venue_id").eq("id", user.id).single();
-    ok = profile?.role === "admin" && (!tenant || !profile.venue_id || profile.venue_id === tenant.id);
+    ok = profile?.role === "admin" && (!tenant || profile.venue_id === tenant.id);
   }
   if (!ok) {
     redirect("/");
@@ -57,7 +60,8 @@ export async function isVenueAdmin(): Promise<boolean> {
     if (vm?.role === "admin") return true;
   }
   const { data: profile } = await supabase.from("profiles").select("role, venue_id").eq("id", user.id).single();
-  return profile?.role === "admin" && (!tenant || !profile.venue_id || profile.venue_id === tenant.id);
+  // Same tightening as requireAdmin: a null venue_id doesn't make you admin of every venue.
+  return profile?.role === "admin" && (!tenant || profile.venue_id === tenant.id);
 }
 
 /** Gate for platform-level pages (tenant onboarding). A super admin operates the whole
