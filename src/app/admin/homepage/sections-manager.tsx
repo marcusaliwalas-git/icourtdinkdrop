@@ -92,6 +92,10 @@ function SectionForm({ venueId, section, onSaved }: { venueId: string; section: 
             </Button>
           )}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Videos should be H.264 <code>.mp4</code> for every browser. Phone clips are often HEVC/H.265,
+          which plays on iPhone and Safari but shows a black box in Chrome and Firefox — re-export as H.264 first.
+        </p>
       </div>
       <div className="grid grid-cols-2 items-end gap-3">
         <div className="flex flex-col gap-1.5">

@@ -179,6 +179,10 @@ export default async function HomePage() {
               muted
               loop
               playsInline
+              // `controls` is the fallback: when a browser blocks muted-autoplay the visitor can still
+              // press play, so the hero is never a dead frame.
+              controls
+              preload="metadata"
             />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
