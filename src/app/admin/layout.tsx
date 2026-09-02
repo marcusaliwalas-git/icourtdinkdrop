@@ -2,6 +2,7 @@ import Image from "next/image";
 import { requireAdmin, isSuperAdmin } from "@/lib/auth";
 import { getTenant } from "@/lib/tenant";
 import { AdminNavLink } from "./nav-link";
+import { AdminNavDropdown } from "./nav-dropdown";
 
 export default async function AdminLayout({
   children,
@@ -27,15 +28,31 @@ export default async function AdminLayout({
             )}
             <span className="font-mono text-[0.65rem] tracking-[0.15em] text-muted-foreground uppercase">Admin</span>
           </AdminNavLink>
-          <AdminNavLink href="/admin/venue">Venue &amp; Courts</AdminNavLink>
-          <AdminNavLink href="/admin/homepage">Home page</AdminNavLink>
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
-          <AdminNavLink href="/admin/customers">Top Customers</AdminNavLink>
-          <AdminNavLink href="/admin/coaches">Coaches</AdminNavLink>
-          <AdminNavLink href="/admin/sales">Sales</AdminNavLink>
-          <AdminNavLink href="/admin/members">Members</AdminNavLink>
-          <AdminNavLink href="/admin/audit">Audit Log</AdminNavLink>
+          <AdminNavDropdown
+            label="People"
+            items={[
+              { href: "/admin/members", label: "Members" },
+              { href: "/admin/customers", label: "Top Customers" },
+              { href: "/admin/coaches", label: "Coaches" },
+            ]}
+          />
+          <AdminNavDropdown
+            label="Setup"
+            items={[
+              { href: "/admin/venue", label: "Venue & Courts" },
+              { href: "/admin/homepage", label: "Home page" },
+              { href: "/admin/footer", label: "Footer" },
+            ]}
+          />
+          <AdminNavDropdown
+            label="Reports"
+            items={[
+              { href: "/admin/sales", label: "Sales" },
+              { href: "/admin/audit", label: "Audit Log" },
+            ]}
+          />
           {superAdmin && <AdminNavLink href="/superadmin" className="ml-auto text-primary">Platform ↗</AdminNavLink>}
           <AdminNavLink href="/" className={superAdmin ? "" : "ml-auto"}>Back to site</AdminNavLink>
         </nav>
