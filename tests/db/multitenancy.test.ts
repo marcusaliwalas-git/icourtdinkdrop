@@ -166,6 +166,60 @@ describe("multi-tenant isolation (RLS)", () => {
     });
   });
 
+  it("a venue_memberships-only admin (no legacy profiles.role/venue_id) can confirm a booking", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+
+      // An admin whose admin-ness comes *solely* from venue_memberships — profiles.role is not
+      // 'admin' and venue_id doesn't point at A (the multi-venue onboarding shape). This is the
+      // case the old is_admin()/current_user_venue() RPC guard wrongly rejected.
+      const mvAdmin = await createMemberProfile(client);
+      await client.query(`update profiles set role = 'player', venue_id = null where id = $1`, [mvAdmin]);
+      await client.query(
+        `insert into venue_memberships (profile_id, venue_id, role) values ($1, $2, 'admin')`,
+        [mvAdmin, a.venueId]
+      );
+
+      const pendingId = randomUUID();
+      await client.query(
+        `insert into bookings (id, court_id, guest_name, guest_phone, time_range, status, party_size, total_cents, payment_status, source)
+         values ($1, $2, 'Guest', '09170000000', tstzrange(now() + interval '2 day', now() + interval '2 day 1 hour', '[)'), 'pending', 1, 50000, 'pay_at_venue', 'walkin')`,
+        [pendingId, a.courtId]
+      );
+
+      await actAs(client, mvAdmin);
+      const { rows } = await client.query(`select status from confirm_booking(p_booking_id => $1)`, [pendingId]);
+      expect(rows[0].status).toBe("confirmed");
+    });
+  });
+
+  it("a membership admin of A still cannot confirm B's booking", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+
+      // Admin of A via venue_memberships only; must not reach into B.
+      const mvAdmin = await createMemberProfile(client);
+      await client.query(`update profiles set role = 'player', venue_id = null where id = $1`, [mvAdmin]);
+      await client.query(
+        `insert into venue_memberships (profile_id, venue_id, role) values ($1, $2, 'admin')`,
+        [mvAdmin, a.venueId]
+      );
+
+      const pendingB = randomUUID();
+      await client.query(
+        `insert into bookings (id, court_id, guest_name, guest_phone, time_range, status, party_size, total_cents, payment_status, source)
+         values ($1, $2, 'Guest', '09170000000', tstzrange(now() + interval '2 day', now() + interval '2 day 1 hour', '[)'), 'pending', 1, 50000, 'pay_at_venue', 'walkin')`,
+        [pendingB, b.courtId]
+      );
+
+      await actAs(client, mvAdmin);
+      await expect(client.query(`select confirm_booking(p_booking_id => $1)`, [pendingB])).rejects.toThrow(
+        /NOT_AUTHORIZED/
+      );
+    });
+  });
+
   it("a member cannot move themselves to another tenant", async () => {
     await withRollback(async (client) => {
       const a = await seedTenant(client, "Venue A");
