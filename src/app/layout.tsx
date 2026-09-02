@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
 import { isVenueAdmin } from "@/lib/auth";
@@ -47,6 +48,15 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <SiteHeader logoUrl={tenant?.logo_url} brandName={tenant?.name} isAdmin={isAdmin} />
         <div className="flex-1">{children}</div>
+        <SiteFooter
+          brandName={tenant?.name}
+          about={tenant?.footer_about}
+          email={tenant?.footer_email}
+          phone={tenant?.footer_phone}
+          address={tenant?.footer_address}
+          socials={tenant?.footer_socials}
+          links={tenant?.footer_links}
+        />
         <Toaster />
       </body>
     </html>

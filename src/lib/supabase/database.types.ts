@@ -981,6 +981,12 @@ export type Database = {
           created_at: string
           custom_domain: string | null
           email_from: string | null
+          footer_about: string | null
+          footer_address: string | null
+          footer_email: string | null
+          footer_links: Json
+          footer_phone: string | null
+          footer_socials: Json
           hero_heading: string | null
           hero_media_type: string | null
           hero_media_url: string | null
@@ -1007,6 +1013,12 @@ export type Database = {
           created_at?: string
           custom_domain?: string | null
           email_from?: string | null
+          footer_about?: string | null
+          footer_address?: string | null
+          footer_email?: string | null
+          footer_links?: Json
+          footer_phone?: string | null
+          footer_socials?: Json
           hero_heading?: string | null
           hero_media_type?: string | null
           hero_media_url?: string | null
@@ -1033,6 +1045,12 @@ export type Database = {
           created_at?: string
           custom_domain?: string | null
           email_from?: string | null
+          footer_about?: string | null
+          footer_address?: string | null
+          footer_email?: string | null
+          footer_links?: Json
+          footer_phone?: string | null
+          footer_socials?: Json
           hero_heading?: string | null
           hero_media_type?: string | null
           hero_media_url?: string | null
@@ -1120,6 +1138,7 @@ export type Database = {
       admin_user_id_by_email: { Args: { p_email: string }; Returns: string }
       booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
       booking_venue: { Args: { p_booking: string }; Returns: string }
+      can_admin_venue: { Args: { p_venue: string }; Returns: boolean }
       cancel_booking: {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
