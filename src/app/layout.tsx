@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
 import { isVenueAdmin } from "@/lib/auth";
 import { featureEnabled } from "@/lib/features";
-import { normalizeTheme } from "@/lib/themes";
+import { normalizeTheme, LIGHT_THEME } from "@/lib/themes";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,11 +43,15 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const [tenant, isAdmin] = await Promise.all([getTenant(), isVenueAdmin()]);
+  const theme = normalizeTheme(tenant?.theme);
+  // The app is dark-first; the one light theme drops the `dark` class so every component renders its
+  // light base (and `dark:` utility variants stay off), while `data-theme` re-skins the tokens.
+  const isLight = theme === LIGHT_THEME;
   return (
     <html
       lang="en"
-      data-theme={normalizeTheme(tenant?.theme)}
-      className={`dark ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      data-theme={theme}
+      className={`${isLight ? "" : "dark"} ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <SiteAnnouncement

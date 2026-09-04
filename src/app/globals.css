@@ -210,6 +210,38 @@
   --sidebar-ring: #c4b5fd;
 }
 
+/* Daylight — the one light theme. The layout drops the `.dark` class for this theme, so it skins
+   the base :root tokens (and every component falls back to its light-first base). */
+:root[data-theme="light"] {
+  --background: #f7f8f6;
+  --foreground: #14181c;
+  --card: #ffffff;
+  --card-foreground: #14181c;
+  --popover: #ffffff;
+  --popover-foreground: #14181c;
+  --primary: #059669;
+  --primary-foreground: #ffffff;
+  --secondary: #eceef0;
+  --secondary-foreground: #14181c;
+  --muted: #eef0f1;
+  --muted-foreground: #5b6470;
+  --accent: #e7efe9;
+  --accent-foreground: #14181c;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0 0 0 / 10%);
+  --input: oklch(0 0 0 / 14%);
+  --ring: #059669;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #14181c;
+  --sidebar-primary: #059669;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e7efe9;
+  --sidebar-accent-foreground: #14181c;
+  --sidebar-border: oklch(0 0 0 / 10%);
+  --sidebar-ring: #059669;
+  --radius: 0.75rem;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
