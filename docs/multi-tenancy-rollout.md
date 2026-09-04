@@ -141,6 +141,10 @@ Before adding any tenant, confirm the current site is unaffected:
 
 ## 6. Create the first real tenant
 
+> **Now do this in the app instead:** onboard tenants from **Admin → Platform → "Onboard a new
+> tenant"** (see [Onboarding a tenant](#onboarding-a-tenant--no-new-deployment) below). The CLI below
+> is the original path, kept for scripted onboarding.
+
 Run the onboarding script **against production**. Put the prod URL + service-role key in a local,
 **git-ignored** env file (never commit it):
 
@@ -175,39 +179,60 @@ Then:
 - (Optional) Confirm an Acme admin can't act on a default-venue booking: any admin action is
   venue-scoped by RLS and the RPC guards.
 
-## Adding another tenant later — no new deployment
+## Onboarding a tenant — no new deployment
 
-> **There is one Vercel deployment and one Supabase database for every tenant.** You do **not**
-> create a new Vercel project (or a new database) per venue/court. The running deployment already
-> serves all tenants; a tenant is just a `venues` row plus a hostname pointed at that deployment.
+> **One Vercel deployment and one Supabase database serve every tenant.** You do **not** create a new
+> Vercel project (or a new database) per venue/court. The running deployment already serves all
+> tenants; a tenant is just a `venues` row plus a hostname pointed at that deployment.
 
 A tenant boundary is a **venue** (one customer/organization), not a single court — a venue holds its
 own courts, coaches, members, and bookings.
 
-To add one, repeat just two things (Steps 6–7 above):
+### 1. Create the venue + first admin — in the app (no CLI, no deploy)
 
-1. **Create the venue + its admin** in the shared database — no deploy:
-   ```bash
-   npx tsx --env-file=.env.prod supabase/create-tenant.ts \
-     --name "Beta Padel" --slug beta \
-     --admin-email owner@betapadel.com --admin-password '<strong>' \
-     --timezone Asia/Manila   # add --domain betapadel.com for a custom domain
-   ```
-2. **Point a hostname** at the *existing* deployment:
-   - **Subdomain** (`beta.dinkdrop.live`): nothing to do — the `*.<root domain>` wildcard from Step 4
-     already routes it.
-   - **Custom domain** (`betapadel.com`): add it in **Vercel → Domains**, have the tenant CNAME it to
-     Vercel. `create-tenant.ts --domain` already set `venues.custom_domain`. **Also add
-     `https://betapadel.com/**` to Supabase → Auth → Redirect URLs** (Step 4), or Google/magic-link
-     sign-in from that domain will bounce to the default host. Subdomain tenants are already covered
-     by the `https://*.dinkdrop.live/**` wildcard.
+Sign in as a **super admin** and go to **Admin → Platform → "Onboard a new tenant"**. Enter the venue
+name, timezone, the first admin's email + password, and (optionally) a custom domain; the **slug
+auto-derives from the name** if you leave it blank. This creates the venue, a full week of hours, a
+starter court, and the venue's first admin (as a `venue_memberships` admin row) — all in the shared
+database. The admin can sign in immediately at their host.
+
+> The old `supabase/create-tenant.ts` CLI still works for scripted onboarding, but the Platform UI is
+> the normal path and needs no local env file or service-role key.
+
+### 2. Point a hostname at the existing deployment
+
+| Tenant uses… | Vercel → Project → Domains | Supabase → Auth → Redirect URLs |
+| --- | --- | --- |
+| **Subdomain** `beta.dinkdrop.live` | Nothing — the `*.dinkdrop.live` wildcard already routes it. | Nothing — covered by `https://*.dinkdrop.live/**`. |
+| **Custom domain** `betapadel.com` | Add the domain, then have the tenant add the DNS records Vercel shows at their registrar (apex → `A 76.76.21.21`; `www`/subdomain → `CNAME cname.vercel-dns.com`). Wait for verify + auto-SSL. Set the venue's **Custom domain** field in the Platform form. | Add `https://betapadel.com/**`, or Google / magic-link / password-reset sign-in from that domain bounces to the default host. |
+
+**No Google Cloud change ever** — Google's authorized redirect URI stays the fixed Supabase callback;
+per-tenant routing happens at Supabase's `redirectTo` step, never Google's.
+
+### 3. (Optional) The tenant's own email sender — Resend
+
+By default a tenant's **booking** emails go out under the venue's name from the shared platform
+address (`RESEND_FROM_EMAIL`) — **nothing to do**. For a tenant's **own** sender
+(`bookings@betapadel.com`): add + verify that domain in **Resend** (add its DKIM/SPF/DMARC records at
+the tenant's registrar), then set **Admin → Venue → Sender email** (`venues.email_from`).
+
+> ⚠️ **Password-reset / auth emails** always come from Supabase's **global** SMTP sender — this is
+> not per-tenant. `email_from` only affects **booking** emails.
+
+### 4. (Optional) Theme & capabilities — super admin
+
+On the **Platform** page each venue row has a **Theme** picker (Midnight Lime / Ocean / Sunset /
+Grape / Daylight) and a **Capabilities** toggle (Coaches, Analytics). Both are super-admin-only and
+locked by a DB trigger — a venue admin can't change them. Everything else is the venue admin's own:
+home page, footer, announcement banner, courts, rates, payment accounts, and sender email.
 
 Then smoke-test isolation on the new host (Step 7). Shipping a fix or feature is a single deploy that
 reaches **every** tenant at once — never one deploy per tenant.
 
-Everything that differs between tenants lives in the `venues` row — `slug`, `custom_domain`, `name`,
-`email_from`, timezone, rates, etc. — **not** in Vercel env vars (those are one shared set:
-`NEXT_PUBLIC_ROOT_DOMAIN`, the Supabase URL/keys, `RESEND_*`).
+Everything that differs between tenants lives on the `venues` row — `slug`, `custom_domain`, `name`,
+`email_from`, `theme`, `features`, timezone, rates, and the announcement/footer/home content — **not**
+in Vercel env vars (those are one shared set: `NEXT_PUBLIC_ROOT_DOMAIN`, the Supabase URL/keys,
+`RESEND_*`).
 
 **When a separate deployment *would* make sense:** only if a customer genuinely needs isolated
 infrastructure — their own database or a forked codebase (e.g. a strict enterprise/compliance
@@ -224,12 +249,18 @@ exception, not the norm.
 
 ## Notes & gotchas
 
-- **Shared auth:** one Supabase project = one auth system, so an **email exists only once** across
-  all tenants. This matches the "accounts isolated per tenant" model; the same person can't hold two
-  accounts under one email. A signup with an already-used email is rejected by Auth.
-- **Service-role key** is used server-side only (OAuth callback + `create-tenant.ts`). Never expose
-  it to the browser or commit it.
-- **First admin login:** `create-tenant.ts` sets the admin's password directly and confirms the
-  email, so they can sign in immediately at their tenant host.
+- **Shared auth + multi-venue membership:** one Supabase project = one auth system, so an **email
+  exists only once** — one account per person. With the `venue_memberships` join table, that single
+  account can belong to **several** venues and hold a different role at each (e.g. player at one,
+  admin at another). Signing in on any tenant host uses the same account; each venue's bookings,
+  membership, and admin access are scoped separately (RLS + the app's per-host `where` filters). A
+  signup with an already-used email signs into the existing account rather than creating a second one.
+- **Service-role key** is used server-side only (the OAuth callback and the Platform onboarding
+  action, plus the legacy `create-tenant.ts`). Never expose it to the browser or commit it.
+- **First admin login:** onboarding (the Platform form or `create-tenant.ts`) sets the admin's
+  password directly and confirms the email, so they can sign in immediately at their tenant host.
+- **Super-admin-only fields:** `venues.theme` and `venues.features` can be changed only by a super
+  admin — the `set_venue_theme` / `set_venue_feature` RPCs plus a guard trigger reject writes (even a
+  venue admin's, and even direct SQL without a super-admin `auth.uid()`).
 - **Storage** (payment slips, coach photos) is shared across tenants but keyed by random UUID paths;
   slips are a private bucket (admin-only via signed URLs), photos are public images.
