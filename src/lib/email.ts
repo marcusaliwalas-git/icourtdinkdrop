@@ -88,6 +88,48 @@ const homeUrl = (base: string) => `${base}/`;
 // Admins get sent straight to the pending-review queue they need to act on.
 const adminPendingUrl = (base: string) => `${base}/admin/bookings?status=pending`;
 
+interface BookingGroupEmailDetails {
+  to: string;
+  slots: { courtName: string; startsAt: Date; endsAt: Date }[];
+  timezone: string;
+  referenceCode: string;
+  totalCents: number;
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+  logoUrl: string | null;
+}
+
+/** One confirmation email for a multi-slot cart — lists every slot, one reference, one total. */
+export async function sendBookingGroupConfirmationEmail(details: BookingGroupEmailDetails) {
+  const slotRows = details.slots.map((s) => ({
+    label: formatInTimezone(s.startsAt, "EEE, MMM d", details.timezone),
+    value: `${formatInTimezone(s.startsAt, "h:mm a", details.timezone)}–${formatInTimezone(
+      s.endsAt,
+      "h:mm a",
+      details.timezone
+    )} · ${s.courtName}`,
+  }));
+  const n = details.slots.length;
+  await safeSend({
+    from: fromAddress(details.brandName, details.fromEmail),
+    to: details.to,
+    subject: `Booking confirmed: ${n} slot${n === 1 ? "" : "s"}`,
+    html: renderEmail({
+      heading: "Your booking is confirmed 🎉",
+      intro: ["The venue has verified your payment — your courts are reserved. Show your reference code at check-in."],
+      detailRows: [
+        ...slotRows,
+        { label: "Reference", value: details.referenceCode, mono: true },
+        { label: "Total paid", value: pesos(details.totalCents) },
+      ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
+      button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
+    }),
+  });
+}
+
 export async function sendBookingConfirmationEmail(details: BookingEmailDetails) {
   const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);

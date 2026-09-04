@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow, getBookingPaymentProof } from "./actions";
+import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
 
 export function BookingActionSheet({
@@ -33,7 +34,9 @@ export function BookingActionSheet({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [proof, setProof] = useState<{ paymentReference: string | null; slipUrl: string | null } | null>(null);
+  const [group, setGroup] = useState<{ groupId: string | null; pendingCount: number }>({ groupId: null, pendingCount: 0 });
   const [mode, setMode] = useState<"actions" | "reschedule">("actions");
+  const isCart = group.groupId != null && group.pendingCount > 1;
 
   const hasStarted = startsAtIso !== "" && new Date(startsAtIso) <= new Date();
   const isPendingConfirmation = status === "pending";
@@ -41,10 +44,12 @@ export function BookingActionSheet({
   useEffect(() => {
     if (!open || !bookingId) {
       setProof(null);
+      setGroup({ groupId: null, pendingCount: 0 });
       setMode("actions");
       return;
     }
     getBookingPaymentProof(bookingId).then(setProof);
+    getBookingGroupPending(bookingId).then(setGroup);
   }, [open, bookingId]);
 
   function onConfirm() {
@@ -53,6 +58,20 @@ export function BookingActionSheet({
       const result = await adminConfirmBooking(bookingId);
       if (!result.success) {
         setError(result.message);
+        return;
+      }
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  function onConfirmGroup() {
+    if (!group.groupId) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await adminConfirmBookingGroup(group.groupId!);
+      if (!result.success) {
+        setError(result.error ?? "Couldn't confirm the cart.");
         return;
       }
       onOpenChange(false);
@@ -106,7 +125,9 @@ export function BookingActionSheet({
             <SheetTitle>{label}</SheetTitle>
             <SheetDescription>
               {isPendingConfirmation
-                ? "This booking is awaiting confirmation."
+                ? isCart
+                  ? `1 of ${group.pendingCount} slots in one payment, awaiting confirmation.`
+                  : "This booking is awaiting confirmation."
                 : "What would you like to do with this booking?"}
             </SheetDescription>
           </SheetHeader>
@@ -133,9 +154,14 @@ export function BookingActionSheet({
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <SheetFooter className="flex-col gap-2 p-0 sm:flex-col">
+            {isPendingConfirmation && isCart && (
+              <Button disabled={isPending} onClick={onConfirmGroup}>
+                Confirm all {group.pendingCount} slots
+              </Button>
+            )}
             {isPendingConfirmation && (
-              <Button disabled={isPending} onClick={onConfirm}>
-                Confirm booking
+              <Button variant={isCart ? "outline" : "default"} disabled={isPending} onClick={onConfirm}>
+                {isCart ? "Confirm this slot only" : "Confirm booking"}
               </Button>
             )}
             {!isPendingConfirmation && hasStarted && (

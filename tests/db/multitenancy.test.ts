@@ -304,6 +304,38 @@ describe("multi-tenant isolation (RLS)", () => {
     });
   });
 
+  it("confirm_booking_group confirms a whole cart; only an admin of its venue can", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+
+      // Two pending bookings sharing one group at Venue A.
+      const gid = randomUUID();
+      for (const off of [2, 3]) {
+        await client.query(
+          `insert into bookings (court_id, booking_group_id, guest_name, guest_phone, time_range, status, party_size, total_cents, payment_status, source)
+           values ($1, $2, 'Cart', '0900',
+             tstzrange(now() + ($3 || ' day')::interval, now() + ($3 || ' day')::interval + interval '1 hour', '[)'),
+             'pending', 1, 50000, 'pay_at_venue', 'online')`,
+          [a.courtId, gid, String(off)]
+        );
+      }
+
+      // An admin of B cannot confirm A's group.
+      await actAs(client, b.adminId);
+      await client.query(`savepoint sp`);
+      await expect(client.query(`select confirm_booking_group($1)`, [gid])).rejects.toThrow(/NOT_AUTHORIZED/);
+      await client.query(`rollback to savepoint sp`);
+
+      // An admin of A confirms both slots at once.
+      await asSuperuser(client);
+      await actAs(client, a.adminId);
+      const { rows } = await client.query(`select status from confirm_booking_group($1)`, [gid]);
+      expect(rows).toHaveLength(2);
+      expect(rows.every((r) => r.status === "confirmed")).toBe(true);
+    });
+  });
+
   it("a member cannot move themselves to another tenant", async () => {
     await withRollback(async (client) => {
       const a = await seedTenant(client, "Venue A");

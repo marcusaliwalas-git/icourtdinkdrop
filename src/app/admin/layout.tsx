@@ -43,6 +43,7 @@ export default async function AdminLayout({
           </AdminNavLink>
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
+          <AdminNavLink href="/admin/payments">Payments</AdminNavLink>
           <AdminNavDropdown label="People" items={peopleItems} />
           <AdminNavDropdown
             label="Setup"
