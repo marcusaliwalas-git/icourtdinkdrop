@@ -11,7 +11,7 @@ language plpgsql security definer set search_path = public as $$
 begin
   if new.venue_id is null and new.entity_id is not null then
     new.venue_id := case new.entity
-      when 'venue'   then new.entity_id
+      when 'venue'   then (select id from venues where id = new.entity_id)
       when 'court'   then (select venue_id from courts   where id = new.entity_id)
       when 'coach'   then (select venue_id from coaches  where id = new.entity_id)
       when 'closure' then (select venue_id from closures where id = new.entity_id)
@@ -27,8 +27,10 @@ create trigger audit_log_set_venue before insert on audit_log
   for each row execute function audit_log_fill_venue();
 
 -- Backfill existing rows with the same derivation.
+-- `when 'venue' then (select id from venues …)` (not a.entity_id directly) so an audit row for a
+-- since-deleted venue backfills to null instead of a dangling id that violates the FK.
 update audit_log a set venue_id = case a.entity
-  when 'venue'   then a.entity_id
+  when 'venue'   then (select id from venues where id = a.entity_id)
   when 'court'   then (select venue_id from courts   where id = a.entity_id)
   when 'coach'   then (select venue_id from coaches  where id = a.entity_id)
   when 'closure' then (select venue_id from closures where id = a.entity_id)
