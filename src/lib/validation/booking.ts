@@ -20,7 +20,7 @@ export const createBookingSchema = z
       .multipleOf(60),
     partySize: z.coerce.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
-    guestPhone: phSchema.optional(),
+    guestPhone: phSchema.optional().or(z.literal("")),
     // Required for a guest's online booking (enforced in create_booking, not here — this
     // schema is shared with createWalkInBooking, which never collects an email at all, same
     // reasoning as paymentReference/paymentSlipPath below). It's how a guest, who has no
@@ -60,7 +60,7 @@ export const createBookingsSchema = z
     coachId: z.uuid().nullable().optional(),
     partySize: z.coerce.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
-    guestPhone: phSchema.optional(),
+    guestPhone: phSchema.optional().or(z.literal("")),
     guestEmail: z.email().optional().or(z.literal("")),
     notes: z.string().trim().max(500).optional(),
     idempotencyKey: z.string().trim().min(1).max(200).optional(),

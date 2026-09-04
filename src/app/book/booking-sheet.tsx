@@ -164,7 +164,7 @@ export function BookingSheet({
           durationMinutes: s.durationMinutes,
         })),
         guestName: isLoggedIn ? undefined : guestName,
-        guestPhone: isLoggedIn ? undefined : guestPhone,
+        guestPhone: isLoggedIn ? undefined : guestPhone || undefined,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
         coachId: coachId || null,
         paymentReference: paymentReference.trim() || undefined,
