@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { requireAdmin, isSuperAdmin } from "@/lib/auth";
 import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
 import { AdminNavLink } from "./nav-link";
 import { AdminNavDropdown } from "./nav-dropdown";
 
@@ -12,6 +13,18 @@ export default async function AdminLayout({
   await requireAdmin();
   const tenant = await getTenant();
   const superAdmin = await isSuperAdmin();
+  const coachesEnabled = featureEnabled(tenant?.features, "coaches");
+  const analyticsEnabled = featureEnabled(tenant?.features, "analytics");
+
+  const peopleItems = [
+    { href: "/admin/members", label: "Members" },
+    ...(analyticsEnabled ? [{ href: "/admin/customers", label: "Top Customers" }] : []),
+    ...(coachesEnabled ? [{ href: "/admin/coaches", label: "Coaches" }] : []),
+  ];
+  const reportsItems = [
+    ...(analyticsEnabled ? [{ href: "/admin/sales", label: "Sales" }] : []),
+    { href: "/admin/audit", label: "Audit Log" },
+  ];
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -30,14 +43,7 @@ export default async function AdminLayout({
           </AdminNavLink>
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
-          <AdminNavDropdown
-            label="People"
-            items={[
-              { href: "/admin/members", label: "Members" },
-              { href: "/admin/customers", label: "Top Customers" },
-              { href: "/admin/coaches", label: "Coaches" },
-            ]}
-          />
+          <AdminNavDropdown label="People" items={peopleItems} />
           <AdminNavDropdown
             label="Setup"
             items={[
@@ -46,13 +52,7 @@ export default async function AdminLayout({
               { href: "/admin/footer", label: "Footer" },
             ]}
           />
-          <AdminNavDropdown
-            label="Reports"
-            items={[
-              { href: "/admin/sales", label: "Sales" },
-              { href: "/admin/audit", label: "Audit Log" },
-            ]}
-          />
+          <AdminNavDropdown label="Reports" items={reportsItems} />
           {superAdmin && <AdminNavLink href="/superadmin" className="ml-auto text-primary">Platform ↗</AdminNavLink>}
           <AdminNavLink href="/" className={superAdmin ? "" : "ml-auto"}>Back to site</AdminNavLink>
         </nav>

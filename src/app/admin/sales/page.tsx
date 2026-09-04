@@ -5,6 +5,8 @@ import { parseTstzRange } from "@/lib/availability";
 import { periodBounds, shiftAnchor, type CalendarPeriod } from "@/lib/period-range";
 import { summarizeSales, percentChange, type SalesInputRow, type SalesBreakdown } from "@/lib/sales";
 import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +93,7 @@ export default async function AdminSalesPage({
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;
   }
+  if (!featureEnabled(venue.features, "analytics")) notFound();
 
   const period: CalendarPeriod | "custom" = PERIOD_OPTIONS.some((p) => p.value === params.period)
     ? (params.period as CalendarPeriod | "custom")

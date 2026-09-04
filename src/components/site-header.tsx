@@ -39,10 +39,12 @@ export function SiteHeader({
   logoUrl,
   brandName,
   isAdmin = false,
+  coachesEnabled = true,
 }: {
   logoUrl?: string | null;
   brandName?: string | null;
   isAdmin?: boolean;
+  coachesEnabled?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -65,7 +67,7 @@ export function SiteHeader({
         </Link>
         <NavLink href="/" pathname={pathname}>Home</NavLink>
         <NavLink href="/book" pathname={pathname}>Book</NavLink>
-        <NavLink href="/coaches" pathname={pathname}>Coaches</NavLink>
+        {coachesEnabled && <NavLink href="/coaches" pathname={pathname}>Coaches</NavLink>}
         <NavLink href="/bookings" pathname={pathname}>My bookings</NavLink>
         {isAdmin && (
           <NavLink href="/admin/venue" pathname={pathname} className="text-primary hover:text-primary">

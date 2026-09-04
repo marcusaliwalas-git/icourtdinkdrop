@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { formatInTimezone } from "@/lib/time";
+import { notFound } from "next/navigation";
 import { CoachesManager, type Coach } from "./coaches-manager";
 import { RequestsList, type CoachRequest } from "./requests-list";
 import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,7 @@ export default async function AdminCoachesPage() {
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;
   }
+  if (!featureEnabled(venue.features, "coaches")) notFound();
   const tz = venue.timezone ?? "Asia/Manila";
 
   const [{ data: coaches }, { data: requests }] = await Promise.all([

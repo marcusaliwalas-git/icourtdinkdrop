@@ -220,6 +220,36 @@ describe("multi-tenant isolation (RLS)", () => {
     });
   });
 
+  it("only a super admin can change a venue's capability flags", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const superId = await createMemberProfile(client);
+      await client.query(`update profiles set is_super_admin = true where id = $1`, [superId]);
+
+      // Super admin turns a capability off via the RPC.
+      await actAs(client, superId);
+      const { rows } = await client.query(`select set_venue_feature($1, 'coaches', false) as features`, [a.venueId]);
+      expect(rows[0].features).toMatchObject({ coaches: false });
+
+      // A venue admin (not super) cannot — not via the RPC… (savepoints because each raise aborts to
+      // the savepoint, letting the single transaction continue to the next assertion).
+      await asSuperuser(client);
+      await actAs(client, a.adminId);
+      await client.query(`savepoint sp_rpc`);
+      await expect(client.query(`select set_venue_feature($1, 'coaches', true)`, [a.venueId])).rejects.toThrow(
+        /NOT_AUTHORIZED/
+      );
+      await client.query(`rollback to savepoint sp_rpc`);
+      // …nor by writing the column directly (the guard trigger blocks it, even though RLS lets the
+      // admin update their own venue row).
+      await client.query(`savepoint sp_col`);
+      await expect(
+        client.query(`update venues set features = '{"coaches": true}'::jsonb where id = $1`, [a.venueId])
+      ).rejects.toThrow(/NOT_AUTHORIZED/);
+      await client.query(`rollback to savepoint sp_col`);
+    });
+  });
+
   it("a member cannot move themselves to another tenant", async () => {
     await withRollback(async (client) => {
       const a = await seedTenant(client, "Venue A");

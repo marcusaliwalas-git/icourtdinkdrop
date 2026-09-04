@@ -3,6 +3,7 @@ import { formatInTimezone } from "@/lib/time";
 import { CreateTenantForm } from "./create-tenant-form";
 import { DeleteVenueButton } from "./delete-venue-button";
 import { VenueActiveToggle } from "./venue-active-toggle";
+import { VenueCapabilities } from "./venue-capabilities";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function SuperAdminPage() {
   const supabase = await createClient();
   const { data: venues } = await supabase
     .from("venues")
-    .select("id, name, slug, custom_domain, timezone, created_at, is_active")
+    .select("id, name, slug, custom_domain, timezone, created_at, is_active, features")
     .order("created_at", { ascending: false });
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "dinkdrop.live";
@@ -62,6 +63,7 @@ export default async function SuperAdminPage() {
                 </td>
                 <td className="p-3">
                   <div className="flex items-center justify-end gap-1">
+                    <VenueCapabilities venueId={v.id} features={v.features} />
                     <VenueActiveToggle venueId={v.id} active={v.is_active} />
                     <DeleteVenueButton venueId={v.id} venueName={v.name} />
                   </div>

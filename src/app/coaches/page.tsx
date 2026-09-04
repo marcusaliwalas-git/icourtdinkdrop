@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { notFound } from "next/navigation";
 import { RequestCoachDialog } from "./request-coach-dialog";
 import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,7 @@ export default async function CoachesPage() {
   const supabase = await createClient();
 
   const venue = await getTenant();
+  if (!featureEnabled(venue?.features, "coaches")) notFound();
 
   const {
     data: { user },

@@ -127,6 +127,19 @@ export async function setVenueActive(venueId: string, active: boolean): Promise<
 }
 
 /**
+ * Toggle a per-venue capability (see src/lib/features.ts). Goes through the set_venue_feature RPC on
+ * the super admin's own session — not the service-role client — because the venues.features column
+ * is guarded by a trigger that authorizes on auth.uid()'s is_super_admin (service-role has no uid).
+ */
+export async function setVenueFeature(venueId: string, key: string, enabled: boolean): Promise<Result> {
+  const { supabase } = await requireSuperAdmin();
+  const { error } = await supabase.rpc("set_venue_feature", { p_venue: venueId, p_key: key, p_enabled: enabled });
+  if (error) return { error: error.message };
+  revalidatePath("/superadmin");
+  return { success: true };
+}
+
+/**
  * Delete a tenant. Guarded: refuses a venue that has any bookings (deactivate those instead), and
  * won't delete the venue the caller's own account belongs to. Otherwise removes the tenant's member
  * accounts, then the venue (which cascades its courts, hours, closures, coaches, payment accounts,

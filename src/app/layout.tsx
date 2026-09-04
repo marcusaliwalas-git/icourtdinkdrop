@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
 import { isVenueAdmin } from "@/lib/auth";
+import { featureEnabled } from "@/lib/features";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,7 +47,12 @@ export default async function RootLayout({
       className={`dark ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SiteHeader logoUrl={tenant?.logo_url} brandName={tenant?.name} isAdmin={isAdmin} />
+        <SiteHeader
+          logoUrl={tenant?.logo_url}
+          brandName={tenant?.name}
+          isAdmin={isAdmin}
+          coachesEnabled={featureEnabled(tenant?.features, "coaches")}
+        />
         <div className="flex-1">{children}</div>
         <SiteFooter
           brandName={tenant?.name}

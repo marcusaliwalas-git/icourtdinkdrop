@@ -5,6 +5,7 @@ import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate }
 import { AvailabilityGrid } from "./availability-grid";
 import { DatePickerPopover } from "./date-picker-popover";
 import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -56,13 +57,17 @@ export default async function BookPage({
     .eq("is_active", true)
     .order("name");
 
-  const { data: coaches } = await supabase
-    .from("coaches")
-    .select("id, name, hourly_rate_cents")
-    .eq("venue_id", venue.id)
-    .eq("is_active", true)
-    .order("sort_order")
-    .order("name");
+  // Coaching is a per-venue capability; when it's off, offer no coaches so the booking sheet hides
+  // the add-on entirely.
+  const { data: coaches } = featureEnabled(venue?.features, "coaches")
+    ? await supabase
+        .from("coaches")
+        .select("id, name, hourly_rate_cents")
+        .eq("venue_id", venue.id)
+        .eq("is_active", true)
+        .order("sort_order")
+        .order("name")
+    : { data: [] as { id: string; name: string; hourly_rate_cents: number }[] };
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
