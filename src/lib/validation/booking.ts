@@ -34,9 +34,11 @@ export const createBookingSchema = z
     paymentReference: z.string().trim().min(1).max(100).optional(),
     paymentSlipPath: z.string().trim().min(1).max(300).optional(),
   })
-  .refine((data) => !!data.guestName === !!data.guestPhone, {
-    message: "guestName and guestPhone must be provided together",
-    path: ["guestPhone"],
+  // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
+  // name is the only invalid combination.
+  .refine((data) => !data.guestPhone || !!data.guestName, {
+    message: "Enter your name to go with the mobile number.",
+    path: ["guestName"],
   });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
@@ -65,9 +67,11 @@ export const createBookingsSchema = z
     paymentReference: z.string().trim().min(1).max(100).optional(),
     paymentSlipPath: z.string().trim().min(1).max(300).optional(),
   })
-  .refine((data) => !!data.guestName === !!data.guestPhone, {
-    message: "guestName and guestPhone must be provided together",
-    path: ["guestPhone"],
+  // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
+  // name is the only invalid combination.
+  .refine((data) => !data.guestPhone || !!data.guestName, {
+    message: "Enter your name to go with the mobile number.",
+    path: ["guestName"],
   });
 
 export type CreateBookingsInput = z.infer<typeof createBookingsSchema>;

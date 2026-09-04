@@ -68,7 +68,7 @@ export function BookingCard({ booking, timezone }: { booking: Booking; timezone:
             {formatInTimezone(end, "h:mm a", timezone)}
           </p>
           <p className="text-xs text-muted-foreground">
-            Ref {booking.reference_code} · {booking.party_size} players · {pesos(booking.total_cents)} (
+            Ref {booking.reference_code} · {pesos(booking.total_cents)} (
             {PAYMENT_STATUS_LABEL[booking.payment_status] ?? booking.payment_status})
           </p>
           {error && <p className="text-xs text-destructive">{error}</p>}

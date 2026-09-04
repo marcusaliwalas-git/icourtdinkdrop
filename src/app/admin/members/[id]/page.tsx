@@ -124,7 +124,6 @@ export default async function MemberDetailPage({
             <TableRow>
               <TableHead>Court</TableHead>
               <TableHead>When</TableHead>
-              <TableHead>Party</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
@@ -137,7 +136,6 @@ export default async function MemberDetailPage({
                 <TableRow key={b.id}>
                   <TableCell>{courtName}</TableCell>
                   <TableCell>{formatInTimezone(start, "MMM d, yyyy h:mm a")}</TableCell>
-                  <TableCell>{b.party_size}</TableCell>
                   <TableCell>{(b.total_cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[b.status] ?? "secondary"}>{b.status}</Badge>

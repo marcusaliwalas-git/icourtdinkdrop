@@ -295,13 +295,12 @@ export function BookingSheet({
                   <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="guestPhone">Mobile number</Label>
+                  <Label htmlFor="guestPhone">Mobile number (optional)</Label>
                   <Input
                     id="guestPhone"
                     placeholder="09171234567"
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
-                    required
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">

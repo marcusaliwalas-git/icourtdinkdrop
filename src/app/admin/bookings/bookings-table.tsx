@@ -59,7 +59,6 @@ export function BookingsTable({ bookings, timezone }: { bookings: Booking[]; tim
               <TableHead>Booked by</TableHead>
               <TableHead>Court</TableHead>
               <TableHead>When</TableHead>
-              <TableHead>Party</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Payment</TableHead>
               <TableHead>Status</TableHead>
@@ -93,7 +92,6 @@ export function BookingsTable({ bookings, timezone }: { bookings: Booking[]; tim
                     {" – "}
                     {formatInTimezone(end, "h:mm a", timezone)}
                   </TableCell>
-                  <TableCell>{b.party_size}</TableCell>
                   <TableCell>{pesos(b.total_cents)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{b.payment_status}</TableCell>
                   <TableCell>

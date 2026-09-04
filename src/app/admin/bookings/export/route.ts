@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const { data: bookings } = await query.limit(2000);
 
   const csv = toCsv(
-    ["Reference", "Court", "Starts", "Ends", "Booked by", "Phone", "Email", "Party", "Total (PHP)", "Payment", "Source", "Status"],
+    ["Reference", "Court", "Starts", "Ends", "Booked by", "Phone", "Email", "Total (PHP)", "Payment", "Source", "Status"],
     (bookings ?? []).map((b) => {
       const { start, end } = parseTstzRange(b.time_range);
       const court = (b.courts as unknown as { name: string } | null)?.name ?? "";
@@ -43,7 +43,6 @@ export async function GET(request: Request) {
         profile?.full_name ?? b.guest_name ?? "",
         profile?.phone ?? b.guest_phone ?? "",
         b.guest_email ?? "",
-        b.party_size,
         (b.total_cents / 100).toFixed(2),
         b.payment_status,
         b.source,
