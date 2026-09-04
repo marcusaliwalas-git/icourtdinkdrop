@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** A short, stable key for this announcement's content — when the admin changes the message/image,
- * the key changes so anyone who dismissed the old one sees the new one. */
+/** A short, stable key for this announcement's content. Dismissal is stored in sessionStorage, so it
+ * lasts only for the current visit — a refresh keeps it closed, but a new browser session (or tab)
+ * shows it again. The content hash also re-shows it within a visit if the admin changes it. */
 function contentKey(parts: (string | null | undefined)[]): string {
   const raw = parts.filter(Boolean).join("|");
   let hash = 0;
@@ -33,12 +34,13 @@ export function SiteAnnouncement({
   const isAdmin = pathname?.startsWith("/admin") ?? false;
   const eligible = enabled && !isAdmin && (isImage || isText);
 
-  // Start hidden and reveal after the mount check, so a previously-dismissed overlay never flashes.
+  // Start hidden and reveal after the mount check, so an overlay dismissed earlier this visit never
+  // flashes. sessionStorage means the dismissal is forgotten when the browser session ends.
   const [show, setShow] = useState(false);
   useEffect(() => {
     if (!eligible) return;
     try {
-      setShow(localStorage.getItem(key) !== "1");
+      setShow(sessionStorage.getItem(key) !== "1");
     } catch {
       setShow(true); // storage blocked — show it rather than hide it
     }
@@ -62,7 +64,7 @@ export function SiteAnnouncement({
 
   function dismiss() {
     try {
-      localStorage.setItem(key, "1");
+      sessionStorage.setItem(key, "1");
     } catch {
       /* ignore */
     }
