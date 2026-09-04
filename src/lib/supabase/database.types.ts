@@ -1008,6 +1008,7 @@ export type Database = {
           name: string
           photos: string[]
           slug: string | null
+          theme: string
           timezone: string
           updated_at: string
         }
@@ -1046,6 +1047,7 @@ export type Database = {
           name: string
           photos?: string[]
           slug?: string | null
+          theme?: string
           timezone?: string
           updated_at?: string
         }
@@ -1084,6 +1086,7 @@ export type Database = {
           name?: string
           photos?: string[]
           slug?: string | null
+          theme?: string
           timezone?: string
           updated_at?: string
         }
@@ -1417,6 +1420,10 @@ export type Database = {
       set_venue_feature: {
         Args: { p_enabled: boolean; p_key: string; p_venue: string }
         Returns: Json
+      }
+      set_venue_theme: {
+        Args: { p_theme: string; p_venue: string }
+        Returns: string
       }
     }
     Enums: {

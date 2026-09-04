@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
 import { isVenueAdmin } from "@/lib/auth";
 import { featureEnabled } from "@/lib/features";
+import { normalizeTheme } from "@/lib/themes";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -45,6 +46,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      data-theme={normalizeTheme(tenant?.theme)}
       className={`dark ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">

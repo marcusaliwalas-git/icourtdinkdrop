@@ -4,6 +4,7 @@ import { CreateTenantForm } from "./create-tenant-form";
 import { DeleteVenueButton } from "./delete-venue-button";
 import { VenueActiveToggle } from "./venue-active-toggle";
 import { VenueCapabilities } from "./venue-capabilities";
+import { VenueThemeSelect } from "./venue-theme-select";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export default async function SuperAdminPage() {
   const supabase = await createClient();
   const { data: venues } = await supabase
     .from("venues")
-    .select("id, name, slug, custom_domain, timezone, created_at, is_active, features")
+    .select("id, name, slug, custom_domain, timezone, created_at, is_active, features, theme")
     .order("created_at", { ascending: false });
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "dinkdrop.live";
@@ -34,6 +35,7 @@ export default async function SuperAdminPage() {
               <th className="p-3 font-medium">Venue</th>
               <th className="p-3 font-medium">Reachable at</th>
               <th className="p-3 font-medium">Timezone</th>
+              <th className="p-3 font-medium">Theme</th>
               <th className="p-3 font-medium">Created</th>
               <th className="p-3 font-medium"></th>
             </tr>
@@ -58,6 +60,9 @@ export default async function SuperAdminPage() {
                   </div>
                 </td>
                 <td className="p-3 text-muted-foreground">{v.timezone}</td>
+                <td className="p-3">
+                  <VenueThemeSelect venueId={v.id} theme={v.theme} />
+                </td>
                 <td className="p-3 text-muted-foreground">
                   {formatInTimezone(new Date(v.created_at), "MMM d, yyyy", v.timezone)}
                 </td>
@@ -72,7 +77,7 @@ export default async function SuperAdminPage() {
             ))}
             {(venues ?? []).length === 0 && (
               <tr>
-                <td colSpan={5} className="p-4 text-center text-muted-foreground">
+                <td colSpan={6} className="p-4 text-center text-muted-foreground">
                   No venues yet. Onboard the first one below.
                 </td>
               </tr>

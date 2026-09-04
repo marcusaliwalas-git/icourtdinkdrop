@@ -140,6 +140,20 @@ export async function setVenueFeature(venueId: string, key: string, enabled: boo
 }
 
 /**
+ * Assign a venue's theme (super-admin only). Like setVenueFeature, it goes through the
+ * set_venue_theme RPC on the super admin's own session — the venues.theme column is guarded by the
+ * same trigger, so the service-role client (no auth.uid()) can't write it.
+ */
+export async function setVenueTheme(venueId: string, theme: string): Promise<Result> {
+  const { supabase } = await requireSuperAdmin();
+  const { error } = await supabase.rpc("set_venue_theme", { p_venue: venueId, p_theme: theme });
+  if (error) return { error: error.message };
+  revalidatePath("/superadmin");
+  revalidatePath("/", "layout"); // the theme re-skins the whole tenant site
+  return { success: true };
+}
+
+/**
  * Delete a tenant. Guarded: refuses a venue that has any bookings (deactivate those instead), and
  * won't delete the venue the caller's own account belongs to. Otherwise removes the tenant's member
  * accounts, then the venue (which cascades its courts, hours, closures, coaches, payment accounts,

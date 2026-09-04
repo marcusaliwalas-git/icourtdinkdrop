@@ -121,6 +121,95 @@
   --radius: 0.75rem;
 }
 
+/* ── Per-venue themes ─────────────────────────────────────────────────────────
+   Super admin assigns one per venue (venues.theme → <html data-theme>). Each block
+   re-skins the same tokens as .dark; `data-theme="default"` matches nothing here and
+   keeps the iCourt lime look above. The `.dark[data-theme]` selector outranks `.dark`,
+   so these always win regardless of order. */
+.dark[data-theme="ocean"] {
+  --background: #060b16;
+  --foreground: #eef4ff;
+  --card: #0e1728;
+  --card-foreground: #eef4ff;
+  --popover: #0e1728;
+  --popover-foreground: #eef4ff;
+  --primary: #38bdf8;
+  --primary-foreground: #04121f;
+  --secondary: #16233a;
+  --secondary-foreground: #eef4ff;
+  --muted: #101a2c;
+  --muted-foreground: #9fb3cd;
+  --accent: #16233a;
+  --accent-foreground: #eef4ff;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #38bdf8;
+  --sidebar: #0e1728;
+  --sidebar-foreground: #eef4ff;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #04121f;
+  --sidebar-accent: #16233a;
+  --sidebar-accent-foreground: #eef4ff;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #7dd3fc;
+}
+
+.dark[data-theme="sunset"] {
+  --background: #0f0a07;
+  --foreground: #fdf3ec;
+  --card: #1d1510;
+  --card-foreground: #fdf3ec;
+  --popover: #1d1510;
+  --popover-foreground: #fdf3ec;
+  --primary: #fb923c;
+  --primary-foreground: #200f02;
+  --secondary: #271b13;
+  --secondary-foreground: #fdf3ec;
+  --muted: #1b130d;
+  --muted-foreground: #c3ab99;
+  --accent: #271b13;
+  --accent-foreground: #fdf3ec;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #fb923c;
+  --sidebar: #1d1510;
+  --sidebar-foreground: #fdf3ec;
+  --sidebar-primary: #fb923c;
+  --sidebar-primary-foreground: #200f02;
+  --sidebar-accent: #271b13;
+  --sidebar-accent-foreground: #fdf3ec;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #fdba74;
+}
+
+.dark[data-theme="grape"] {
+  --background: #0b0713;
+  --foreground: #f3eefe;
+  --card: #17102a;
+  --card-foreground: #f3eefe;
+  --popover: #17102a;
+  --popover-foreground: #f3eefe;
+  --primary: #a78bfa;
+  --primary-foreground: #14032a;
+  --secondary: #201735;
+  --secondary-foreground: #f3eefe;
+  --muted: #160f26;
+  --muted-foreground: #b0a3cc;
+  --accent: #201735;
+  --accent-foreground: #f3eefe;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #a78bfa;
+  --sidebar: #17102a;
+  --sidebar-foreground: #f3eefe;
+  --sidebar-primary: #a78bfa;
+  --sidebar-primary-foreground: #14032a;
+  --sidebar-accent: #201735;
+  --sidebar-accent-foreground: #f3eefe;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #c4b5fd;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

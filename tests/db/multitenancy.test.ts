@@ -250,6 +250,32 @@ describe("multi-tenant isolation (RLS)", () => {
     });
   });
 
+  it("only a super admin can change a venue's theme", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const superId = await createMemberProfile(client);
+      await client.query(`update profiles set is_super_admin = true where id = $1`, [superId]);
+
+      // Super admin assigns a theme via the RPC.
+      await actAs(client, superId);
+      const { rows } = await client.query(`select set_venue_theme($1, 'ocean') as theme`, [a.venueId]);
+      expect(rows[0].theme).toBe("ocean");
+
+      // A venue admin cannot — not via the RPC…
+      await asSuperuser(client);
+      await actAs(client, a.adminId);
+      await client.query(`savepoint sp_rpc`);
+      await expect(client.query(`select set_venue_theme($1, 'grape')`, [a.venueId])).rejects.toThrow(/NOT_AUTHORIZED/);
+      await client.query(`rollback to savepoint sp_rpc`);
+      // …nor by writing the column directly (guard trigger).
+      await client.query(`savepoint sp_col`);
+      await expect(client.query(`update venues set theme = 'grape' where id = $1`, [a.venueId])).rejects.toThrow(
+        /NOT_AUTHORIZED/
+      );
+      await client.query(`rollback to savepoint sp_col`);
+    });
+  });
+
   it("a member cannot move themselves to another tenant", async () => {
     await withRollback(async (client) => {
       const a = await seedTenant(client, "Venue A");
