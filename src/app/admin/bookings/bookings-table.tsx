@@ -25,8 +25,17 @@ interface Booking {
   guest_phone: string | null;
   time_range: string;
   reference_code: string;
+  booking_group_id: string | null;
   courts: { name: string } | null;
   profiles: { full_name: string | null; phone: string | null; email: string | null } | null;
+}
+
+/** A stable hue per cart, so the same cart's rows share one colour even when the time sort scatters
+ * them through the list. */
+function cartHue(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -49,6 +58,26 @@ export function BookingsTable({ bookings, timezone }: { bookings: Booking[]; tim
     status: string;
   } | null>(null);
 
+  // Members of each cart, in list order — to show "n of m" and a shared accent on grouped rows.
+  const cartMembers = new Map<string, string[]>();
+  for (const b of bookings) {
+    if (!b.booking_group_id) continue;
+    const arr = cartMembers.get(b.booking_group_id) ?? [];
+    arr.push(b.id);
+    cartMembers.set(b.booking_group_id, arr);
+  }
+  function cartInfo(b: Booking) {
+    if (!b.booking_group_id) return null;
+    const arr = cartMembers.get(b.booking_group_id);
+    if (!arr || arr.length < 2) return null; // a lone booking isn't a "cart"
+    return {
+      pos: arr.indexOf(b.id) + 1,
+      total: arr.length,
+      code: b.booking_group_id.slice(0, 4).toUpperCase(),
+      hue: cartHue(b.booking_group_id),
+    };
+  }
+
   return (
     <>
       <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
@@ -68,10 +97,12 @@ export function BookingsTable({ bookings, timezone }: { bookings: Booking[]; tim
             {bookings.map((b) => {
               const { start, end } = parseTstzRange(b.time_range);
               const name = b.profiles?.full_name ?? b.profiles?.email ?? b.guest_name ?? "Guest";
+              const cart = cartInfo(b);
               return (
                 <TableRow
                   key={b.id}
                   className="cursor-pointer"
+                  style={cart ? { boxShadow: `inset 3px 0 0 hsl(${cart.hue} 70% 55%)` } : undefined}
                   onClick={() =>
                     setSelected({
                       id: b.id,
@@ -81,7 +112,18 @@ export function BookingsTable({ bookings, timezone }: { bookings: Booking[]; tim
                     })
                   }
                 >
-                  <TableCell className="font-mono text-xs tracking-wide">{b.reference_code}</TableCell>
+                  <TableCell className="font-mono text-xs tracking-wide">
+                    {b.reference_code}
+                    {cart && (
+                      <span
+                        className="ml-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.6rem] font-medium tracking-wide whitespace-nowrap"
+                        style={{ backgroundColor: `hsl(${cart.hue} 70% 55% / 0.15)`, color: `hsl(${cart.hue} 70% 70%)` }}
+                        title={`Part of a ${cart.total}-slot cart (one payment)`}
+                      >
+                        🛒 {cart.code} · {cart.pos}/{cart.total}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {name}
                     <span className="ml-1.5 text-xs text-muted-foreground capitalize">({b.source})</span>
