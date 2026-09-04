@@ -122,11 +122,12 @@ export default async function AdminSalesPage({
         })()
       : periodBounds(period, shiftAnchor(period, anchor, -1));
 
-  // Fixed month/year windows (independent of the selected period) for the always-on trends panel.
-  const monthNow = periodBounds("month", today);
-  const monthPrev = periodBounds("month", shiftAnchor("month", today, -1));
-  const yearNow = periodBounds("year", today);
-  const yearPrev = periodBounds("year", shiftAnchor("year", today, -1));
+  // Month/year windows for the revenue-trends panel, anchored to the selected date so they follow
+  // the picker (navigate to August → the tiles compare August; pick a year → that year).
+  const monthNow = periodBounds("month", anchor);
+  const monthPrev = periodBounds("month", shiftAnchor("month", anchor, -1));
+  const yearNow = periodBounds("year", anchor);
+  const yearPrev = periodBounds("year", shiftAnchor("year", anchor, -1));
 
   const [current, previous, mNow, mPrev, yNow, yPrev] = await Promise.all([
     summarizeRange(supabase, venue.id, venue.timezone, from, to),
@@ -145,11 +146,15 @@ export default async function AdminSalesPage({
   const avgDailyPrev = avgDailyCents(previous.summary.realizedCents, prev.from, prev.to, today);
   const avgDailyChange = percentChange(avgDaily, avgDailyPrev);
 
-  // Month-over-month and year-over-year avg daily sales, always relative to today.
-  const momCurrent = avgDailyCents(mNow.summary.realizedCents, monthNow.from, monthNow.to, today);
-  const momPrevious = avgDailyCents(mPrev.summary.realizedCents, monthPrev.from, monthPrev.to, today);
-  const yoyCurrent = avgDailyCents(yNow.summary.realizedCents, yearNow.from, yearNow.to, today);
-  const yoyPrevious = avgDailyCents(yPrev.summary.realizedCents, yearPrev.from, yearPrev.to, today);
+  // Month-over-month and year-over-year — actual realized revenue for each window (not averaged).
+  const momCurrent = mNow.summary.realizedCents;
+  const momPrevious = mPrev.summary.realizedCents;
+  const yoyCurrent = yNow.summary.realizedCents;
+  const yoyPrevious = yPrev.summary.realizedCents;
+
+  // Labels naming the windows being compared, e.g. "Sep 2026 vs Aug 2026" and "2026 vs 2025".
+  const monthLabel = (w: { from: string }) => formatInTimezone(new Date(`${w.from}T12:00:00Z`), "MMM yyyy", venue.timezone);
+  const yearLabel = (w: { from: string }) => formatInTimezone(new Date(`${w.from}T12:00:00Z`), "yyyy", venue.timezone);
 
   function hrefFor(overrides: Record<string, string | undefined>): string {
     const next = new URLSearchParams();
@@ -276,14 +281,14 @@ export default async function AdminSalesPage({
         Avg daily sales divides realized revenue by the number of days elapsed in the range.
       </p>
 
-      {/* Avg daily sales trends — fixed month/year comparisons, independent of the picker above */}
+      {/* Revenue trends — realized revenue for the selected month/year vs the prior one. */}
       <div className="rounded-xl border border-white/[0.08] bg-card p-4">
         <h2 className="mb-3 font-mono text-xs tracking-[0.15em] text-muted-foreground uppercase">
-          Avg daily sales trends
+          Revenue trends
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          <TrendRow label="This month vs last month" current={momCurrent} previous={momPrevious} />
-          <TrendRow label="This year vs last year" current={yoyCurrent} previous={yoyPrevious} />
+          <TrendRow label={`${monthLabel(monthNow)} vs ${monthLabel(monthPrev)}`} current={momCurrent} previous={momPrevious} />
+          <TrendRow label={`${yearLabel(yearNow)} vs ${yearLabel(yearPrev)}`} current={yoyCurrent} previous={yoyPrevious} />
         </div>
       </div>
 
@@ -320,7 +325,7 @@ function TrendRow({ label, current, previous }: { label: string; current: number
           </span>
         )}
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">was {pesos(previous)} / day</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">was {pesos(previous)}</p>
     </div>
   );
 }
