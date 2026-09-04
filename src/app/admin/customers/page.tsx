@@ -74,7 +74,8 @@ export default async function AdminCustomersPage({
   // actually happened, but a still-pending one is a genuine booking request either way.
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("booked_by, guest_name, guest_phone, status, total_cents, profiles(full_name, phone)")
+    .select("booked_by, guest_name, guest_phone, status, total_cents, profiles(full_name, phone), courts!inner(venue_id)")
+    .eq("courts.venue_id", venue.id) // scope to this venue — RLS alone pools all of a multi-venue admin's venues
     .neq("status", "cancelled")
     .filter("time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
     .limit(10000);

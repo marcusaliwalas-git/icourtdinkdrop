@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
+import { getTenant } from "@/lib/tenant";
 import { MemberActions } from "./member-actions";
 
 export const dynamic = "force-dynamic";
@@ -39,18 +40,24 @@ export default async function MemberDetailPage({
 
   if (!profile) notFound();
 
+  // Scope this member's booking history to the current venue — otherwise a multi-venue admin sees
+  // the member's bookings at their other venues too.
+  const venue = await getTenant();
+  let bookingsQuery = supabase
+    .from("bookings")
+    .select("id, status, party_size, total_cents, payment_status, time_range, courts!inner(name, venue_id)")
+    .eq("booked_by", id)
+    .order("time_range", { ascending: false })
+    .limit(50);
+  if (venue) bookingsQuery = bookingsQuery.eq("courts.venue_id", venue.id);
+
   const [{ data: memberships }, { data: bookings }] = await Promise.all([
     supabase
       .from("memberships")
       .select("id, tier, status, starts_on, ends_on")
       .eq("profile_id", id)
       .order("starts_on", { ascending: false }),
-    supabase
-      .from("bookings")
-      .select("id, status, party_size, total_cents, payment_status, time_range, courts(name)")
-      .eq("booked_by", id)
-      .order("time_range", { ascending: false })
-      .limit(50),
+    bookingsQuery,
   ]);
 
   const restricted = profile.booking_restricted_until && new Date(profile.booking_restricted_until) > new Date();

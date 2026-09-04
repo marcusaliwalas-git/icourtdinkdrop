@@ -52,6 +52,7 @@ interface SummaryResult {
 
 async function summarizeRange(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  venueId: string,
   timezone: string,
   from: string,
   to: string
@@ -59,9 +60,13 @@ async function summarizeRange(
   const rangeStart = startOfLocalDayUtc(from, timezone);
   const rangeEnd = endOfLocalDayUtc(to, timezone);
 
+  // Scope to this venue via the court's venue_id (courts!inner makes the filter narrow the
+  // bookings). RLS alone isn't enough here — an admin of several venues would otherwise see every
+  // venue's sales pooled together on whichever host they're on.
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("status, total_cents, source, court_id, time_range, courts(name)")
+    .select("status, total_cents, source, court_id, time_range, courts!inner(name, venue_id)")
+    .eq("courts.venue_id", venueId)
     .filter("time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
     .limit(10000);
 
@@ -124,12 +129,12 @@ export default async function AdminSalesPage({
   const yearPrev = periodBounds("year", shiftAnchor("year", today, -1));
 
   const [current, previous, mNow, mPrev, yNow, yPrev] = await Promise.all([
-    summarizeRange(supabase, venue.timezone, from, to),
-    summarizeRange(supabase, venue.timezone, prev.from, prev.to),
-    summarizeRange(supabase, venue.timezone, monthNow.from, monthNow.to),
-    summarizeRange(supabase, venue.timezone, monthPrev.from, monthPrev.to),
-    summarizeRange(supabase, venue.timezone, yearNow.from, yearNow.to),
-    summarizeRange(supabase, venue.timezone, yearPrev.from, yearPrev.to),
+    summarizeRange(supabase, venue.id, venue.timezone, from, to),
+    summarizeRange(supabase, venue.id, venue.timezone, prev.from, prev.to),
+    summarizeRange(supabase, venue.id, venue.timezone, monthNow.from, monthNow.to),
+    summarizeRange(supabase, venue.id, venue.timezone, monthPrev.from, monthPrev.to),
+    summarizeRange(supabase, venue.id, venue.timezone, yearNow.from, yearNow.to),
+    summarizeRange(supabase, venue.id, venue.timezone, yearPrev.from, yearPrev.to),
   ]);
 
   const s = current.summary;

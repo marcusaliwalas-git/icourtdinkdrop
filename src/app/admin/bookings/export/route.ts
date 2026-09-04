@@ -1,10 +1,12 @@
 import { requireAdmin } from "@/lib/auth";
+import { getTenant } from "@/lib/tenant";
 import { toCsv } from "@/lib/csv";
 import { parseTstzRange } from "@/lib/availability";
 import { formatInTimezone } from "@/lib/time";
 
 export async function GET(request: Request) {
   const { supabase } = await requireAdmin();
+  const tenant = await getTenant();
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
   const to = searchParams.get("to");
@@ -12,9 +14,12 @@ export async function GET(request: Request) {
   let query = supabase
     .from("bookings")
     .select(
-      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, courts(name), profiles(full_name, phone)"
+      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, courts!inner(name, venue_id), profiles(full_name, phone)"
     )
     .order("time_range", { ascending: false });
+
+  // Scope to this venue — RLS alone would pool every venue a multi-venue admin can see.
+  if (tenant) query = query.eq("courts.venue_id", tenant.id);
 
   if (from || to) {
     const fromIso = from ? `${from}T00:00:00Z` : "-infinity";
