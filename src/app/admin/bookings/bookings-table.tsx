@@ -26,7 +26,7 @@ interface Booking {
   time_range: string;
   reference_code: string;
   courts: { name: string } | null;
-  profiles: { full_name: string | null; phone: string | null } | null;
+  profiles: { full_name: string | null; phone: string | null; email: string | null } | null;
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -67,7 +67,7 @@ export function BookingsTable({ bookings, timezone }: { bookings: Booking[]; tim
           <TableBody>
             {bookings.map((b) => {
               const { start, end } = parseTstzRange(b.time_range);
-              const name = b.profiles?.full_name ?? b.guest_name ?? "Guest";
+              const name = b.profiles?.full_name ?? b.profiles?.email ?? b.guest_name ?? "Guest";
               return (
                 <TableRow
                   key={b.id}

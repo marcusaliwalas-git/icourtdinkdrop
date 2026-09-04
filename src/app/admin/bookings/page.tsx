@@ -57,7 +57,7 @@ export default async function AdminBookingsPage({
   let query = supabase
     .from("bookings")
     .select(
-      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, time_range, reference_code, courts!inner(name, venue_id), profiles(full_name, phone)"
+      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, time_range, reference_code, courts!inner(name, venue_id), profiles(full_name, phone, email)"
     )
     .eq("courts.venue_id", venue.id) // scope to this venue — RLS alone pools all of a multi-venue admin's venues
     .order("time_range", { ascending: true })

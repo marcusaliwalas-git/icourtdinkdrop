@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("bookings")
     .select(
-      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, courts!inner(name, venue_id), profiles(full_name, phone)"
+      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, courts!inner(name, venue_id), profiles(full_name, phone, email)"
     )
     .order("time_range", { ascending: false });
 
@@ -34,13 +34,13 @@ export async function GET(request: Request) {
     (bookings ?? []).map((b) => {
       const { start, end } = parseTstzRange(b.time_range);
       const court = (b.courts as unknown as { name: string } | null)?.name ?? "";
-      const profile = b.profiles as unknown as { full_name: string | null; phone: string | null } | null;
+      const profile = b.profiles as unknown as { full_name: string | null; phone: string | null; email: string | null } | null;
       return [
         b.reference_code,
         court,
         formatInTimezone(start, "yyyy-MM-dd HH:mm"),
         formatInTimezone(end, "yyyy-MM-dd HH:mm"),
-        profile?.full_name ?? b.guest_name ?? "",
+        profile?.full_name ?? profile?.email ?? b.guest_name ?? "",
         profile?.phone ?? b.guest_phone ?? "",
         b.guest_email ?? "",
         (b.total_cents / 100).toFixed(2),
