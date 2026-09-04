@@ -44,6 +44,7 @@ export type Database = {
           entity: string
           entity_id: string | null
           id: string
+          venue_id: string | null
         }
         Insert: {
           action: string
@@ -54,6 +55,7 @@ export type Database = {
           entity: string
           entity_id?: string | null
           id?: string
+          venue_id?: string | null
         }
         Update: {
           action?: string
@@ -64,6 +66,7 @@ export type Database = {
           entity?: string
           entity_id?: string | null
           id?: string
+          venue_id?: string | null
         }
         Relationships: [
           {
@@ -71,6 +74,13 @@ export type Database = {
             columns: ["actor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]

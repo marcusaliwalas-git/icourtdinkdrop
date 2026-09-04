@@ -276,6 +276,34 @@ describe("multi-tenant isolation (RLS)", () => {
     });
   });
 
+  it("audit_log.venue_id is derived from the logged entity by the trigger", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+
+      // booking entity → the booking's court's venue
+      const booking = await client.query(
+        `insert into audit_log (actor_id, action, entity, entity_id) values ($1, 'x', 'booking', $2) returning venue_id`,
+        [a.adminId, a.bookingId]
+      );
+      expect(booking.rows[0].venue_id).toBe(a.venueId);
+
+      // venue entity → the venue id itself
+      const venue = await client.query(
+        `insert into audit_log (actor_id, action, entity, entity_id) values ($1, 'x', 'venue', $2) returning venue_id`,
+        [a.adminId, a.venueId]
+      );
+      expect(venue.rows[0].venue_id).toBe(a.venueId);
+
+      // an explicit venue_id is respected, not overwritten
+      const b = await seedTenant(client, "Venue B");
+      const explicit = await client.query(
+        `insert into audit_log (actor_id, action, entity, entity_id, venue_id) values ($1, 'x', 'profile', $2, $3) returning venue_id`,
+        [a.adminId, a.memberId, b.venueId]
+      );
+      expect(explicit.rows[0].venue_id).toBe(b.venueId);
+    });
+  });
+
   it("a member cannot move themselves to another tenant", async () => {
     await withRollback(async (client) => {
       const a = await seedTenant(client, "Venue A");
