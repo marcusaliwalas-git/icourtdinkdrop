@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { SiteAnnouncement } from "@/components/site-announcement";
 import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
 import { isVenueAdmin } from "@/lib/auth";
@@ -47,6 +48,13 @@ export default async function RootLayout({
       className={`dark ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <SiteAnnouncement
+          enabled={tenant?.announcement_enabled}
+          type={tenant?.announcement_type}
+          text={tenant?.announcement_text}
+          imageUrl={tenant?.announcement_image_url}
+          link={tenant?.announcement_link}
+        />
         <SiteHeader
           logoUrl={tenant?.logo_url}
           brandName={tenant?.name}

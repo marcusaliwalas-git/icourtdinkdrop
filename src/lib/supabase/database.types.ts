@@ -976,6 +976,11 @@ export type Database = {
         Row: {
           address: string | null
           amenities: string[]
+          announcement_enabled: boolean
+          announcement_image_url: string | null
+          announcement_link: string | null
+          announcement_text: string | null
+          announcement_type: string
           cancellation_cutoff_hours: number
           contact: string | null
           created_at: string
@@ -1009,6 +1014,11 @@ export type Database = {
         Insert: {
           address?: string | null
           amenities?: string[]
+          announcement_enabled?: boolean
+          announcement_image_url?: string | null
+          announcement_link?: string | null
+          announcement_text?: string | null
+          announcement_type?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string
@@ -1042,6 +1052,11 @@ export type Database = {
         Update: {
           address?: string | null
           amenities?: string[]
+          announcement_enabled?: boolean
+          announcement_image_url?: string | null
+          announcement_link?: string | null
+          announcement_text?: string | null
+          announcement_type?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string

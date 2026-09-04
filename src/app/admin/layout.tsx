@@ -49,6 +49,7 @@ export default async function AdminLayout({
             items={[
               { href: "/admin/venue", label: "Venue & Courts" },
               { href: "/admin/homepage", label: "Home page" },
+              { href: "/admin/announcement", label: "Announcement" },
               { href: "/admin/footer", label: "Footer" },
             ]}
           />
