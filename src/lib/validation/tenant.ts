@@ -38,3 +38,25 @@ export const createTenantSchema = z.object({
 });
 
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;
+
+// Editing an existing venue's host (slug and/or custom domain). Slug is required here (a venue
+// always keeps its <slug>.<root> fallback URL); the custom domain is optional.
+export const updateTenantHostSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, "Enter a slug.")
+    .regex(/^[a-z0-9-]+$/, "Slug: lowercase letters, numbers, and hyphens only.")
+    .max(63),
+  customDomain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(253)
+    .regex(/^([a-z0-9-]+\.)+[a-z]{2,}$/, "Enter a valid domain, e.g. acmepickleball.com")
+    .optional()
+    .or(z.literal("")),
+});
+
+export type UpdateTenantHostInput = z.infer<typeof updateTenantHostSchema>;

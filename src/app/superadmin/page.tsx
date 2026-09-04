@@ -5,6 +5,7 @@ import { DeleteVenueButton } from "./delete-venue-button";
 import { VenueActiveToggle } from "./venue-active-toggle";
 import { VenueCapabilities } from "./venue-capabilities";
 import { VenueThemeSelect } from "./venue-theme-select";
+import { EditVenueHost } from "./edit-venue-host";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,13 @@ export default async function SuperAdminPage() {
                 </td>
                 <td className="p-3">
                   <div className="flex items-center justify-end gap-1">
+                    <EditVenueHost
+                      venueId={v.id}
+                      venueName={v.name}
+                      slug={v.slug}
+                      customDomain={v.custom_domain}
+                      rootDomain={rootDomain}
+                    />
                     <VenueCapabilities venueId={v.id} features={v.features} />
                     <VenueActiveToggle venueId={v.id} active={v.is_active} />
                     <DeleteVenueButton venueId={v.id} venueName={v.name} />

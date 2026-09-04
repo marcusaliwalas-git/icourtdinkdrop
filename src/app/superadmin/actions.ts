@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createTenantSchema, slugify } from "@/lib/validation/tenant";
+import { createTenantSchema, updateTenantHostSchema, slugify } from "@/lib/validation/tenant";
 
 type Result = { error?: string; success?: boolean; venueId?: string; slug?: string };
 
@@ -116,6 +116,45 @@ export async function createTenant(input: unknown): Promise<Result> {
 
 /** Take a venue offline (or bring it back). Deactivated venues keep all their data but stop
  * resolving from their hostname, so the public site and booking flow go dark. Reversible. */
+/**
+ * Change an existing venue's host — its subdomain slug and/or custom domain. Super-admin only.
+ * This is the DB half of a host change; the DNS/Vercel/Supabase-redirect steps are still manual
+ * (the edit dialog spells them out). Data is keyed by venue_id, so this never affects bookings.
+ */
+export async function updateTenantHost(venueId: string, input: unknown): Promise<Result> {
+  const parsed = updateTenantHostSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const { slug, customDomain } = parsed.data;
+
+  await requireSuperAdmin();
+  const admin = createAdminClient();
+
+  // Slug and custom domain must be unique across venues (excluding this one).
+  const { data: slugTaken } = await admin.from("venues").select("id").eq("slug", slug).neq("id", venueId).maybeSingle();
+  if (slugTaken) return { error: `The slug "${slug}" is already used by another venue.` };
+  if (customDomain) {
+    const { data: domainTaken } = await admin
+      .from("venues")
+      .select("id")
+      .eq("custom_domain", customDomain)
+      .neq("id", venueId)
+      .maybeSingle();
+    if (domainTaken) return { error: `The domain "${customDomain}" is already used by another venue.` };
+  }
+
+  const { data, error } = await admin
+    .from("venues")
+    .update({ slug, custom_domain: customDomain || null })
+    .eq("id", venueId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Venue not found." };
+
+  revalidatePath("/superadmin");
+  revalidatePath("/", "layout"); // host resolution + email links change
+  return { success: true };
+}
+
 export async function setVenueActive(venueId: string, active: boolean): Promise<Result> {
   await requireSuperAdmin();
   const admin = createAdminClient();
