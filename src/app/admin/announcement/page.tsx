@@ -17,8 +17,8 @@ export default async function AdminAnnouncementPage() {
         <div>
           <h1 className="text-xl font-semibold">Announcement</h1>
           <p className="text-sm text-muted-foreground">
-            A banner across the top of your public site — for upcoming events, promos, or notices. Choose a short
-            message or an image.
+            A pop-up shown in the center of your site when visitors arrive — for upcoming events, promos, or notices.
+            Choose a short message or an image.
           </p>
         </div>
         <Link href="/" target="_blank" className="text-sm text-primary hover:underline">

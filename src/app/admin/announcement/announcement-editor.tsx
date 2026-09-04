@@ -108,7 +108,7 @@ export function AnnouncementEditor({
               </Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">A wide image works best — it&rsquo;s shown full-width across the top.</p>
+          <p className="text-xs text-muted-foreground">A poster-style image works best — it&rsquo;s shown centered as a pop-up.</p>
         </div>
       )}
 

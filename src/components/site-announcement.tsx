@@ -13,21 +13,6 @@ function contentKey(parts: (string | null | undefined)[]): string {
   return `dd-ann:${hash}`;
 }
 
-function DismissButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Dismiss announcement"
-      className="shrink-0 rounded p-1 opacity-80 transition-opacity hover:opacity-100"
-    >
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-        <path d="M18 6 6 18M6 6l12 12" />
-      </svg>
-    </button>
-  );
-}
-
 export function SiteAnnouncement({
   enabled = false,
   type,
@@ -45,20 +30,35 @@ export function SiteAnnouncement({
   const isImage = type === "image" && !!imageUrl;
   const isText = type !== "image" && !!text?.trim();
   const key = contentKey([type, text, imageUrl, link]);
+  const isAdmin = pathname?.startsWith("/admin") ?? false;
+  const eligible = enabled && !isAdmin && (isImage || isText);
 
-  // Start hidden and reveal after the mount check, so a previously-dismissed banner never flashes.
+  // Start hidden and reveal after the mount check, so a previously-dismissed overlay never flashes.
   const [show, setShow] = useState(false);
   useEffect(() => {
+    if (!eligible) return;
     try {
       setShow(localStorage.getItem(key) !== "1");
     } catch {
       setShow(true); // storage blocked — show it rather than hide it
     }
-  }, [key]);
+  }, [key, eligible]);
 
-  // Admin has its own chrome — no public banner there.
-  if (pathname?.startsWith("/admin")) return null;
-  if (!enabled || (!isImage && !isText) || !show) return null;
+  // Lock background scroll and close on Escape while the overlay is open.
+  useEffect(() => {
+    if (!show) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && dismiss();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
+
+  if (!eligible || !show) return null;
 
   function dismiss() {
     try {
@@ -70,46 +70,53 @@ export function SiteAnnouncement({
   }
 
   const hasLink = !!link?.trim();
+  const external = hasLink && /^https?:\/\//i.test(link!);
 
-  if (isImage) {
-    const img = (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={imageUrl!} alt={text?.trim() || "Announcement"} className="max-h-56 w-full object-cover" />
-    );
-    return (
-      <div className="relative w-full border-b border-border/60 bg-muted">
-        {hasLink ? (
-          <Link href={link!} target={/^https?:\/\//i.test(link!) ? "_blank" : undefined} className="block">
-            {img}
-          </Link>
-        ) : (
-          img
-        )}
-        <div className="absolute top-2 right-2 rounded-full bg-background/70 text-foreground backdrop-blur">
-          <DismissButton onClick={dismiss} />
-        </div>
-      </div>
-    );
-  }
-
-  // Text mode: a slim accent strip.
   return (
-    <div className="w-full bg-primary text-primary-foreground">
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2 text-sm">
-        <span className="min-w-0 flex-1 text-center">
-          {hasLink ? (
-            <Link
-              href={link!}
-              target={/^https?:\/\//i.test(link!) ? "_blank" : undefined}
-              className="underline decoration-primary-foreground/40 underline-offset-2 hover:decoration-primary-foreground"
-            >
-              {text}
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Announcement"
+      onClick={dismiss}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+    >
+      <div onClick={(e) => e.stopPropagation()} className="relative max-h-[85vh] w-full max-w-lg">
+        <button
+          type="button"
+          onClick={dismiss}
+          aria-label="Close announcement"
+          className="absolute -top-3 -right-3 z-10 grid size-8 place-items-center rounded-full border border-border bg-background text-foreground shadow-md transition-colors hover:bg-muted"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+
+        {isImage ? (
+          hasLink ? (
+            <Link href={link!} target={external ? "_blank" : undefined} className="block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl!} alt={text?.trim() || "Announcement"} className="max-h-[85vh] w-full rounded-2xl object-contain shadow-2xl" />
             </Link>
           ) : (
-            text
-          )}
-        </span>
-        <DismissButton onClick={dismiss} />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl!} alt={text?.trim() || "Announcement"} className="max-h-[85vh] w-full rounded-2xl object-contain shadow-2xl" />
+          )
+        ) : (
+          <div className="flex flex-col items-center gap-5 rounded-2xl border border-border bg-background p-8 text-center shadow-2xl">
+            <p className="text-lg leading-relaxed font-medium whitespace-pre-line">{text}</p>
+            {hasLink && (
+              <Link
+                href={link!}
+                target={external ? "_blank" : undefined}
+                onClick={dismiss}
+                className="inline-flex items-center rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                Learn more
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
