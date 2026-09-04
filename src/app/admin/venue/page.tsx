@@ -75,7 +75,7 @@ export default async function AdminVenuePage() {
       .order("starts_at", { ascending: false }),
     supabase
       .from("payment_accounts")
-      .select("id, bank_name, account_name, account_number, remarks, sort_order")
+      .select("id, bank_name, account_name, account_number, remarks, qr_url, sort_order")
       .eq("venue_id", venue.id)
       .order("sort_order"),
   ]);

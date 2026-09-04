@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { uploadVenueMedia } from "@/app/admin/homepage/media-upload";
 import { addPaymentAccount, updatePaymentAccount, deletePaymentAccount } from "./actions";
 
 export type PaymentAccount = {
@@ -12,8 +13,50 @@ export type PaymentAccount = {
   account_name: string;
   account_number: string;
   remarks: string | null;
+  qr_url: string | null;
   sort_order: number;
 };
+
+/** Optional payment-QR image for one account. Uploads to the shared media bucket and carries the
+ * resulting URL in a hidden `qrUrl` field so it saves with the surrounding form. */
+function QrUploadField({ initial }: { initial: string | null }) {
+  const [url, setUrl] = useState(initial ?? "");
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setErr(null);
+    setUploading(true);
+    const result = await uploadVenueMedia(file);
+    setUploading(false);
+    if ("error" in result) return setErr(result.error);
+    if (result.type !== "image") return setErr("Choose an image file for the QR.");
+    setUrl(result.url);
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 sm:col-span-2">
+      <Label>Payment QR (optional)</Label>
+      <input type="hidden" name="qrUrl" value={url} />
+      <div className="flex items-center gap-3">
+        {url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="" className="size-16 rounded border border-border object-contain" />
+        )}
+        <Input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} className="w-auto" />
+        {uploading && <span className="text-xs text-muted-foreground">Uploading…</span>}
+        {url && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setUrl("")}>
+            Remove
+          </Button>
+        )}
+      </div>
+      {err && <p className="text-xs text-destructive">{err}</p>}
+    </div>
+  );
+}
 
 function AccountRow({ account }: { account: PaymentAccount }) {
   const [isPending, startTransition] = useTransition();
@@ -52,6 +95,7 @@ function AccountRow({ account }: { account: PaymentAccount }) {
         <Label>Remarks (optional)</Label>
         <Input name="remarks" defaultValue={account.remarks ?? ""} placeholder="e.g. GCash preferred" />
       </div>
+      <QrUploadField initial={account.qr_url} />
       <input type="hidden" name="sortOrder" value={account.sort_order} />
       <div className="flex items-center gap-2 sm:col-span-2">
         <Button type="submit" size="sm" disabled={isPending}>
@@ -114,6 +158,7 @@ export function PaymentAccountsManager({ venueId, accounts }: { venueId: string;
           <Label htmlFor="remarks">Remarks (optional)</Label>
           <Input id="remarks" name="remarks" placeholder="e.g. GCash preferred" />
         </div>
+        <QrUploadField initial="" />
         <div className="flex items-center gap-2 sm:col-span-2">
           <Button type="submit" disabled={isPending}>
             {isPending ? "Adding…" : "Add account"}

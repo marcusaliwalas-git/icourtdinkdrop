@@ -75,6 +75,7 @@ export const paymentAccountSchema = z.object({
   accountName: z.string().trim().min(1, "Enter the account name.").max(120),
   accountNumber: z.string().trim().min(1, "Enter the account number.").max(60),
   remarks: z.string().trim().max(300).optional().or(z.literal("")),
+  qrUrl: z.string().trim().max(500).optional().or(z.literal("")),
   sortOrder: z.number().int().default(0),
 });
 

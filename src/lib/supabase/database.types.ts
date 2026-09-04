@@ -686,6 +686,7 @@ export type Database = {
           bank_name: string
           created_at: string
           id: string
+          qr_url: string | null
           remarks: string | null
           sort_order: number
           venue_id: string
@@ -696,6 +697,7 @@ export type Database = {
           bank_name: string
           created_at?: string
           id?: string
+          qr_url?: string | null
           remarks?: string | null
           sort_order?: number
           venue_id: string
@@ -706,6 +708,7 @@ export type Database = {
           bank_name?: string
           created_at?: string
           id?: string
+          qr_url?: string | null
           remarks?: string | null
           sort_order?: number
           venue_id?: string

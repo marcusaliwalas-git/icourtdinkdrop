@@ -43,6 +43,7 @@ export interface PaymentAccount {
   account_name: string;
   account_number: string;
   remarks: string | null;
+  qr_url: string | null;
 }
 
 function pesos(cents: number) {
@@ -338,6 +339,14 @@ export function BookingSheet({
                     <p className="text-muted-foreground">{acct.account_name}</p>
                     <CopyableAccountNumber value={acct.account_number} />
                     {acct.remarks && <p className="text-xs text-muted-foreground">{acct.remarks}</p>}
+                    {acct.qr_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={acct.qr_url}
+                        alt={`${acct.bank_name} payment QR`}
+                        className="mt-2 size-40 rounded-lg border border-border bg-white object-contain p-1"
+                      />
+                    )}
                   </div>
                 ))}
               </div>

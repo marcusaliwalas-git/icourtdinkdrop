@@ -269,6 +269,7 @@ export async function addPaymentAccount(formData: FormData): Promise<ActionResul
     accountName: formData.get("accountName"),
     accountNumber: formData.get("accountNumber"),
     remarks: formData.get("remarks") ?? "",
+    qrUrl: formData.get("qrUrl") ?? "",
     sortOrder: Number(formData.get("sortOrder")) || 0,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -280,6 +281,7 @@ export async function addPaymentAccount(formData: FormData): Promise<ActionResul
     account_name: parsed.data.accountName,
     account_number: parsed.data.accountNumber,
     remarks: parsed.data.remarks || null,
+    qr_url: parsed.data.qrUrl || null,
     sort_order: parsed.data.sortOrder,
   });
   if (error) return { error: error.message };
@@ -293,6 +295,7 @@ export async function updatePaymentAccount(id: string, formData: FormData): Prom
     accountName: formData.get("accountName"),
     accountNumber: formData.get("accountNumber"),
     remarks: formData.get("remarks") ?? "",
+    qrUrl: formData.get("qrUrl") ?? "",
     sortOrder: Number(formData.get("sortOrder")) || 0,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -305,6 +308,7 @@ export async function updatePaymentAccount(id: string, formData: FormData): Prom
       account_name: parsed.data.accountName,
       account_number: parsed.data.accountNumber,
       remarks: parsed.data.remarks || null,
+      qr_url: parsed.data.qrUrl || null,
       sort_order: parsed.data.sortOrder,
     })
     .eq("id", id)

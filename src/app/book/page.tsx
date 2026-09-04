@@ -105,7 +105,7 @@ export default async function BookPage({
       .gt("ends_at", dayStart.toISOString()),
     supabase
       .from("payment_accounts")
-      .select("bank_name, account_name, account_number, remarks")
+      .select("bank_name, account_name, account_number, remarks, qr_url")
       .eq("venue_id", venue.id)
       .order("sort_order"),
   ]);
