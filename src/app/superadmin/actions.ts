@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createTenantSchema, updateTenantHostSchema, slugify } from "@/lib/validation/tenant";
+import { createTenantSchema, updateTenantHostSchema, addVenueAdminSchema, slugify } from "@/lib/validation/tenant";
 
 type Result = { error?: string; success?: boolean; venueId?: string; slug?: string };
 
@@ -152,6 +152,51 @@ export async function updateTenantHost(venueId: string, input: unknown): Promise
 
   revalidatePath("/superadmin");
   revalidatePath("/", "layout"); // host resolution + email links change
+  return { success: true };
+}
+
+/**
+ * Add an admin to an existing venue (super-admin only). If the email already has an account, that
+ * person is promoted to admin of this venue (multi-venue: one account can administer several);
+ * otherwise a new confirmed account is created (a password is required for that). Only the
+ * venue_membership admin row is written — a person's identity/home venue isn't overwritten.
+ */
+export async function addVenueAdmin(venueId: string, input: unknown): Promise<Result> {
+  const parsed = addVenueAdminSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const { email, password, fullName } = parsed.data;
+
+  await requireSuperAdmin();
+  const admin = createAdminClient();
+
+  // Already has an account → just make them an admin of this venue.
+  const { data: existingId } = await admin.rpc("admin_user_id_by_email", { p_email: email });
+  if (existingId) {
+    const { error } = await admin
+      .from("venue_memberships")
+      .upsert({ profile_id: existingId, venue_id: venueId, role: "admin" }, { onConflict: "profile_id,venue_id" });
+    if (error) return { error: error.message };
+    revalidatePath("/superadmin");
+    return { success: true };
+  }
+
+  // New account — needs a password to create the login.
+  if (!password) return { error: "No account exists for that email. Set a password to create one." };
+  const { data: created, error: userErr } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName || undefined, venue_id: venueId },
+  });
+  if (userErr || !created.user) return { error: userErr?.message ?? "Could not create the admin." };
+
+  // handle_new_user made a 'player' membership from the venue_id metadata; upgrade it to admin.
+  const { error } = await admin
+    .from("venue_memberships")
+    .upsert({ profile_id: created.user.id, venue_id: venueId, role: "admin" }, { onConflict: "profile_id,venue_id" });
+  if (error) return { error: error.message };
+
+  revalidatePath("/superadmin");
   return { success: true };
 }
 

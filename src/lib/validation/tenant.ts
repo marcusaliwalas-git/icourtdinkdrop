@@ -60,3 +60,13 @@ export const updateTenantHostSchema = z.object({
 });
 
 export type UpdateTenantHostInput = z.infer<typeof updateTenantHostSchema>;
+
+// Add an admin to an EXISTING venue. If the email already has an account, that person is promoted
+// to admin of this venue; otherwise a new account is created (password required for that case).
+export const addVenueAdminSchema = z.object({
+  email: z.email("Enter a valid email."),
+  password: z.string().min(8, "Password must be at least 8 characters.").max(200).optional().or(z.literal("")),
+  fullName: z.string().trim().max(160).optional().or(z.literal("")),
+});
+
+export type AddVenueAdminInput = z.infer<typeof addVenueAdminSchema>;
