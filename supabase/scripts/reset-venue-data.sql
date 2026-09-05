@@ -3,10 +3,16 @@
 --
 -- HOW TO USE (Supabase → SQL editor):
 --   1. BACK UP FIRST (Dashboard → Database → Backups → Create backup).
---   2. Put the venue's id in the ONE place marked below.
---   3. Run the whole script. It runs in a transaction and prints how many rows each
---      step will remove, plus a final check that config is intact.
---   4. If the numbers look right, run  COMMIT;  — otherwise run  ROLLBACK;.
+--   2. (Recommended) Preview first: run the READ-ONLY count query at the bottom of
+--      this file to see exactly what will be removed — it deletes nothing.
+--   3. Put the venue's id in the ONE place marked below.
+--   4. Run the whole script in ONE go. It is a single transaction that ENDS WITH
+--      `commit;`, so it deletes and commits in one Run. (Do NOT split the commit
+--      into a second Run — the Supabase editor starts a fresh session each Run, so a
+--      transaction left open from a previous Run is gone/rolled back. That's the
+--      usual reason "nothing deleted after commit".)
+--   • Want a dry run? Change the final `commit;` to `rollback;` — it reports the
+--     counts and undoes everything.
 --
 -- KEEPS (the venue's setup): the venue row + its branding/theme/homepage/footer,
 --   courts, operating hours, rate periods, coaches, payment accounts, and the
@@ -67,11 +73,7 @@ select
   (select count(*) from venue_memberships where venue_id = (select id from _v) and role = 'admin') as admins_kept,
   (select count(*) from bookings where court_id in (select id from _courts)) as bookings_left;   -- should be 0
 
--- Review the counts above.  Then run ONE of:
---   COMMIT;    -- keep the reset
---   ROLLBACK;  -- undo everything (nothing was actually deleted yet)
-
--- ── OPTIONAL add-ons (uncomment BEFORE commit if you want them) ──────────────
+-- ── OPTIONAL add-ons (uncomment them ABOVE this line, before the commit) ─────
 -- Reset the homepage / footer / announcement back to blank defaults:
 --   update venues set hero_heading=null, hero_subheading=null, hero_media_url=null, hero_media_type=null,
 --     how_steps=null, how_note=null, how_note_hidden=false,
@@ -80,12 +82,29 @@ select
 --     announcement_enabled=false, announcement_text=null, announcement_image_url=null, announcement_link=null
 --   where id = (select id from _v);
 --   delete from venue_sections where venue_id = (select id from _v);
---
 -- Remove test coaches too (only if they were test entries):
 --   delete from coaches where venue_id = (select id from _v);
---
+
+-- ▼ This is what actually applies the reset. Change to `rollback;` for a dry run. ▼
+commit;
+
 -- NOTE on test CUSTOMER ACCOUNTS: their login (auth.users) and profile are NOT
 -- deleted here — an email can belong to several venues, and deleting accounts is
 -- destructive. After step 7 they no longer appear under this venue anyway. If you
 -- truly want to delete a test account, do it from Supabase → Authentication →
 -- Users (that cascades its profile), one at a time, only for accounts you created.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- READ-ONLY PREVIEW — run this block on its own to see what a reset WOULD remove.
+-- Deletes nothing. Replace the id, select just these lines, and Run.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- with v as (select '00000000-0000-0000-0000-000000000000'::uuid as id),
+--      c as (select id from courts where venue_id = (select id from v))
+-- select
+--   (select name from venues where id = (select id from v))                                        as venue,
+--   (select count(*) from bookings   where court_id in (select id from c))                          as bookings,
+--   (select count(*) from closures   where venue_id = (select id from v))                           as closures,
+--   (select count(*) from sessions   where venue_id = (select id from v))                           as sessions,
+--   (select count(*) from memberships where venue_id = (select id from v))                          as memberships,
+--   (select count(*) from audit_log  where venue_id = (select id from v))                           as audit_rows,
+--   (select count(*) from venue_memberships where venue_id=(select id from v) and role<>'admin')    as non_admin_members;
