@@ -5,7 +5,7 @@ import { minutesToLabel, timeToMinutes } from "@/lib/home-status";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { allRatesCents } from "@/lib/pricing";
 import { getTenant } from "@/lib/tenant";
-import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS, heroAspect } from "@/lib/home-defaults";
+import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS, mediaSizeClass } from "@/lib/home-defaults";
 
 export const dynamic = "force-dynamic";
 
@@ -139,8 +139,8 @@ export default async function HomePage() {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
     : null;
 
-  // Admin-chosen hero height (small/medium/large → an aspect ratio).
-  const heroMediaClass = `mt-8 ${heroAspect(venue.hero_media_size)} w-full rounded-2xl border border-border object-cover`;
+  // Admin-chosen hero size — whole image shown (never cropped).
+  const heroMediaClass = `mt-8 ${mediaSizeClass(venue.hero_media_size)} rounded-2xl border border-border`;
 
   return (
     <div>
@@ -266,7 +266,7 @@ export default async function HomePage() {
               (s.media_type === "video" ? (
                 <video
                   src={s.media_url}
-                  className={`mb-4 ${heroAspect(s.media_size)} w-full rounded-2xl border border-border object-cover`}
+                  className={`mb-4 ${mediaSizeClass(s.media_size)} rounded-2xl border border-border`}
                   controls
                   playsInline
                 />
@@ -275,7 +275,7 @@ export default async function HomePage() {
                 <img
                   src={s.media_url}
                   alt=""
-                  className={`mb-4 ${heroAspect(s.media_size)} w-full rounded-2xl border border-border object-cover`}
+                  className={`mb-4 ${mediaSizeClass(s.media_size)} rounded-2xl border border-border`}
                 />
               ))}
             {s.body && <p className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">{s.body}</p>}

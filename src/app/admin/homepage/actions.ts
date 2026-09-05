@@ -13,7 +13,7 @@ const heroSchema = z.object({
   heroSubheading: z.string().trim().max(600).optional().or(z.literal("")),
   heroMediaUrl: z.string().trim().max(500).optional().or(z.literal("")),
   heroMediaType: z.enum(["image", "video"]).optional().or(z.literal("")),
-  heroMediaSize: z.enum(["small", "medium", "large"]).optional().or(z.literal("")),
+  heroMediaSize: z.enum(["small", "medium", "large", "original"]).optional().or(z.literal("")),
 });
 
 const howItWorksSchema = z.object({

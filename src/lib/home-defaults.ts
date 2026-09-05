@@ -10,20 +10,24 @@ export const DEFAULT_HOW_STEPS = [
 export const DEFAULT_HOW_NOTE =
   "The venue confirms every booking before it's final — you'll get a reference code either way.";
 
-// Hero image/video size — admin picks how tall it displays. Kept as aspect ratios so it stays
-// responsive; larger = taller. Shared by the editor (the choices) and the home page (the class).
+// Hero / section media size — admin picks how big it displays. The whole image is always shown
+// (object-contain, never cropped): small/medium/large cap the height; "original" uses the image's
+// natural size (only capped to the content width so it can't overflow). Shared by the editor (the
+// choices) and the home page (the class).
 export const HERO_SIZES = [
   { value: "small", label: "Small" },
   { value: "medium", label: "Medium" },
   { value: "large", label: "Large" },
+  { value: "original", label: "Original size" },
 ] as const;
 
-export const HERO_SIZE_ASPECT: Record<string, string> = {
-  small: "aspect-[21/9]",
-  medium: "aspect-video",
-  large: "aspect-[3/2]",
+const MEDIA_SIZE_CLASS: Record<string, string> = {
+  small: "w-full max-h-64 object-contain",
+  medium: "w-full max-h-96 object-contain",
+  large: "w-full max-h-[36rem] object-contain",
+  original: "max-w-full h-auto",
 };
 
-export function heroAspect(size: string | null | undefined): string {
-  return HERO_SIZE_ASPECT[size ?? "medium"] ?? HERO_SIZE_ASPECT.medium;
+export function mediaSizeClass(size: string | null | undefined): string {
+  return MEDIA_SIZE_CLASS[size ?? "medium"] ?? MEDIA_SIZE_CLASS.medium;
 }

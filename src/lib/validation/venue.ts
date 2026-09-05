@@ -27,7 +27,7 @@ export const venueSectionSchema = z.object({
   body: z.string().trim().max(5000).optional().or(z.literal("")),
   mediaUrl: z.string().trim().max(500).optional().or(z.literal("")),
   mediaType: mediaType,
-  mediaSize: z.enum(["small", "medium", "large"]).optional().or(z.literal("")),
+  mediaSize: z.enum(["small", "medium", "large", "original"]).optional().or(z.literal("")),
   sortOrder: z.number().int().default(0),
   isVisible: z.boolean().default(true),
 });
