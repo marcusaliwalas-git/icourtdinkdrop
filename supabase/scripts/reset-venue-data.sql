@@ -24,6 +24,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 begin;
 
+-- Clear any temp tables left by a previous Run in the same editor session — without this, a
+-- second Run errors on "relation _v already exists", which aborts the transaction so the final
+-- commit rolls back and nothing deletes.
+drop table if exists _v, _courts, _coaches, _sessions, _bookings;
+
 -- ▼▼▼ THE ONLY LINE YOU EDIT ▼▼▼
 create temp table _v(id uuid);
 insert into _v values ('00000000-0000-0000-0000-000000000000');  -- ← paste the venue id
