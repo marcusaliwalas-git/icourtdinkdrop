@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateHero } from "./actions";
+import { HERO_SIZES } from "@/lib/home-defaults";
 import { uploadVenueMedia } from "./media-upload";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm";
@@ -13,13 +14,20 @@ const ACCEPT = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm";
 export function HeroEditor({
   hero,
 }: {
-  hero: { heading: string | null; subheading: string | null; mediaUrl: string | null; mediaType: string | null };
+  hero: {
+    heading: string | null;
+    subheading: string | null;
+    mediaUrl: string | null;
+    mediaType: string | null;
+    mediaSize: string | null;
+  };
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [mediaUrl, setMediaUrl] = useState(hero.mediaUrl ?? "");
   const [mediaType, setMediaType] = useState(hero.mediaType ?? "");
+  const [mediaSize, setMediaSize] = useState(hero.mediaSize ?? "medium");
   const [uploading, setUploading] = useState(false);
 
   async function onMedia(e: React.ChangeEvent<HTMLInputElement>) {
@@ -42,6 +50,7 @@ export function HeroEditor({
         heroSubheading: String(formData.get("subheading") ?? ""),
         heroMediaUrl: mediaUrl,
         heroMediaType: mediaUrl ? mediaType : "",
+        heroMediaSize: mediaSize,
       });
       setMessage(result.error ?? "Saved");
       if (!result.error) router.refresh();
@@ -85,6 +94,26 @@ export function HeroEditor({
           Videos should be H.264 <code>.mp4</code> for every browser. Phone clips are often HEVC/H.265,
           which plays on iPhone and Safari but shows a black box in Chrome and Firefox — re-export as H.264 first.
         </p>
+        {mediaUrl && (
+          <div className="flex items-center gap-2">
+            <Label htmlFor="heroSize" className="text-sm">
+              Size
+            </Label>
+            <select
+              id="heroSize"
+              value={mediaSize}
+              onChange={(e) => setMediaSize(e.target.value)}
+              className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {HERO_SIZES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">How tall it appears on your site.</span>
+          </div>
+        )}
       </div>
       <Button type="submit" disabled={isPending || uploading} className="w-fit">
         {isPending ? "Saving…" : "Save hero"}

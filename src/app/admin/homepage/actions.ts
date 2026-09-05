@@ -13,6 +13,7 @@ const heroSchema = z.object({
   heroSubheading: z.string().trim().max(600).optional().or(z.literal("")),
   heroMediaUrl: z.string().trim().max(500).optional().or(z.literal("")),
   heroMediaType: z.enum(["image", "video"]).optional().or(z.literal("")),
+  heroMediaSize: z.enum(["small", "medium", "large"]).optional().or(z.literal("")),
 });
 
 const howItWorksSchema = z.object({
@@ -41,6 +42,7 @@ export async function updateHero(input: unknown): Promise<Result> {
       hero_subheading: parsed.data.heroSubheading || null,
       hero_media_url: parsed.data.heroMediaUrl || null,
       hero_media_type: parsed.data.heroMediaType || null,
+      hero_media_size: parsed.data.heroMediaSize || "medium",
     })
     .eq("id", tenant.id)
     .select("id");

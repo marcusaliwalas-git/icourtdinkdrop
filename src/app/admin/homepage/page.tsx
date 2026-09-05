@@ -45,6 +45,7 @@ export default async function AdminHomepagePage() {
             subheading: venue.hero_subheading,
             mediaUrl: venue.hero_media_url,
             mediaType: venue.hero_media_type,
+            mediaSize: venue.hero_media_size,
           }}
         />
       </section>

@@ -5,7 +5,7 @@ import { minutesToLabel, timeToMinutes } from "@/lib/home-status";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { allRatesCents } from "@/lib/pricing";
 import { getTenant } from "@/lib/tenant";
-import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS } from "@/lib/home-defaults";
+import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS, heroAspect } from "@/lib/home-defaults";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +139,9 @@ export default async function HomePage() {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
     : null;
 
+  // Admin-chosen hero height (small/medium/large → an aspect ratio).
+  const heroMediaClass = `mt-8 ${heroAspect(venue.hero_media_size)} w-full rounded-2xl border border-border object-cover`;
+
   return (
     <div>
       {/* ── Hero ────────────────────────────────────────────────── */}
@@ -174,7 +177,7 @@ export default async function HomePage() {
           (venue.hero_media_type === "video" ? (
             <video
               src={venue.hero_media_url}
-              className="mt-8 aspect-video w-full rounded-2xl border border-border object-cover"
+              className={heroMediaClass}
               autoPlay
               muted
               loop
@@ -189,7 +192,7 @@ export default async function HomePage() {
             <img
               src={venue.hero_media_url}
               alt=""
-              className="mt-8 aspect-video w-full rounded-2xl border border-border object-cover"
+              className={heroMediaClass}
             />
           ))}
       </section>
