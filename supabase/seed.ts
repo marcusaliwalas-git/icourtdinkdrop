@@ -40,6 +40,9 @@ async function main() {
     .from("venues")
     .insert({
       name: "DinkDrop Pickleball Club — BGC",
+      // Matches the migration backfill for the default venue. The backfill runs before this seed,
+      // so set it here too or a fresh local reset shows the venue name instead of the logo.
+      logo_url: "/icourt-social-logo.png",
       address: "9th Ave corner 31st St, Bonifacio Global City, Taguig",
       timezone: "Asia/Manila",
       contact: "+639171234567",
@@ -102,12 +105,17 @@ async function main() {
         phone: `+639${String(170000000 + i).padStart(9, "0")}`,
         skill_level: skillLevel(),
         role,
+        // Tag every seeded profile with the venue. The one-time migration backfill runs before
+        // this seed, so without this the admin lands with a null venue_id and RLS silently
+        // blocks all venue-admin writes.
+        venue_id: venue.id,
       })
       .eq("id", profileId);
 
     if (i % 2 === 0) {
       await supabase.from("memberships").insert({
         profile_id: profileId,
+        venue_id: venue.id,
         tier: i % 4 === 0 ? "premium" : "standard",
         starts_on: new Date(Date.now() - 60 * 86400_000).toISOString().slice(0, 10),
         ends_on: new Date(Date.now() + 300 * 86400_000).toISOString().slice(0, 10),

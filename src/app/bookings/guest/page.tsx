@@ -97,7 +97,7 @@ export default function GuestBookingLookupPage() {
               {formatInTimezone(new Date(booking.ends_at), "h:mm a")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {booking.party_size} players · {pesos(booking.total_cents)}
+              {pesos(booking.total_cents)}
             </p>
             {canCancel && (
               <Button size="sm" variant="outline" disabled={isPending} onClick={onCancel} className="mt-2 w-fit">

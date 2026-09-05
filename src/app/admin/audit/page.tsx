@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getTenant } from "@/lib/tenant";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -21,6 +22,7 @@ export default async function AuditLogPage({
 }) {
   const { entity } = await searchParams;
   const supabase = await createClient();
+  const venue = await getTenant();
 
   let query = supabase
     .from("audit_log")
@@ -28,6 +30,8 @@ export default async function AuditLogPage({
     .order("created_at", { ascending: false })
     .limit(200);
 
+  // Scope to this venue — RLS alone would show a multi-venue admin their other venues' history.
+  if (venue) query = query.eq("venue_id", venue.id);
   if (entity) query = query.eq("entity", entity);
 
   const { data: entries } = await query;

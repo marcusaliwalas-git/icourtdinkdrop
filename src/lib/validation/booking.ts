@@ -10,16 +10,17 @@ export const createBookingSchema = z
   .object({
     courtId: z.uuid(),
     startsAt: z.iso.datetime({ offset: true }),
-    // Whole-hour increments, 1-24 hours.
-    durationMinutes: z
+    // Whole-hour increments, 1-24 hours. Coerced so a numeric value arriving as a string (from a
+    // form/select) is accepted rather than rejected with a cryptic "expected number" error.
+    durationMinutes: z.coerce
       .number()
       .int()
       .min(60)
       .max(1440)
       .multipleOf(60),
-    partySize: z.number().int().min(1).max(20).default(1),
+    partySize: z.coerce.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
-    guestPhone: phSchema.optional(),
+    guestPhone: phSchema.optional().or(z.literal("")),
     // Required for a guest's online booking (enforced in create_booking, not here — this
     // schema is shared with createWalkInBooking, which never collects an email at all, same
     // reasoning as paymentReference/paymentSlipPath below). It's how a guest, who has no
@@ -33,9 +34,11 @@ export const createBookingSchema = z
     paymentReference: z.string().trim().min(1).max(100).optional(),
     paymentSlipPath: z.string().trim().min(1).max(300).optional(),
   })
-  .refine((data) => !!data.guestName === !!data.guestPhone, {
-    message: "guestName and guestPhone must be provided together",
-    path: ["guestPhone"],
+  // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
+  // name is the only invalid combination.
+  .refine((data) => !data.guestPhone || !!data.guestName, {
+    message: "Enter your name to go with the mobile number.",
+    path: ["guestName"],
   });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
@@ -46,7 +49,7 @@ export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 export const bookingSegmentSchema = z.object({
   courtId: z.uuid(),
   startsAt: z.iso.datetime({ offset: true }),
-  durationMinutes: z.number().int().min(60).max(1440).multipleOf(60),
+  durationMinutes: z.coerce.number().int().min(60).max(1440).multipleOf(60),
 });
 
 export type BookingSegmentInput = z.infer<typeof bookingSegmentSchema>;
@@ -55,18 +58,20 @@ export const createBookingsSchema = z
   .object({
     segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(24),
     coachId: z.uuid().nullable().optional(),
-    partySize: z.number().int().min(1).max(20).default(1),
+    partySize: z.coerce.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
-    guestPhone: phSchema.optional(),
+    guestPhone: phSchema.optional().or(z.literal("")),
     guestEmail: z.email().optional().or(z.literal("")),
     notes: z.string().trim().max(500).optional(),
     idempotencyKey: z.string().trim().min(1).max(200).optional(),
     paymentReference: z.string().trim().min(1).max(100).optional(),
     paymentSlipPath: z.string().trim().min(1).max(300).optional(),
   })
-  .refine((data) => !!data.guestName === !!data.guestPhone, {
-    message: "guestName and guestPhone must be provided together",
-    path: ["guestPhone"],
+  // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
+  // name is the only invalid combination.
+  .refine((data) => !data.guestPhone || !!data.guestName, {
+    message: "Enter your name to go with the mobile number.",
+    path: ["guestName"],
   });
 
 export type CreateBookingsInput = z.infer<typeof createBookingsSchema>;

@@ -44,6 +44,7 @@ export type Database = {
           entity: string
           entity_id: string | null
           id: string
+          venue_id: string | null
         }
         Insert: {
           action: string
@@ -54,6 +55,7 @@ export type Database = {
           entity: string
           entity_id?: string | null
           id?: string
+          venue_id?: string | null
         }
         Update: {
           action?: string
@@ -64,6 +66,7 @@ export type Database = {
           entity?: string
           entity_id?: string | null
           id?: string
+          venue_id?: string | null
         }
         Relationships: [
           {
@@ -71,6 +74,13 @@ export type Database = {
             columns: ["actor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]
@@ -156,6 +166,7 @@ export type Database = {
       bookings: {
         Row: {
           booked_by: string | null
+          booking_group_id: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -179,6 +190,7 @@ export type Database = {
         }
         Insert: {
           booked_by?: string | null
+          booking_group_id?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
           court_id: string
@@ -202,6 +214,7 @@ export type Database = {
         }
         Update: {
           booked_by?: string | null
+          booking_group_id?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
           court_id?: string
@@ -554,6 +567,7 @@ export type Database = {
           starts_on: string
           status: string
           tier: string
+          venue_id: string | null
         }
         Insert: {
           created_at?: string
@@ -563,6 +577,7 @@ export type Database = {
           starts_on: string
           status?: string
           tier: string
+          venue_id?: string | null
         }
         Update: {
           created_at?: string
@@ -572,6 +587,7 @@ export type Database = {
           starts_on?: string
           status?: string
           tier?: string
+          venue_id?: string | null
         }
         Relationships: [
           {
@@ -579,6 +595,13 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]
@@ -627,6 +650,7 @@ export type Database = {
       operating_hours: {
         Row: {
           close_time: string
+          closes_next_day: boolean
           day_of_week: number
           id: string
           open_time: string
@@ -634,6 +658,7 @@ export type Database = {
         }
         Insert: {
           close_time: string
+          closes_next_day?: boolean
           day_of_week: number
           id?: string
           open_time: string
@@ -641,6 +666,7 @@ export type Database = {
         }
         Update: {
           close_time?: string
+          closes_next_day?: boolean
           day_of_week?: number
           id?: string
           open_time?: string
@@ -656,44 +682,105 @@ export type Database = {
           },
         ]
       }
+      payment_accounts: {
+        Row: {
+          account_name: string
+          account_number: string
+          bank_name: string
+          created_at: string
+          id: string
+          qr_url: string | null
+          remarks: string | null
+          sort_order: number
+          venue_id: string
+        }
+        Insert: {
+          account_name: string
+          account_number: string
+          bank_name: string
+          created_at?: string
+          id?: string
+          qr_url?: string | null
+          remarks?: string | null
+          sort_order?: number
+          venue_id: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string
+          bank_name?: string
+          created_at?: string
+          id?: string
+          qr_url?: string | null
+          remarks?: string | null
+          sort_order?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_accounts_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
           booking_restricted_until: string | null
           created_at: string
+          email: string | null
           full_name: string | null
           id: string
+          is_super_admin: boolean
           no_show_count: number
           phone: string | null
           role: string
           skill_level: number | null
           updated_at: string
+          venue_id: string | null
         }
         Insert: {
           avatar_url?: string | null
           booking_restricted_until?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id: string
+          is_super_admin?: boolean
           no_show_count?: number
           phone?: string | null
           role?: string
           skill_level?: number | null
           updated_at?: string
+          venue_id?: string | null
         }
         Update: {
           avatar_url?: string | null
           booking_restricted_until?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id?: string
+          is_super_admin?: boolean
           no_show_count?: number
           phone?: string | null
           role?: string
           skill_level?: number | null
           updated_at?: string
+          venue_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       session_signups: {
         Row: {
@@ -818,46 +905,213 @@ export type Database = {
           },
         ]
       }
+      venue_memberships: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string
+          role: string
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          role?: string
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          role?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_memberships_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_memberships_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      venue_sections: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          is_visible: boolean
+          media_size: string
+          media_type: string | null
+          media_url: string | null
+          sort_order: number
+          title: string | null
+          updated_at: string
+          venue_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          media_size?: string
+          media_type?: string | null
+          media_url?: string | null
+          sort_order?: number
+          title?: string | null
+          updated_at?: string
+          venue_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          is_visible?: boolean
+          media_size?: string
+          media_type?: string | null
+          media_url?: string | null
+          sort_order?: number
+          title?: string | null
+          updated_at?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_sections_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venues: {
         Row: {
           address: string | null
           amenities: string[]
+          announcement_enabled: boolean
+          announcement_image_url: string | null
+          announcement_link: string | null
+          announcement_text: string | null
+          announcement_type: string
           cancellation_cutoff_hours: number
           contact: string | null
           created_at: string
+          custom_domain: string | null
+          email_from: string | null
+          features: Json
+          footer_about: string | null
+          footer_address: string | null
+          footer_email: string | null
+          footer_links: Json
+          footer_phone: string | null
+          footer_socials: Json
+          hero_heading: string | null
+          hero_media_size: string
+          hero_media_type: string | null
+          hero_media_url: string | null
+          hero_subheading: string | null
+          how_note: string | null
+          how_note_hidden: boolean
+          how_steps: string[] | null
           id: string
+          is_active: boolean
+          logo_url: string | null
           max_advance_days: number
           min_lead_minutes: number
           name: string
           photos: string[]
+          slug: string | null
+          theme: string
           timezone: string
           updated_at: string
         }
         Insert: {
           address?: string | null
           amenities?: string[]
+          announcement_enabled?: boolean
+          announcement_image_url?: string | null
+          announcement_link?: string | null
+          announcement_text?: string | null
+          announcement_type?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string
+          custom_domain?: string | null
+          email_from?: string | null
+          features?: Json
+          footer_about?: string | null
+          footer_address?: string | null
+          footer_email?: string | null
+          footer_links?: Json
+          footer_phone?: string | null
+          footer_socials?: Json
+          hero_heading?: string | null
+          hero_media_size?: string
+          hero_media_type?: string | null
+          hero_media_url?: string | null
+          hero_subheading?: string | null
+          how_note?: string | null
+          how_note_hidden?: boolean
+          how_steps?: string[] | null
           id?: string
+          is_active?: boolean
+          logo_url?: string | null
           max_advance_days?: number
           min_lead_minutes?: number
           name: string
           photos?: string[]
+          slug?: string | null
+          theme?: string
           timezone?: string
           updated_at?: string
         }
         Update: {
           address?: string | null
           amenities?: string[]
+          announcement_enabled?: boolean
+          announcement_image_url?: string | null
+          announcement_link?: string | null
+          announcement_text?: string | null
+          announcement_type?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string
+          custom_domain?: string | null
+          email_from?: string | null
+          features?: Json
+          footer_about?: string | null
+          footer_address?: string | null
+          footer_email?: string | null
+          footer_links?: Json
+          footer_phone?: string | null
+          footer_socials?: Json
+          hero_heading?: string | null
+          hero_media_size?: string
+          hero_media_type?: string | null
+          hero_media_url?: string | null
+          hero_subheading?: string | null
+          how_note?: string | null
+          how_note_hidden?: boolean
+          how_steps?: string[] | null
           id?: string
+          is_active?: boolean
+          logo_url?: string | null
           max_advance_days?: number
           min_lead_minutes?: number
           name?: string
           photos?: string[]
+          slug?: string | null
+          theme?: string
           timezone?: string
           updated_at?: string
         }
@@ -926,11 +1180,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_shares_venue_with: { Args: { p_profile: string }; Returns: boolean }
+      admin_user_id_by_email: { Args: { p_email: string }; Returns: string }
       booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
+      booking_venue: { Args: { p_booking: string }; Returns: string }
+      can_admin_venue: { Args: { p_venue: string }; Returns: boolean }
       cancel_booking: {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
           booked_by: string | null
+          booking_group_id: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -959,10 +1218,45 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancel_booking_group: {
+        Args: { p_group_id: string }
+        Returns: {
+          booked_by: string | null
+          booking_group_id: string | null
+          coach_fee_cents: number
+          coach_id: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      coach_venue: { Args: { p_coach: string }; Returns: string }
       confirm_booking: {
         Args: { p_booking_id: string }
         Returns: {
           booked_by: string | null
+          booking_group_id: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -991,6 +1285,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      confirm_booking_group: {
+        Args: { p_group_id: string }
+        Returns: {
+          booked_by: string | null
+          booking_group_id: string | null
+          coach_fee_cents: number
+          coach_id: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      court_venue: { Args: { p_court: string }; Returns: string }
       create_booking: {
         Args: {
           p_booked_by?: string
@@ -1010,6 +1338,7 @@ export type Database = {
         }
         Returns: {
           booked_by: string | null
+          booking_group_id: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1056,6 +1385,7 @@ export type Database = {
         }
         Returns: {
           booked_by: string | null
+          booking_group_id: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1084,6 +1414,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      current_user_venue: { Args: never; Returns: string }
       get_booking_by_reference: {
         Args: { p_reference_code: string }
         Returns: {
@@ -1099,17 +1430,23 @@ export type Database = {
           total_cents: number
         }[]
       }
-      has_active_membership: {
-        Args: { p_profile_id: string }
-        Returns: boolean
-      }
+      has_active_membership:
+        | { Args: { p_profile_id: string }; Returns: boolean }
+        | {
+            Args: { p_profile_id: string; p_venue_id: string }
+            Returns: boolean
+          }
       is_admin: { Args: never; Returns: boolean }
+      is_admin_anywhere: { Args: never; Returns: boolean }
+      is_admin_of: { Args: { p_venue: string }; Returns: boolean }
       is_booking_owner: { Args: { p_booking_id: string }; Returns: boolean }
+      is_member_of: { Args: { p_venue: string }; Returns: boolean }
       is_organizer_or_admin: { Args: never; Returns: boolean }
       mark_no_show: {
         Args: { p_booking_id: string }
         Returns: {
           booked_by: string | null
+          booking_group_id: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1138,6 +1475,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      profile_venue: { Args: { p_profile: string }; Returns: string }
       reschedule_booking: {
         Args: {
           p_booking_id: string
@@ -1146,6 +1484,7 @@ export type Database = {
         }
         Returns: {
           booked_by: string | null
+          booking_group_id: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1173,6 +1512,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      session_venue: { Args: { p_session: string }; Returns: string }
+      set_venue_feature: {
+        Args: { p_enabled: boolean; p_key: string; p_venue: string }
+        Returns: Json
+      }
+      set_venue_theme: {
+        Args: { p_theme: string; p_venue: string }
+        Returns: string
       }
     }
     Enums: {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getTenant } from "@/lib/tenant";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,17 +22,39 @@ export default async function MembersPage({
 }) {
   const { q } = await searchParams;
   const supabase = await createClient();
+  const venue = await getTenant();
 
-  let query = supabase
-    .from("profiles")
-    .select("id, full_name, phone, skill_level, role, no_show_count, booking_restricted_until")
-    .order("full_name");
+  // Who belongs to this venue — read the venue_memberships join table (multi-venue Step 5); the
+  // role shown is the member's role at *this* venue.
+  type ProfileRow = {
+    id: string;
+    full_name: string | null;
+    phone: string | null;
+    skill_level: number | null;
+    no_show_count: number;
+    booking_restricted_until: string | null;
+  };
+  const { data: rows } = venue
+    ? await supabase
+        .from("venue_memberships")
+        .select("role, profiles(id, full_name, phone, skill_level, no_show_count, booking_restricted_until)")
+        .eq("venue_id", venue.id)
+    : { data: [] as { role: string; profiles: ProfileRow | null }[] };
+
+  let members = (rows ?? [])
+    .map((r) => {
+      const p = r.profiles as unknown as ProfileRow | null;
+      return p ? { ...p, role: r.role as string } : null;
+    })
+    .filter((m): m is ProfileRow & { role: string } => m !== null);
 
   if (q) {
-    query = query.or(`full_name.ilike.%${q}%,phone.ilike.%${q}%`);
+    const needle = q.toLowerCase();
+    members = members.filter(
+      (m) => (m.full_name ?? "").toLowerCase().includes(needle) || (m.phone ?? "").includes(q)
+    );
   }
-
-  const { data: members } = await query;
+  members.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,7 +90,7 @@ export default async function MembersPage({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {(members ?? []).map((m) => {
+          {members.map((m) => {
             const restricted = m.booking_restricted_until && new Date(m.booking_restricted_until) > new Date();
             return (
               <TableRow key={m.id}>
