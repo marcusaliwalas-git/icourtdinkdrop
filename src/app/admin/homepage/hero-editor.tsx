@@ -111,7 +111,7 @@ export function HeroEditor({
                 </option>
               ))}
             </select>
-            <span className="text-xs text-muted-foreground">How tall it appears on your site.</span>
+            <span className="text-xs text-muted-foreground">How big it appears on your site.</span>
           </div>
         )}
       </div>

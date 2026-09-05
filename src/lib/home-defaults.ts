@@ -11,9 +11,11 @@ export const DEFAULT_HOW_NOTE =
   "The venue confirms every booking before it's final — you'll get a reference code either way.";
 
 // Hero / section media size — admin picks how big it displays. The whole image is always shown
-// (object-contain, never cropped): small/medium/large cap the height; "original" uses the image's
-// natural size (only capped to the content width so it can't overflow). Shared by the editor (the
-// choices) and the home page (the class).
+// (never cropped): small/medium/large scale the image down by capping its WIDTH (height follows
+// the aspect ratio), and the smaller ones are centered. Capping the height instead did nothing for
+// a normal landscape photo — it fills the width long before it's ever that tall — so all sizes
+// looked identical. "original" uses the image's natural size (only capped to the content width so
+// it can't overflow). Shared by the editor (the choices) and the home page (the class).
 export const HERO_SIZES = [
   { value: "small", label: "Small" },
   { value: "medium", label: "Medium" },
@@ -22,9 +24,9 @@ export const HERO_SIZES = [
 ] as const;
 
 const MEDIA_SIZE_CLASS: Record<string, string> = {
-  small: "w-full max-h-64 object-contain",
-  medium: "w-full max-h-96 object-contain",
-  large: "w-full max-h-[36rem] object-contain",
+  small: "mx-auto w-full max-w-xs h-auto",
+  medium: "mx-auto w-full max-w-lg h-auto",
+  large: "w-full h-auto",
   original: "max-w-full h-auto",
 };
 
