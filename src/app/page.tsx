@@ -51,7 +51,7 @@ export default async function HomePage() {
 
   const { data: sections } = await supabase
     .from("venue_sections")
-    .select("id, title, body, media_url, media_type")
+    .select("id, title, body, media_url, media_type, media_size")
     .eq("venue_id", venue.id)
     .eq("is_visible", true)
     .order("sort_order");
@@ -266,13 +266,17 @@ export default async function HomePage() {
               (s.media_type === "video" ? (
                 <video
                   src={s.media_url}
-                  className="mb-4 aspect-video w-full rounded-2xl border border-border object-cover"
+                  className={`mb-4 ${heroAspect(s.media_size)} w-full rounded-2xl border border-border object-cover`}
                   controls
                   playsInline
                 />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.media_url} alt="" className="mb-4 w-full rounded-2xl border border-border object-cover" />
+                <img
+                  src={s.media_url}
+                  alt=""
+                  className={`mb-4 ${heroAspect(s.media_size)} w-full rounded-2xl border border-border object-cover`}
+                />
               ))}
             {s.body && <p className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">{s.body}</p>}
           </section>

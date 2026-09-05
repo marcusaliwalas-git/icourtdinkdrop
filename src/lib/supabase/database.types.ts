@@ -950,6 +950,7 @@ export type Database = {
           created_at: string
           id: string
           is_visible: boolean
+          media_size: string
           media_type: string | null
           media_url: string | null
           sort_order: number
@@ -962,6 +963,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_visible?: boolean
+          media_size?: string
           media_type?: string | null
           media_url?: string | null
           sort_order?: number
@@ -974,6 +976,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_visible?: boolean
+          media_size?: string
           media_type?: string | null
           media_url?: string | null
           sort_order?: number

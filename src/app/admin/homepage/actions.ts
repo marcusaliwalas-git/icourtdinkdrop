@@ -97,6 +97,7 @@ export async function upsertSection(sectionId: string | null, input: unknown): P
     body: d.body || null,
     media_url: d.mediaUrl || null,
     media_type: d.mediaType || null,
+    media_size: d.mediaSize || "medium",
     sort_order: d.sortOrder,
     is_visible: d.isVisible,
   };

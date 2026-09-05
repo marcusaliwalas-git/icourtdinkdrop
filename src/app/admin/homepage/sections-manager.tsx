@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { upsertSection, deleteSection } from "./actions";
 import { uploadVenueMedia } from "./media-upload";
+import { HERO_SIZES } from "@/lib/home-defaults";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm";
 
@@ -18,6 +19,7 @@ export type Section = {
   body: string | null;
   media_url: string | null;
   media_type: string | null;
+  media_size: string | null;
   sort_order: number;
   is_visible: boolean;
 };
@@ -27,6 +29,7 @@ function SectionForm({ venueId, section, onSaved }: { venueId: string; section: 
   const [error, setError] = useState<string | null>(null);
   const [mediaUrl, setMediaUrl] = useState(section?.media_url ?? "");
   const [mediaType, setMediaType] = useState(section?.media_type ?? "");
+  const [mediaSize, setMediaSize] = useState(section?.media_size ?? "medium");
   const [uploading, setUploading] = useState(false);
 
   async function onMedia(e: React.ChangeEvent<HTMLInputElement>) {
@@ -50,6 +53,7 @@ function SectionForm({ venueId, section, onSaved }: { venueId: string; section: 
         body: String(formData.get("body") ?? ""),
         mediaUrl,
         mediaType: mediaUrl ? mediaType : "",
+        mediaSize,
         sortOrder: Number(formData.get("sortOrder")) || 0,
         isVisible: formData.get("isVisible") === "on",
       });
@@ -96,6 +100,26 @@ function SectionForm({ venueId, section, onSaved }: { venueId: string; section: 
           Videos should be H.264 <code>.mp4</code> for every browser. Phone clips are often HEVC/H.265,
           which plays on iPhone and Safari but shows a black box in Chrome and Firefox — re-export as H.264 first.
         </p>
+        {mediaUrl && (
+          <div className="flex items-center gap-2">
+            <Label htmlFor="sectionSize" className="text-sm">
+              Size
+            </Label>
+            <select
+              id="sectionSize"
+              value={mediaSize}
+              onChange={(e) => setMediaSize(e.target.value)}
+              className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {HERO_SIZES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">How tall it appears on your site.</span>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 items-end gap-3">
         <div className="flex flex-col gap-1.5">
