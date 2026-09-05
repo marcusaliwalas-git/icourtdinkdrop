@@ -18,7 +18,7 @@ export default async function AdminHomepagePage() {
 
   const { data: sections } = await supabase
     .from("venue_sections")
-    .select("id, title, body, media_url, media_type, sort_order, is_visible")
+    .select("id, title, body, media_url, media_type, media_size, sort_order, is_visible")
     .eq("venue_id", venue.id)
     .order("sort_order")
     .returns<Section[]>();
