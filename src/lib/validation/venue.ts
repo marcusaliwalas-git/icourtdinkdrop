@@ -99,7 +99,14 @@ export type ClosureInput = z.infer<typeof closureSchema>;
 export const ratePeriodSchema = z.object({
   courtId: z.uuid(),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  // A native <input type="time"> can't hold "24:00", so an admin ending a period at midnight
+  // (e.g. a 7am–12am window) submits "00:00" — which would fail both the "end after start" check
+  // and the DB's end_time > start_time constraint. Treat it as "24:00" (end of day), the one value
+  // Postgres's `time` type supports for midnight-as-close, exactly as operating hours do.
+  endTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .transform((t) => (t === "00:00" ? "24:00" : t)),
   hourlyRateCents: z.number().int().min(0),
   memberRateCents: z.number().int().min(0).optional(),
 });

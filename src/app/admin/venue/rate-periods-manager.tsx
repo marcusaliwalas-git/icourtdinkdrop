@@ -11,6 +11,16 @@ function centsToPesos(cents: number) {
   return (cents / 100).toFixed(2);
 }
 
+// Show stored 24-hour times ("14:00", or "24:00" for midnight-as-end-of-day) as 12-hour AM/PM, so
+// the table matches the AM/PM time pickers used to enter them.
+function to12Hour(value: string): string {
+  const [hStr, mStr] = value.slice(0, 5).split(":");
+  const h = Number(hStr) % 24; // 24:00 (end of day) → 0 → 12:00 AM
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mStr} ${period}`;
+}
+
 type RatePeriod = {
   id: string;
   start_time: string;
@@ -48,8 +58,9 @@ export function RatePeriodsManager({
       <div>
         <Label className="text-sm font-medium">Time-based rates</Label>
         <p className="text-xs text-muted-foreground">
-          Override the rate above for specific hours, e.g. 7:00–14:00 at one rate and 14:00
-          onwards at another. Hours with no override use the rate above.
+          Override the rate above for specific hours, e.g. 7:00 AM–2:00 PM at one rate and 2:00 PM
+          onwards at another. Hours with no override use the rate above. For a period that ends at
+          midnight, set the end to 12:00 AM.
         </p>
       </div>
 
@@ -65,8 +76,8 @@ export function RatePeriodsManager({
         <TableBody>
           {sorted.map((p) => (
             <TableRow key={p.id}>
-              <TableCell>{p.start_time.slice(0, 5)}</TableCell>
-              <TableCell>{p.end_time.slice(0, 5)}</TableCell>
+              <TableCell>{to12Hour(p.start_time)}</TableCell>
+              <TableCell>{to12Hour(p.end_time)}</TableCell>
               <TableCell>
                 ₱{centsToPesos(p.hourly_rate_cents)}/hr
                 {p.member_rate_cents != null && (
