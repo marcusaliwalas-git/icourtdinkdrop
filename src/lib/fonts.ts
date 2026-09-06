@@ -10,6 +10,7 @@ export const VENUE_FONTS = [
   { key: "sora", label: "Sora", previewVar: "var(--font-opt-sora)" },
   { key: "rubik", label: "Rubik", previewVar: "var(--font-opt-rubik)" },
   { key: "fraunces", label: "Fraunces", previewVar: "var(--font-opt-fraunces)" },
+  { key: "montserrat", label: "Montserrat", previewVar: "var(--font-opt-montserrat)" },
 ] as const;
 
 export type VenueFontKey = (typeof VENUE_FONTS)[number]["key"];

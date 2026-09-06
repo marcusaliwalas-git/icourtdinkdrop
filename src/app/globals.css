@@ -266,6 +266,7 @@ html[data-font="poppins"]  { --font-geist-sans: var(--font-opt-poppins);  --font
 html[data-font="sora"]     { --font-geist-sans: var(--font-opt-sora);     --font-display: var(--font-opt-sora); }
 html[data-font="rubik"]    { --font-geist-sans: var(--font-opt-rubik);    --font-display: var(--font-opt-rubik); }
 html[data-font="fraunces"] { --font-geist-sans: var(--font-opt-fraunces); --font-display: var(--font-opt-fraunces); }
+html[data-font="montserrat"] { --font-geist-sans: var(--font-opt-montserrat); --font-display: var(--font-opt-montserrat); }
 
 /* Home page status board: rows settle in like a flip/departure board. Scoped to its own
    class rather than a global keyframe name collision risk. */

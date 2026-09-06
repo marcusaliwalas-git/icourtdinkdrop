@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk, Poppins, Sora, Rubik, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk, Poppins, Sora, Rubik, Fraunces, Montserrat } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -34,6 +34,7 @@ const poppins = Poppins({ variable: "--font-opt-poppins", subsets: ["latin"], we
 const sora = Sora({ variable: "--font-opt-sora", subsets: ["latin"], preload: false });
 const rubik = Rubik({ variable: "--font-opt-rubik", subsets: ["latin"], preload: false });
 const fraunces = Fraunces({ variable: "--font-opt-fraunces", subsets: ["latin"], preload: false });
+const montserrat = Montserrat({ variable: "--font-opt-montserrat", subsets: ["latin"], weight: ["400", "500", "600", "700"], preload: false });
 
 // Per-tenant browser title/description: resolve the venue for the current host so each tenant's
 // tab shows their own name. getTenant() is request-cached, so this doesn't double-query.
@@ -62,7 +63,7 @@ export default async function RootLayout({
       lang="en"
       data-theme={theme}
       data-font={font}
-      className={`${isLight ? "" : "dark"} ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${poppins.variable} ${sora.variable} ${rubik.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${isLight ? "" : "dark"} ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${poppins.variable} ${sora.variable} ${rubik.variable} ${fraunces.variable} ${montserrat.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <SiteAnnouncement
