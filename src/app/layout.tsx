@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk, Poppins, Sora, Rubik, Fraunces } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -9,6 +9,7 @@ import { getTenant } from "@/lib/tenant";
 import { isVenueAdmin } from "@/lib/auth";
 import { featureEnabled } from "@/lib/features";
 import { normalizeTheme, LIGHT_THEME } from "@/lib/themes";
+import { normalizeFont } from "@/lib/fonts";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,6 +26,14 @@ const spaceGrotesk = Space_Grotesk({
   variable: "--font-display",
   subsets: ["latin"],
 });
+
+// Optional per-tenant faces — the super admin picks one per venue (see lib/fonts.ts). All are
+// loaded so globals.css can switch to the chosen one by `data-font`, but preload:false means the
+// browser only downloads the font a tenant actually renders in, not all four.
+const poppins = Poppins({ variable: "--font-opt-poppins", subsets: ["latin"], weight: ["400", "500", "600", "700"], preload: false });
+const sora = Sora({ variable: "--font-opt-sora", subsets: ["latin"], preload: false });
+const rubik = Rubik({ variable: "--font-opt-rubik", subsets: ["latin"], preload: false });
+const fraunces = Fraunces({ variable: "--font-opt-fraunces", subsets: ["latin"], preload: false });
 
 // Per-tenant browser title/description: resolve the venue for the current host so each tenant's
 // tab shows their own name. getTenant() is request-cached, so this doesn't double-query.
@@ -44,6 +53,7 @@ export default async function RootLayout({
 }>) {
   const [tenant, isAdmin] = await Promise.all([getTenant(), isVenueAdmin()]);
   const theme = normalizeTheme(tenant?.theme);
+  const font = normalizeFont(tenant?.font);
   // The app is dark-first; the one light theme drops the `dark` class so every component renders its
   // light base (and `dark:` utility variants stay off), while `data-theme` re-skins the tokens.
   const isLight = theme === LIGHT_THEME;
@@ -51,7 +61,8 @@ export default async function RootLayout({
     <html
       lang="en"
       data-theme={theme}
-      className={`${isLight ? "" : "dark"} ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      data-font={font}
+      className={`${isLight ? "" : "dark"} ${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${poppins.variable} ${sora.variable} ${rubik.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <SiteAnnouncement

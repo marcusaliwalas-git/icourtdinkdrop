@@ -1009,6 +1009,7 @@ export type Database = {
           custom_domain: string | null
           email_from: string | null
           features: Json
+          font: string
           footer_about: string | null
           footer_address: string | null
           footer_email: string | null
@@ -1049,6 +1050,7 @@ export type Database = {
           custom_domain?: string | null
           email_from?: string | null
           features?: Json
+          font?: string
           footer_about?: string | null
           footer_address?: string | null
           footer_email?: string | null
@@ -1089,6 +1091,7 @@ export type Database = {
           custom_domain?: string | null
           email_from?: string | null
           features?: Json
+          font?: string
           footer_about?: string | null
           footer_address?: string | null
           footer_email?: string | null
@@ -1517,6 +1520,10 @@ export type Database = {
       set_venue_feature: {
         Args: { p_enabled: boolean; p_key: string; p_venue: string }
         Returns: Json
+      }
+      set_venue_font: {
+        Args: { p_font: string; p_venue: string }
+        Returns: string
       }
       set_venue_theme: {
         Args: { p_theme: string; p_venue: string }

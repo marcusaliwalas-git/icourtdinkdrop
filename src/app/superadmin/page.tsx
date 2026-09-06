@@ -5,6 +5,7 @@ import { DeleteVenueButton } from "./delete-venue-button";
 import { VenueActiveToggle } from "./venue-active-toggle";
 import { VenueCapabilities } from "./venue-capabilities";
 import { VenueThemeSelect } from "./venue-theme-select";
+import { VenueFontSelect } from "./venue-font-select";
 import { EditVenueHost } from "./edit-venue-host";
 import { AddVenueAdmin } from "./add-venue-admin";
 
@@ -14,7 +15,7 @@ export default async function SuperAdminPage() {
   const supabase = await createClient();
   const { data: venues } = await supabase
     .from("venues")
-    .select("id, name, slug, custom_domain, timezone, created_at, is_active, features, theme")
+    .select("id, name, slug, custom_domain, timezone, created_at, is_active, features, theme, font")
     .order("created_at", { ascending: false });
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "dinkdrop.live";
@@ -38,6 +39,7 @@ export default async function SuperAdminPage() {
               <th className="p-3 font-medium">Reachable at</th>
               <th className="p-3 font-medium">Timezone</th>
               <th className="p-3 font-medium">Theme</th>
+              <th className="p-3 font-medium">Font</th>
               <th className="p-3 font-medium">Created</th>
               <th className="p-3 font-medium"></th>
             </tr>
@@ -64,6 +66,9 @@ export default async function SuperAdminPage() {
                 <td className="p-3 text-muted-foreground">{v.timezone}</td>
                 <td className="p-3">
                   <VenueThemeSelect venueId={v.id} theme={v.theme} />
+                </td>
+                <td className="p-3">
+                  <VenueFontSelect venueId={v.id} font={v.font} />
                 </td>
                 <td className="p-3 text-muted-foreground">
                   {formatInTimezone(new Date(v.created_at), "MMM d, yyyy", v.timezone)}

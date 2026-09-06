@@ -237,6 +237,15 @@ export async function setVenueTheme(venueId: string, theme: string): Promise<Res
   return { success: true };
 }
 
+export async function setVenueFont(venueId: string, font: string): Promise<Result> {
+  const { supabase } = await requireSuperAdmin();
+  const { error } = await supabase.rpc("set_venue_font", { p_venue: venueId, p_font: font });
+  if (error) return { error: error.message };
+  revalidatePath("/superadmin");
+  revalidatePath("/", "layout"); // the font re-types the whole tenant site
+  return { success: true };
+}
+
 /**
  * Delete a tenant. Guarded: refuses a venue that has any bookings (deactivate those instead), and
  * won't delete the venue the caller's own account belongs to. Otherwise removes the tenant's member
