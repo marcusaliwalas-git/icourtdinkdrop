@@ -38,19 +38,24 @@ const cellKey = (courtId: string, rowIdx: number) => `${courtId}:${rowIdx}`;
 
 // Rate tiers for open cells: cool = cheaper → warm = pricier, so a glance across the grid
 // shows where the peak/premium slots are. Rates are mapped onto these steps by their position
-// between the day's lowest and highest rate, so it adapts to any venue's pricing.
+// between the day's lowest and highest rate, so it adapts to any venue's pricing. The ramp stops
+// at orange and deliberately avoids red — red reads as "unavailable/error", not "premium".
 const RATE_TIERS = [
+  "bg-sky-50 text-sky-700 hover:bg-sky-100 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20",
   "bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-500/10 dark:text-teal-300 dark:hover:bg-teal-500/20",
   "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20",
   "bg-amber-50 text-amber-800 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20",
   "bg-orange-50 text-orange-800 hover:bg-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:hover:bg-orange-500/20",
-  "bg-rose-50 text-rose-800 hover:bg-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/20",
 ];
-const RATE_TIER_SWATCH = ["bg-teal-400", "bg-emerald-400", "bg-amber-400", "bg-orange-400", "bg-rose-400"];
+const RATE_TIER_SWATCH = ["bg-sky-400", "bg-teal-400", "bg-emerald-400", "bg-amber-400", "bg-orange-400"];
 
-// Which tier a rate falls into. A single flat rate stays the familiar "available" green (tier 1).
+// The tier a flat (single) rate lands on — the familiar "available" green, now the middle of the
+// ramp. Keep this in sync with the emerald entry's index above.
+const FLAT_RATE_TIER = 2;
+
+// Which tier a rate falls into. A single flat rate stays the familiar "available" green.
 function rateTierIndex(cents: number, minCents: number, maxCents: number): number {
-  if (maxCents <= minCents) return 1;
+  if (maxCents <= minCents) return FLAT_RATE_TIER;
   return Math.round(((cents - minCents) / (maxCents - minCents)) * (RATE_TIERS.length - 1));
 }
 
