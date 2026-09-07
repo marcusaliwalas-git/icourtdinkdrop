@@ -7,6 +7,7 @@ import { tenantEmailBrand } from "@/lib/site-url";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import { sendBookingGroupConfirmationEmail } from "@/lib/email";
+import { guidelineLines } from "@/lib/validation/venue";
 
 type Result = { success: boolean; error?: string };
 
@@ -47,13 +48,15 @@ export async function adminConfirmBookingGroup(groupId: string): Promise<Result>
         return { courtName: row.courts?.name ?? "Court", startsAt: start, endsAt: end };
       });
       const totalCents = list.reduce((sum, b) => sum + (b as unknown as { total_cents: number }).total_cents, 0);
+      const tenant = await getTenant();
       await sendBookingGroupConfirmationEmail({
         to,
         slots,
         timezone,
         referenceCode: first.reference_code,
         totalCents,
-        ...tenantEmailBrand(await getTenant()),
+        guidelines: guidelineLines(tenant?.guidelines),
+        ...tenantEmailBrand(tenant),
       });
     }
   }

@@ -46,6 +46,8 @@ interface BookingEmailDetails {
   brandName: string;
   fromEmail: string | null;
   logoUrl: string | null;
+  /** Court guidelines shown on confirmation only (one rule per entry). */
+  guidelines?: string[] | null;
 }
 
 function pesos(cents: number) {
@@ -98,6 +100,8 @@ interface BookingGroupEmailDetails {
   brandName: string;
   fromEmail: string | null;
   logoUrl: string | null;
+  /** Court guidelines shown on confirmation only (one rule per entry). */
+  guidelines?: string[] | null;
 }
 
 /** One confirmation email for a multi-slot cart — lists every slot, one reference, one total. */
@@ -123,6 +127,7 @@ export async function sendBookingGroupConfirmationEmail(details: BookingGroupEma
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total paid", value: pesos(details.totalCents) },
       ],
+      guidelines: details.guidelines ?? undefined,
       logoUrl: details.logoUrl,
       brandName: details.brandName,
       button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
@@ -147,6 +152,7 @@ export async function sendBookingConfirmationEmail(details: BookingEmailDetails)
         { label: "Reference", value: details.referenceCode, mono: true },
         { label: "Total paid", value: pesos(details.totalCents) },
       ],
+      guidelines: details.guidelines ?? undefined,
       logoUrl: details.logoUrl,
       brandName: details.brandName,
       button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },

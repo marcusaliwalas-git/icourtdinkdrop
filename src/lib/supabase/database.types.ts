@@ -1016,6 +1016,7 @@ export type Database = {
           footer_links: Json
           footer_phone: string | null
           footer_socials: Json
+          guidelines: string | null
           hero_heading: string | null
           hero_media_size: string
           hero_media_type: string | null
@@ -1057,6 +1058,7 @@ export type Database = {
           footer_links?: Json
           footer_phone?: string | null
           footer_socials?: Json
+          guidelines?: string | null
           hero_heading?: string | null
           hero_media_size?: string
           hero_media_type?: string | null
@@ -1098,6 +1100,7 @@ export type Database = {
           footer_links?: Json
           footer_phone?: string | null
           footer_socials?: Json
+          guidelines?: string | null
           hero_heading?: string | null
           hero_media_size?: string
           hero_media_type?: string | null

@@ -17,7 +17,19 @@ export const venueSchema = z.object({
   minLeadMinutes: z.number().int().min(0).max(1440).default(60),
   maxAdvanceDays: z.number().int().min(1).max(180).default(14),
   cancellationCutoffHours: z.number().int().min(0).max(168).default(3),
+  // Court guidelines / etiquette shown on confirmed bookings (email + My bookings). One rule per
+  // line; optional.
+  guidelines: z.string().trim().max(2000).optional().or(z.literal("")),
 });
+
+/** Split the stored guidelines text into individual rules (one per non-empty line). Shared by the
+ * confirmation email and the My bookings screen so they never drift. */
+export function guidelineLines(value: string | null | undefined): string[] {
+  return (value ?? "")
+    .split("\n")
+    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .filter(Boolean);
+}
 
 export type VenueInput = z.infer<typeof venueSchema>;
 

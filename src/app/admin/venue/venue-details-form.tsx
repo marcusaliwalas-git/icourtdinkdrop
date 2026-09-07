@@ -18,6 +18,7 @@ type Venue = {
   min_lead_minutes: number;
   max_advance_days: number;
   cancellation_cutoff_hours: number;
+  guidelines: string | null;
 } | null;
 
 const ACCEPTED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
@@ -155,6 +156,21 @@ export function VenueDetailsForm({ venue }: { venue: Venue }) {
             required
           />
         </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="guidelines">Court guidelines</Label>
+        <textarea
+          id="guidelines"
+          name="guidelines"
+          defaultValue={venue?.guidelines ?? ""}
+          rows={5}
+          placeholder={"One rule per line, e.g.\nArrive 10 minutes early\nNon-marking shoes only\n15-minute grace period before the slot is released"}
+          className="rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+        <p className="text-xs text-muted-foreground">
+          Shown to customers on a confirmed booking — in the confirmation email and on their My bookings
+          page. One rule per line. Leave blank to show nothing.
+        </p>
       </div>
       <Button type="submit" disabled={isPending} className="w-fit">
         {isPending ? "Saving..." : venue ? "Save changes" : "Create venue"}

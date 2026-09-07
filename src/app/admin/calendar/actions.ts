@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createBookingSchema } from "@/lib/validation/booking";
+import { guidelineLines } from "@/lib/validation/venue";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -141,6 +142,7 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
     const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
     const { start, end } = parseTstzRange(data.time_range);
 
+    const tenant = await getTenant();
     await sendBookingConfirmationEmail({
       to: recipientEmail,
       courtName: court?.name ?? "Court",
@@ -149,7 +151,8 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
-      ...tenantEmailBrand(await getTenant()),
+      guidelines: guidelineLines(tenant?.guidelines),
+      ...tenantEmailBrand(tenant),
     });
   }
 

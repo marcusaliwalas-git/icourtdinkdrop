@@ -24,6 +24,9 @@ export interface EmailTemplate {
   button: { label: string; url: string };
   /** Optional paragraphs shown below the button. */
   outro?: string[];
+  /** Optional court guidelines / etiquette — one rule per entry, shown as a labelled list above
+   * the button. Used on confirmation emails so the customer sees the house rules before they play. */
+  guidelines?: string[];
   /** Accent bar / button colour. Green for normal flows, red for cancellations. */
   accent?: "green" | "red";
   /** Tenant branding for the header/footer: an absolute logo URL, and the venue name used as the
@@ -60,6 +63,20 @@ export function renderEmail(t: EmailTemplate): string {
     )
     .join("");
 
+  const guidelines = t.guidelines ?? [];
+  const guidelinesHtml = guidelines.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+         <tr>
+           <td style="padding:16px 20px;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:10px;">
+             <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#18181b;">Good to know before you play</p>
+             <ul style="margin:0;padding-left:18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#3f3f46;">
+               ${guidelines.map((g) => `<li>${escapeHtml(g)}</li>`).join("")}
+             </ul>
+           </td>
+         </tr>
+       </table>`
+    : "";
+
   const brand = t.brandName?.trim() || "Bookings";
   // The tenant's logo if it has one, else its name as a text wordmark.
   const headerBrandHtml = t.logoUrl
@@ -95,6 +112,7 @@ export function renderEmail(t: EmailTemplate): string {
                     </td>
                   </tr>
                 </table>
+                ${guidelinesHtml}
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="border-radius:10px;background-color:${accentColor};">
