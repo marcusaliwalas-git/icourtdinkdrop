@@ -167,6 +167,7 @@ export type Database = {
         Row: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -191,6 +192,7 @@ export type Database = {
         Insert: {
           booked_by?: string | null
           booking_group_id?: string | null
+          checked_in_at?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
           court_id: string
@@ -215,6 +217,7 @@ export type Database = {
         Update: {
           booked_by?: string | null
           booking_group_id?: string | null
+          checked_in_at?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
           court_id?: string
@@ -1196,6 +1199,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1229,6 +1233,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1263,6 +1268,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1296,6 +1302,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1345,6 +1352,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1392,6 +1400,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1453,6 +1462,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1491,6 +1501,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
@@ -1520,6 +1531,40 @@ export type Database = {
         }
       }
       session_venue: { Args: { p_session: string }; Returns: string }
+      set_booking_checked_in: {
+        Args: { p_booking_id: string; p_checked_in: boolean }
+        Returns: {
+          booked_by: string | null
+          booking_group_id: string | null
+          checked_in_at: string | null
+          coach_fee_cents: number
+          coach_id: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_venue_feature: {
         Args: { p_enabled: boolean; p_key: string; p_venue: string }
         Returns: Json
@@ -1537,6 +1582,7 @@ export type Database = {
         Returns: {
           booked_by: string | null
           booking_group_id: string | null
+          checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string

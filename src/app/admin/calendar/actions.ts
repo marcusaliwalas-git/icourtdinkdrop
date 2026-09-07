@@ -124,6 +124,23 @@ export async function adminVoidBooking(bookingId: string, reason: string): Promi
   return { success: true, referenceCode: "" };
 }
 
+/** Front-desk check-in: toggle a booking's "arrived" marker. A customer must be confirmed to check
+ * in (verify payment via Confirm first); undo clears it. */
+export async function adminSetCheckedIn(bookingId: string, checkedIn: boolean): Promise<WalkInResult> {
+  const { supabase } = await requireAdmin();
+  const { error } = await supabase.rpc("set_booking_checked_in", {
+    p_booking_id: bookingId,
+    p_checked_in: checkedIn,
+  });
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+  revalidatePath("/admin/front-desk");
+  revalidatePath("/admin/calendar");
+  return { success: true, referenceCode: "" };
+}
+
 export async function adminConfirmBooking(bookingId: string): Promise<WalkInResult> {
   const { supabase } = await requireAdmin();
   const { data, error } = await supabase.rpc("confirm_booking", { p_booking_id: bookingId });

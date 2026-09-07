@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   NO_SEGMENTS: "Pick at least one slot to book.",
   CANNOT_RESCHEDULE: "This booking can no longer be rescheduled.",
   REASON_REQUIRED: "Enter a reason for voiding this booking.",
+  NOT_CONFIRMED: "Confirm this booking before checking the customer in.",
   SLOT_TAKEN: "Sorry, that slot was just taken. Pick another.",
   COACH_NOT_FOUND: "That coach isn't available. Pick another or continue without one.",
 };
