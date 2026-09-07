@@ -1529,6 +1529,39 @@ export type Database = {
         Args: { p_theme: string; p_venue: string }
         Returns: string
       }
+      void_booking: {
+        Args: { p_booking_id: string; p_reason: string }
+        Returns: {
+          booked_by: string | null
+          booking_group_id: string | null
+          coach_fee_cents: number
+          coach_id: string | null
+          court_id: string
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          id: string
+          idempotency_key: string | null
+          notes: string | null
+          party_size: number
+          payment_reference: string | null
+          payment_slip_path: string | null
+          payment_status: string
+          reference_code: string
+          source: string
+          status: string
+          time_range: unknown
+          total_cents: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bookings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

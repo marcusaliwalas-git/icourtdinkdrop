@@ -100,6 +100,29 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
   return { success: true, referenceCode: "" };
 }
 
+/**
+ * Void a booking — an admin correction for a mistaken/duplicate entry or a past booking that needs
+ * removing after it started (the normal cancel is blocked once a booking begins). The booking is
+ * kept for the audit trail but drops out of realized revenue and frees its slot. Requires a reason;
+ * no customer email is sent (a "voided" notice for a past booking would only confuse).
+ */
+export async function adminVoidBooking(bookingId: string, reason: string): Promise<WalkInResult> {
+  const { supabase } = await requireAdmin();
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    return { success: false, code: "REASON_REQUIRED", message: "Enter a reason for voiding this booking." };
+  }
+  const { error } = await supabase.rpc("void_booking", { p_booking_id: bookingId, p_reason: trimmed });
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/sales");
+  return { success: true, referenceCode: "" };
+}
+
 export async function adminConfirmBooking(bookingId: string): Promise<WalkInResult> {
   const { supabase } = await requireAdmin();
   const { data, error } = await supabase.rpc("confirm_booking", { p_booking_id: bookingId });

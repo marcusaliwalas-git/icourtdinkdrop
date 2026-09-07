@@ -44,6 +44,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   cancelled: "secondary",
   completed: "secondary",
   no_show: "destructive",
+  voided: "secondary",
 };
 
 function pesos(cents: number) {

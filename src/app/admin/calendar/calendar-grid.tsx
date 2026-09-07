@@ -99,7 +99,16 @@ export function CalendarGrid({
                           Closed
                         </div>
                       )}
-                      {cell.status === "past" && <div className="h-11 w-full min-w-28" />}
+                      {cell.status === "past" && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSlot({ courtId: court.id, courtName: court.name, startsAtIso: row.startsAtIso })}
+                          title="Add a missed booking for this past slot"
+                          className="h-11 w-full min-w-28 rounded-sm text-xs font-medium text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+                        >
+                          + Add past
+                        </button>
+                      )}
                     </td>
                   );
                 })}
