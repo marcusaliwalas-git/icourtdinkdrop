@@ -2,13 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createBookingSchema, createBookingsSchema, cancelBookingSchema } from "@/lib/validation/booking";
+import { createBookingSchema, createBookingsSchema } from "@/lib/validation/booking";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import {
   sendBookingConfirmationEmail,
   sendBookingPendingEmail,
-  sendBookingCancellationEmail,
   sendAdminBookingRequestEmail,
   sendBookingsPendingEmail,
   sendAdminBookingsRequestEmail,
@@ -300,52 +299,4 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
     status,
     whatsAppShareLink: buildWhatsAppShareLinkForBookings({ timezone, bookings: lineItems }),
   };
-}
-
-export type CancelBookingResult = { success: true } | { success: false; code: string; message: string };
-
-export async function cancelBooking(input: unknown): Promise<CancelBookingResult> {
-  const parsed = cancelBookingSchema.safeParse(input);
-  if (!parsed.success) {
-    return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data, error } = await supabase.rpc("cancel_booking", {
-    p_booking_id: parsed.data.bookingId,
-    p_reference_code: parsed.data.referenceCode ?? null,
-  });
-
-  if (error) {
-    const mapped = mapBookingError(error);
-    return { success: false, ...mapped };
-  }
-
-  const recipientEmail = user?.email ?? data.guest_email;
-  if (recipientEmail) {
-    const { data: court } = await supabase
-      .from("courts")
-      .select("name, venues(timezone)")
-      .eq("id", data.court_id)
-      .single();
-    const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
-    const { start, end } = parseTstzRange(data.time_range);
-    await sendBookingCancellationEmail({
-      to: recipientEmail,
-      courtName: court?.name ?? "Court",
-      startsAt: start,
-      endsAt: end,
-      timezone,
-      referenceCode: data.reference_code,
-      ...tenantEmailBrand(await getTenant()),
-    });
-  }
-
-  revalidatePath("/book");
-  revalidatePath("/bookings");
-  return { success: true };
 }
