@@ -9,6 +9,7 @@ export const VENUE_THEMES = [
   { key: "sunset", label: "Sunset", swatch: "#fb923c" },
   { key: "grape", label: "Grape", swatch: "#a78bfa" },
   { key: "light", label: "Daylight", swatch: "#059669" },
+  { key: "gold", label: "Midnight Gold", swatch: "#EBB82D" },
 ] as const;
 
 export type VenueThemeKey = (typeof VENUE_THEMES)[number]["key"];

@@ -210,6 +210,35 @@
   --sidebar-ring: #c4b5fd;
 }
 
+/* Midnight Gold — deep navy ground (#0b1a30) with #1D395E surfaces and #EBB82D gold accents. */
+.dark[data-theme="gold"] {
+  --background: #0b1a30;
+  --foreground: #eaf1fb;
+  --card: #12294a;
+  --card-foreground: #eaf1fb;
+  --popover: #12294a;
+  --popover-foreground: #eaf1fb;
+  --primary: #EBB82D;
+  --primary-foreground: #221800;
+  --secondary: #1D395E;
+  --secondary-foreground: #eaf1fb;
+  --muted: #10233f;
+  --muted-foreground: #9db2d4;
+  --accent: #1D395E;
+  --accent-foreground: #eaf1fb;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #EBB82D;
+  --sidebar: #12294a;
+  --sidebar-foreground: #eaf1fb;
+  --sidebar-primary: #EBB82D;
+  --sidebar-primary-foreground: #221800;
+  --sidebar-accent: #1D395E;
+  --sidebar-accent-foreground: #eaf1fb;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #f3cd5f;
+}
+
 /* Daylight — the one light theme. The layout drops the `.dark` class for this theme, so it skins
    the base :root tokens (and every component falls back to its light-first base). */
 :root[data-theme="light"] {
