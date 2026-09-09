@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage() {
   // Resolve the tenant from the hostname so a new signup is pinned to this venue.
   const venue = await getTenant();
-  return <LoginForm tenantId={venue?.id ?? null} />;
+  return <LoginForm tenantId={venue?.id ?? null} brandName={venue?.name ?? "iCourt Social"} />;
 }

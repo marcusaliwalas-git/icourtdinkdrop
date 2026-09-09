@@ -11,7 +11,8 @@ type Mode = "signin" | "signup";
 
 // tenantId is the venue resolved from the request hostname (server-side). It's attached to a new
 // account's metadata so the handle_new_user trigger pins the member to the tenant they signed up on.
-export function LoginForm({ tenantId }: { tenantId: string | null }) {
+// brandName is that venue's name (falling back to the platform name), shown in the sign-in title.
+export function LoginForm({ tenantId, brandName }: { tenantId: string | null; brandName: string }) {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -81,7 +82,7 @@ export function LoginForm({ tenantId }: { tenantId: string | null }) {
     <div className="flex min-h-svh items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>{mode === "signin" ? "Sign in to iCourt Social" : "Create your account"}</CardTitle>
+          <CardTitle>{mode === "signin" ? `Sign in to ${brandName}` : "Create your account"}</CardTitle>
           <CardDescription>
             {mode === "signin"
               ? "Book a court in under a minute."
