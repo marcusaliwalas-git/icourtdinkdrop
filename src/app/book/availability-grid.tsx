@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -256,16 +256,26 @@ export function AvailabilityGrid({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, rowIdx) => (
-              <tr key={row.startsAtIso} className="border-t">
+            {rows.map((row, rowIdx) => {
+              // One full-width divider at the midnight boundary: the first slot on the next calendar
+              // day. Everything below it is that day (its date is on the divider).
+              const startsNextDay = row.nextDay && (rowIdx === 0 || !rows[rowIdx - 1].nextDay);
+              return (
+              <Fragment key={row.startsAtIso}>
+              {startsNextDay && (
+                <tr>
+                  <td
+                    colSpan={courts.length + 1}
+                    className="border-t bg-muted/40 px-2 py-1.5 text-xs font-medium tracking-wide text-muted-foreground"
+                  >
+                    {formatInTimezone(new Date(row.startsAtIso), "EEEE, MMMM d", timezone)} →
+                  </td>
+                </tr>
+              )}
+              <tr className="border-t">
                 <td className="sticky left-0 z-10 bg-background p-2 whitespace-nowrap">
                   <span className="text-xs font-medium text-foreground">{row.label}</span>
                   <span className="block text-[0.65rem] text-muted-foreground">– {row.endLabel}</span>
-                  {row.nextDay && (
-                    <span className="ml-1 rounded bg-primary/15 px-1 py-0.5 font-mono text-[0.6rem] text-primary">
-                      +1 day
-                    </span>
-                  )}
                 </td>
                 {courts.map((court) => {
                   const status = row.cells[court.id];
@@ -307,7 +317,9 @@ export function AvailabilityGrid({
                   );
                 })}
               </tr>
-            ))}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
