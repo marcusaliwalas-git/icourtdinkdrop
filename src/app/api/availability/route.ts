@@ -82,7 +82,10 @@ export async function GET() {
   const now = new Date();
   // Dedupe by synthesized id — an overnight session's tail and the next day's own grid never
   // produce the same court+instant, but a Map keeps that guaranteed.
-  const bySlotId = new Map<string, { id: string; start: string; end: string }>();
+  const bySlotId = new Map<
+    string,
+    { id: string; start: string; end: string; court: string; courtName: string }
+  >();
 
   for (let date = today; date <= lastDay; date = addDays(date, 1)) {
     const dayOfWeek = new Date(`${date}T12:00:00Z`).getUTCDay();
@@ -108,7 +111,15 @@ export async function GET() {
       for (const court of courts ?? []) {
         if (row.cells[court.id] !== "available") continue;
         const id = `${court.id}:${row.startsAtIso}`;
-        bySlotId.set(id, { id, start: row.startsAtIso, end: endIso });
+        // Additive per-court fields so DinkDrop can list courts separately. `court` is the real,
+        // stable court id (same value the `id` is prefixed with); `courtName` is its display name.
+        bySlotId.set(id, {
+          id,
+          start: row.startsAtIso,
+          end: endIso,
+          court: court.id,
+          courtName: court.name ?? court.id,
+        });
       }
     }
   }
