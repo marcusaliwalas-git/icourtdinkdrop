@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BookingsTable } from "./bookings-table";
+import { getTenant } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +42,7 @@ export default async function AdminBookingsPage({
 
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("id, timezone")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;
@@ -61,8 +57,9 @@ export default async function AdminBookingsPage({
   let query = supabase
     .from("bookings")
     .select(
-      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, time_range, reference_code, courts(name), profiles(full_name, phone)"
+      "id, status, party_size, total_cents, payment_status, source, guest_name, guest_phone, time_range, reference_code, booking_group_id, courts!inner(name, venue_id), profiles(full_name, phone, email)"
     )
+    .eq("courts.venue_id", venue.id) // scope to this venue — RLS alone pools all of a multi-venue admin's venues
     .order("time_range", { ascending: true })
     .limit(500);
 

@@ -37,12 +37,47 @@ export interface CoachOption {
   hourly_rate_cents: number;
 }
 
+// A venue receiving account, shown so the customer knows where to transfer the fee.
+export interface PaymentAccount {
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  remarks: string | null;
+  qr_url: string | null;
+}
+
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+
+// The account number, click-to-copy with a brief "Copied" confirmation. The number is also
+// select-all so it stays copyable by hand if the clipboard API is blocked.
+function CopyableAccountNumber({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context) — the text stays selectable.
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy account number"
+      className="inline-flex items-center gap-1.5 font-mono text-foreground transition-colors hover:text-primary"
+    >
+      <span className="select-all">{value}</span>
+      <span className="font-sans text-xs text-muted-foreground">{copied ? "Copied ✓" : "Copy"}</span>
+    </button>
+  );
+}
 
 export function BookingSheet({
   open,
@@ -51,6 +86,7 @@ export function BookingSheet({
   segments,
   totalCents,
   coaches,
+  paymentAccounts,
   isLoggedIn,
 }: {
   open: boolean;
@@ -59,6 +95,7 @@ export function BookingSheet({
   segments: CartSegment[];
   totalCents: number;
   coaches: CoachOption[];
+  paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
 }) {
   const router = useRouter();
@@ -127,7 +164,7 @@ export function BookingSheet({
           durationMinutes: s.durationMinutes,
         })),
         guestName: isLoggedIn ? undefined : guestName,
-        guestPhone: isLoggedIn ? undefined : guestPhone,
+        guestPhone: isLoggedIn ? undefined : guestPhone || undefined,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
         coachId: coachId || null,
         paymentReference: paymentReference.trim() || undefined,
@@ -259,13 +296,12 @@ export function BookingSheet({
                   <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="guestPhone">Mobile number</Label>
+                  <Label htmlFor="guestPhone">Mobile number (optional)</Label>
                   <Input
                     id="guestPhone"
                     placeholder="09171234567"
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
-                    required
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -291,6 +327,30 @@ export function BookingSheet({
               {isLoggedIn && "Member rates applied if you're an active member. "}
               Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
+
+            {paymentAccounts.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Send payment to
+                </p>
+                {paymentAccounts.map((acct, i) => (
+                  <div key={i} className="text-sm">
+                    <p className="font-medium">{acct.bank_name}</p>
+                    <p className="text-muted-foreground">{acct.account_name}</p>
+                    <CopyableAccountNumber value={acct.account_number} />
+                    {acct.remarks && <p className="text-xs text-muted-foreground">{acct.remarks}</p>}
+                    {acct.qr_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={acct.qr_url}
+                        alt={`${acct.bank_name} payment QR`}
+                        className="mt-2 size-40 rounded-lg border border-border bg-white object-contain p-1"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="paymentReference">Payment reference number (optional)</Label>

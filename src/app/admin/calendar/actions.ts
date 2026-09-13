@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createBookingSchema } from "@/lib/validation/booking";
+import { guidelineLines } from "@/lib/validation/venue";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,6 +12,8 @@ import {
   sendBookingCancellationEmail,
   sendBookingRescheduledEmail,
 } from "@/lib/email";
+import { getTenant } from "@/lib/tenant";
+import { tenantEmailBrand } from "@/lib/site-url";
 import type { RatePeriod } from "@/lib/pricing";
 
 function hhmmToMinutes(t: string): number {
@@ -89,11 +92,52 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
       endsAt: end,
       timezone,
       referenceCode: data.reference_code,
+      ...tenantEmailBrand(await getTenant()),
     });
   }
 
   revalidatePath("/admin/calendar");
   revalidatePath("/admin/bookings");
+  return { success: true, referenceCode: "" };
+}
+
+/**
+ * Void a booking — an admin correction for a mistaken/duplicate entry or a past booking that needs
+ * removing after it started (the normal cancel is blocked once a booking begins). The booking is
+ * kept for the audit trail but drops out of realized revenue and frees its slot. Requires a reason;
+ * no customer email is sent (a "voided" notice for a past booking would only confuse).
+ */
+export async function adminVoidBooking(bookingId: string, reason: string): Promise<WalkInResult> {
+  const { supabase } = await requireAdmin();
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    return { success: false, code: "REASON_REQUIRED", message: "Enter a reason for voiding this booking." };
+  }
+  const { error } = await supabase.rpc("void_booking", { p_booking_id: bookingId, p_reason: trimmed });
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/sales");
+  return { success: true, referenceCode: "" };
+}
+
+/** Front-desk check-in: toggle a booking's "arrived" marker. A customer must be confirmed to check
+ * in (verify payment via Confirm first); undo clears it. */
+export async function adminSetCheckedIn(bookingId: string, checkedIn: boolean): Promise<WalkInResult> {
+  const { supabase } = await requireAdmin();
+  const { error } = await supabase.rpc("set_booking_checked_in", {
+    p_booking_id: bookingId,
+    p_checked_in: checkedIn,
+  });
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+  revalidatePath("/admin/front-desk");
+  revalidatePath("/admin/calendar");
   return { success: true, referenceCode: "" };
 }
 
@@ -115,6 +159,7 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
     const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
     const { start, end } = parseTstzRange(data.time_range);
 
+    const tenant = await getTenant();
     await sendBookingConfirmationEmail({
       to: recipientEmail,
       courtName: court?.name ?? "Court",
@@ -123,6 +168,8 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      guidelines: guidelineLines(tenant?.guidelines),
+      ...tenantEmailBrand(tenant),
     });
   }
 
@@ -134,13 +181,15 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
 
 export type BookingPaymentProof = {
   paymentReference: string | null;
-  slipUrl: string | null;
+  /** Whether a receipt image exists for this booking. The actual view URL is minted on demand by
+   * getPaymentSlipUrl, so it can't go stale between opening the panel and tapping "View receipt". */
+  hasSlip: boolean;
 };
 
-/** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
- * signed URL can only ever be minted server-side with the service-role client, never by a
- * client-side/anon read, so a slip can't be enumerated or guessed even by another admin's
- * browser session. */
+/** Payment reference + whether a receipt exists, for the review panel. Deliberately does NOT mint a
+ * signed URL here: the old flow signed a 10-minute URL when the panel opened, so tapping "View
+ * receipt" a few minutes later hit an expired link and the browser downloaded the storage error
+ * (a tiny JSON) instead of the image. The URL is now generated fresh on tap (getPaymentSlipUrl). */
 export async function getBookingPaymentProof(bookingId: string): Promise<BookingPaymentProof> {
   const { supabase } = await requireAdmin();
   const { data } = await supabase
@@ -149,16 +198,34 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
     .eq("id", bookingId)
     .maybeSingle();
 
-  if (!data?.payment_slip_path) {
-    return { paymentReference: data?.payment_reference ?? null, slipUrl: null };
-  }
+  return {
+    paymentReference: data?.payment_reference ?? null,
+    hasSlip: !!data?.payment_slip_path,
+  };
+}
+
+/** Mint a fresh signed URL for a booking's receipt, on demand (when the admin taps "View receipt").
+ * Storage has no select policy on the payment-slips bucket (see its migration), so the URL can only
+ * be minted server-side with the service-role client — a slip can't be enumerated or guessed even by
+ * another admin's browser. A 1-hour TTL (vs the old 10 min) plus generating it on tap means it's
+ * never expired when opened. Returns null when there's no slip, or the object is missing (e.g. an
+ * orphaned path) — the UI shows "Receipt unavailable" rather than a link that downloads an error. */
+export async function getPaymentSlipUrl(bookingId: string): Promise<{ url: string | null }> {
+  const { supabase } = await requireAdmin();
+  const { data } = await supabase
+    .from("bookings")
+    .select("payment_slip_path")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (!data?.payment_slip_path) return { url: null };
 
   const adminClient = createAdminClient();
   const { data: signed } = await adminClient.storage
     .from("payment-slips")
-    .createSignedUrl(data.payment_slip_path, 60 * 10);
+    .createSignedUrl(data.payment_slip_path, 60 * 60);
 
-  return { paymentReference: data.payment_reference, slipUrl: signed?.signedUrl ?? null };
+  return { url: signed?.signedUrl ?? null };
 }
 
 export interface RescheduleContext {
@@ -288,6 +355,7 @@ export async function adminRescheduleBooking(
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      ...tenantEmailBrand(await getTenant()),
     });
   }
 

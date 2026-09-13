@@ -25,6 +25,26 @@ describe("buildAvailabilityGrid", () => {
     expect(grid.rows.map((r) => r.label)).toEqual(["6:00 AM", "7:00 AM", "8:00 AM"]);
   });
 
+  it("extends past midnight for an overnight session, rolling into the next date", () => {
+    const grid = buildAvailabilityGrid({
+      date: DATE,
+      timezone: TIMEZONE,
+      slotMinutes: 60,
+      courts: [COURT],
+      dayHours: [{ open_time: "22:00", close_time: "02:00", closes_next_day: true }],
+      bookedSlots: [],
+      closures: [],
+      now: FAR_PAST_NOW,
+    });
+
+    // 10 PM → 2 AM: the last two rows are after midnight, still on the opening day's grid.
+    expect(grid.rows.map((r) => r.label)).toEqual(["10:00 PM", "11:00 PM", "12:00 AM", "1:00 AM"]);
+    // The after-midnight rows are flagged so the UI can mark them as the next day.
+    expect(grid.rows.map((r) => r.nextDay)).toEqual([false, false, true, true]);
+    // The 1 AM row's actual instant is the next calendar date (Aug 11 at 01:00 Manila = 17:00 UTC Aug 10).
+    expect(grid.rows[3].startsAtIso).toBe("2026-08-10T17:00:00.000Z");
+  });
+
   it("anchors rows to the admin-configured open_time, not a fixed clock grid", () => {
     const grid = buildAvailabilityGrid({
       date: DATE,

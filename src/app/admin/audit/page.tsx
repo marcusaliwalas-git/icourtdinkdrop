@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getTenant } from "@/lib/tenant";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -21,6 +22,7 @@ export default async function AuditLogPage({
 }) {
   const { entity } = await searchParams;
   const supabase = await createClient();
+  const venue = await getTenant();
 
   let query = supabase
     .from("audit_log")
@@ -28,9 +30,36 @@ export default async function AuditLogPage({
     .order("created_at", { ascending: false })
     .limit(200);
 
+  // Scope to this venue — RLS alone would show a multi-venue admin their other venues' history.
+  if (venue) query = query.eq("venue_id", venue.id);
   if (entity) query = query.eq("entity", entity);
 
   const { data: entries } = await query;
+
+  // Booking rows show the customer-facing reference code (e.g. 5D16C3C0) instead of the internal
+  // UUID prefix. entity_id is polymorphic (no FK to embed), so resolve the codes in one lookup;
+  // a since-deleted booking falls back to the id prefix.
+  const bookingIds = Array.from(
+    new Set(
+      (entries ?? [])
+        .filter((e) => e.entity === "booking" && e.entity_id)
+        .map((e) => e.entity_id as string)
+    )
+  );
+  const refByBookingId = new Map<string, string>();
+  if (bookingIds.length) {
+    const { data: bookingRefs } = await supabase
+      .from("bookings")
+      .select("id, reference_code")
+      .in("id", bookingIds);
+    for (const b of bookingRefs ?? []) refByBookingId.set(b.id, b.reference_code);
+  }
+
+  function entityLabel(entity: string, entityId: string | null): string | undefined {
+    if (!entityId) return undefined;
+    if (entity === "booking") return refByBookingId.get(entityId) ?? entityId.slice(0, 8);
+    return entityId.slice(0, 8);
+  }
 
   function hrefFor(e: string | null) {
     return e ? `/admin/audit?entity=${e}` : "/admin/audit";
@@ -82,7 +111,7 @@ export default async function AuditLogPage({
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {entry.entity}
-                  <span className="ml-1 font-mono">{entry.entity_id?.slice(0, 8)}</span>
+                  <span className="ml-1 font-mono">{entityLabel(entry.entity, entry.entity_id)}</span>
                 </TableCell>
               </TableRow>
             );

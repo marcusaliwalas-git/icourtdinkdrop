@@ -4,6 +4,8 @@ import { computeLiveStatus } from "@/lib/home-status";
 import { minutesToLabel, timeToMinutes } from "@/lib/home-status";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { allRatesCents } from "@/lib/pricing";
+import { getTenant } from "@/lib/tenant";
+import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS, mediaSizeClass } from "@/lib/home-defaults";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function HomePage() {
   const supabase = await createClient();
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return (
@@ -52,16 +49,31 @@ export default async function HomePage() {
     .eq("is_active", true)
     .order("name");
 
+  const { data: sections } = await supabase
+    .from("venue_sections")
+    .select("id, title, body, media_url, media_type, media_size")
+    .eq("venue_id", venue.id)
+    .eq("is_visible", true)
+    .order("sort_order");
+
+  const howSteps = venue.how_steps?.length ? venue.how_steps : DEFAULT_HOW_STEPS;
+  const howNote = venue.how_note_hidden ? null : (venue.how_note ?? DEFAULT_HOW_NOTE);
+
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(today, venue.timezone);
   const dayEnd = endOfLocalDayUtc(today, venue.timezone);
 
-  const [{ data: dayHours }, { data: bookedSlots }, { data: ratePeriods }] = await Promise.all([
+  const [{ data: dayHours }, { data: prevDayHours }, { data: bookedSlots }, { data: ratePeriods }] = await Promise.all([
     supabase
       .from("operating_hours")
-      .select("open_time, close_time")
+      .select("open_time, close_time, closes_next_day")
       .eq("venue_id", venue.id)
       .eq("day_of_week", dayOfWeek),
+    supabase
+      .from("operating_hours")
+      .select("open_time, close_time, closes_next_day")
+      .eq("venue_id", venue.id)
+      .eq("day_of_week", (dayOfWeek + 6) % 7),
     courtIds.length
       ? supabase
           .from("booking_slots")
@@ -83,6 +95,7 @@ export default async function HomePage() {
     now,
     timezone: venue.timezone,
     dayHours: dayHours ?? [],
+    prevDayHours: prevDayHours ?? [],
     courts: (courts ?? []).map((c) => ({ id: c.id, name: c.name, is_indoor: c.is_indoor })),
     bookedSlots: bookedSlots ?? [],
   });
@@ -126,6 +139,9 @@ export default async function HomePage() {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
     : null;
 
+  // Admin-chosen hero size — whole image shown (never cropped).
+  const heroMediaClass = `mt-8 ${mediaSizeClass(venue.hero_media_size)} rounded-2xl border border-border`;
+
   return (
     <div>
       {/* ── Hero ────────────────────────────────────────────────── */}
@@ -134,13 +150,19 @@ export default async function HomePage() {
           {venue.name}
         </p>
         <h1 className="mt-3 text-[2.75rem] leading-[1.05] font-bold tracking-tight sm:text-6xl">
-          See what&apos;s open.
-          <br />
-          Book it. Play tonight.
+          {venue.hero_heading ? (
+            venue.hero_heading
+          ) : (
+            <>
+              See what&apos;s open.
+              <br />
+              Book it. Play tonight.
+            </>
+          )}
         </h1>
         <p className="mt-4 max-w-md text-base text-muted-foreground">
-          Real-time court availability, no account needed. Reserve in about 30 seconds and
-          pay when you arrive.
+          {venue.hero_subheading ??
+            "Real-time court availability, no account needed. Reserve in about 30 seconds and pay when you arrive."}
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-4">
           <Link
@@ -151,6 +173,28 @@ export default async function HomePage() {
           </Link>
           <span className="text-xs text-muted-foreground">No card, no sign-up required.</span>
         </div>
+        {venue.hero_media_url &&
+          (venue.hero_media_type === "video" ? (
+            <video
+              src={venue.hero_media_url}
+              className={heroMediaClass}
+              autoPlay
+              muted
+              loop
+              playsInline
+              // `controls` is the fallback: when a browser blocks muted-autoplay the visitor can still
+              // press play, so the hero is never a dead frame.
+              controls
+              preload="metadata"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={venue.hero_media_url}
+              alt=""
+              className={heroMediaClass}
+            />
+          ))}
       </section>
 
       <CourtLineDivider />
@@ -210,6 +254,35 @@ export default async function HomePage() {
         </p>
       </section>
 
+      {/* ── Venue's own content sections ───────────────────────── */}
+      {(sections ?? []).map((s) => (
+        <div key={s.id}>
+          <CourtLineDivider />
+          <section className="mx-auto max-w-3xl px-5 py-10">
+            {s.title && (
+              <h2 className="mb-4 font-mono text-xs tracking-[0.2em] text-muted-foreground uppercase">{s.title}</h2>
+            )}
+            {s.media_url &&
+              (s.media_type === "video" ? (
+                <video
+                  src={s.media_url}
+                  className={`mb-4 ${mediaSizeClass(s.media_size)} rounded-2xl border border-border`}
+                  controls
+                  playsInline
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={s.media_url}
+                  alt=""
+                  className={`mb-4 ${mediaSizeClass(s.media_size)} rounded-2xl border border-border`}
+                />
+              ))}
+            {s.body && <p className="text-base leading-relaxed whitespace-pre-line text-muted-foreground">{s.body}</p>}
+          </section>
+        </div>
+      ))}
+
       <CourtLineDivider />
 
       {/* ── How it works ───────────────────────────────────────── */}
@@ -218,16 +291,14 @@ export default async function HomePage() {
           How it works
         </h2>
         <div className="font-heading flex flex-wrap items-center gap-x-3 gap-y-2 text-xl font-medium sm:text-2xl">
-          <span>Pick a time</span>
-          <span className="text-primary">→</span>
-          <span>Send your request</span>
-          <span className="text-primary">→</span>
-          <span>Pay at the venue</span>
+          {howSteps.map((step: string, i: number) => (
+            <span key={i} className="flex items-center gap-x-3">
+              {i > 0 && <span className="text-primary">→</span>}
+              <span>{step}</span>
+            </span>
+          ))}
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">
-          The venue confirms every booking before it&apos;s final — you&apos;ll get a reference
-          code either way.
-        </p>
+        {howNote && <p className="mt-3 text-sm text-muted-foreground">{howNote}</p>}
       </section>
 
       <CourtLineDivider />

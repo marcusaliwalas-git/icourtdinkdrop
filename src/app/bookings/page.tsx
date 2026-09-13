@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getTenant } from "@/lib/tenant";
+import { guidelineLines } from "@/lib/validation/venue";
 import { BookingCard } from "./booking-card";
 
 export const dynamic = "force-dynamic";
@@ -27,11 +29,23 @@ export default async function MyBookingsPage() {
     );
   }
 
-  const { data: bookings } = await supabase
+  // Scope to the venue whose site they're on: on Venue A's host, show only their Venue A bookings,
+  // not everything the (shared) account has booked across venues. `courts!inner` makes the
+  // courts.venue_id filter narrow the bookings themselves. (Not a security boundary — RLS already
+  // limits to their own bookings; this keeps each venue's site feeling like its own.)
+  const tenant = await getTenant();
+  let query = supabase
     .from("bookings")
-    .select("id, status, party_size, total_cents, payment_status, reference_code, time_range, courts(name, venues(timezone))")
+    .select("id, status, party_size, total_cents, payment_status, reference_code, time_range, courts!inner(name, venue_id, venues(timezone))")
     .eq("booked_by", user.id)
     .order("time_range", { ascending: false });
+  if (tenant) query = query.eq("courts.venue_id", tenant.id);
+  const { data: bookings } = await query;
+
+  // Venue-wide court guidelines, shown once here as a reference for anyone with a booking (the
+  // same rules also go out in the confirmation email).
+  const guidelines = guidelineLines(tenant?.guidelines);
+  const hasBookings = (bookings ?? []).length > 0;
 
   return (
     <div className="mx-auto max-w-2xl p-4">
@@ -41,7 +55,7 @@ export default async function MyBookingsPage() {
           const tz = (b.courts as unknown as { venues: { timezone: string } })?.venues?.timezone ?? "Asia/Manila";
           return <BookingCard key={b.id} booking={b as never} timezone={tz} />;
         })}
-        {(bookings ?? []).length === 0 && (
+        {!hasBookings && (
           <p className="text-center text-muted-foreground">
             No bookings yet.{" "}
             <Link href="/book" className="underline underline-offset-2">
@@ -50,6 +64,17 @@ export default async function MyBookingsPage() {
           </p>
         )}
       </div>
+
+      {hasBookings && guidelines.length > 0 && (
+        <section className="mt-6 rounded-lg border border-border bg-muted/40 p-4">
+          <h2 className="mb-2 text-sm font-medium">Court guidelines</h2>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {guidelines.map((g, i) => (
+              <li key={i}>{g}</li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
