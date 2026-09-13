@@ -74,7 +74,7 @@ export default async function AdminPaymentsPage() {
         totalCents: rows.reduce((sum, r) => sum + r.total_cents, 0),
         referenceCode: first.reference_code,
         paymentReference: proof.paymentReference,
-        slipUrl: proof.slipUrl,
+        hasSlip: proof.hasSlip,
       };
     })
   );

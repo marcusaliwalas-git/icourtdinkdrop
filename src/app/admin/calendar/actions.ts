@@ -181,13 +181,15 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
 
 export type BookingPaymentProof = {
   paymentReference: string | null;
-  slipUrl: string | null;
+  /** Whether a receipt image exists for this booking. The actual view URL is minted on demand by
+   * getPaymentSlipUrl, so it can't go stale between opening the panel and tapping "View receipt". */
+  hasSlip: boolean;
 };
 
-/** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
- * signed URL can only ever be minted server-side with the service-role client, never by a
- * client-side/anon read, so a slip can't be enumerated or guessed even by another admin's
- * browser session. */
+/** Payment reference + whether a receipt exists, for the review panel. Deliberately does NOT mint a
+ * signed URL here: the old flow signed a 10-minute URL when the panel opened, so tapping "View
+ * receipt" a few minutes later hit an expired link and the browser downloaded the storage error
+ * (a tiny JSON) instead of the image. The URL is now generated fresh on tap (getPaymentSlipUrl). */
 export async function getBookingPaymentProof(bookingId: string): Promise<BookingPaymentProof> {
   const { supabase } = await requireAdmin();
   const { data } = await supabase
@@ -196,16 +198,34 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
     .eq("id", bookingId)
     .maybeSingle();
 
-  if (!data?.payment_slip_path) {
-    return { paymentReference: data?.payment_reference ?? null, slipUrl: null };
-  }
+  return {
+    paymentReference: data?.payment_reference ?? null,
+    hasSlip: !!data?.payment_slip_path,
+  };
+}
+
+/** Mint a fresh signed URL for a booking's receipt, on demand (when the admin taps "View receipt").
+ * Storage has no select policy on the payment-slips bucket (see its migration), so the URL can only
+ * be minted server-side with the service-role client — a slip can't be enumerated or guessed even by
+ * another admin's browser. A 1-hour TTL (vs the old 10 min) plus generating it on tap means it's
+ * never expired when opened. Returns null when there's no slip, or the object is missing (e.g. an
+ * orphaned path) — the UI shows "Receipt unavailable" rather than a link that downloads an error. */
+export async function getPaymentSlipUrl(bookingId: string): Promise<{ url: string | null }> {
+  const { supabase } = await requireAdmin();
+  const { data } = await supabase
+    .from("bookings")
+    .select("payment_slip_path")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (!data?.payment_slip_path) return { url: null };
 
   const adminClient = createAdminClient();
   const { data: signed } = await adminClient.storage
     .from("payment-slips")
-    .createSignedUrl(data.payment_slip_path, 60 * 10);
+    .createSignedUrl(data.payment_slip_path, 60 * 60);
 
-  return { paymentReference: data.payment_reference, slipUrl: signed?.signedUrl ?? null };
+  return { url: signed?.signedUrl ?? null };
 }
 
 export interface RescheduleContext {

@@ -14,6 +14,7 @@ import {
   adminSetCheckedIn,
   getBookingPaymentProof,
 } from "@/app/admin/calendar/actions";
+import { ViewReceiptButton } from "@/app/admin/calendar/view-receipt-button";
 
 export type DeskBooking = {
   id: string;
@@ -49,7 +50,7 @@ export function FrontDesk({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [proofFor, setProofFor] = useState<DeskBooking | null>(null);
-  const [proof, setProof] = useState<{ paymentReference: string | null; slipUrl: string | null } | null>(null);
+  const [proof, setProof] = useState<{ paymentReference: string | null; hasSlip: boolean } | null>(null);
   // Grouping needs "now", but computing it during render would risk a hydration mismatch — so it
   // starts null (server + first client render agree: one flat list) and is set after mount, then
   // ticked every minute so rows move between "now / coming up / earlier" on their own.
@@ -219,7 +220,7 @@ export function FrontDesk({
           </DialogHeader>
           {proof === null ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : !proof.paymentReference && !proof.slipUrl ? (
+          ) : !proof.paymentReference && !proof.hasSlip ? (
             <p className="text-sm text-muted-foreground">No payment proof was submitted.</p>
           ) : (
             <div className="flex flex-col gap-2 text-sm">
@@ -228,16 +229,7 @@ export function FrontDesk({
                   Reference: <span className="font-mono">{proof.paymentReference}</span>
                 </p>
               )}
-              {proof.slipUrl && (
-                <a
-                  href={proof.slipUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline underline-offset-2"
-                >
-                  View receipt
-                </a>
-              )}
+              {proofFor && proof.hasSlip && <ViewReceiptButton bookingId={proofFor.id} />}
             </div>
           )}
           {proofFor?.status === "pending" && (

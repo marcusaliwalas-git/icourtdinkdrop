@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow, adminVoidBooking, getBookingPaymentProof } from "./actions";
 import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
+import { ViewReceiptButton } from "./view-receipt-button";
 
 export function BookingActionSheet({
   open,
@@ -33,7 +34,7 @@ export function BookingActionSheet({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [proof, setProof] = useState<{ paymentReference: string | null; slipUrl: string | null } | null>(null);
+  const [proof, setProof] = useState<{ paymentReference: string | null; hasSlip: boolean } | null>(null);
   const [group, setGroup] = useState<{ groupId: string | null; pendingCount: number }>({ groupId: null, pendingCount: 0 });
   const [mode, setMode] = useState<"actions" | "reschedule" | "void">("actions");
   const [reason, setReason] = useState("");
@@ -185,22 +186,13 @@ export function BookingActionSheet({
             </SheetDescription>
           </SheetHeader>
 
-          {proof && (proof.paymentReference || proof.slipUrl) && (
+          {proof && (proof.paymentReference || proof.hasSlip) && (
             <div className="rounded-md border p-3 text-sm">
               <p className="font-medium">Payment proof</p>
               {proof.paymentReference && (
                 <p className="mt-1 text-muted-foreground">Reference: {proof.paymentReference}</p>
               )}
-              {proof.slipUrl && (
-                <a
-                  href={proof.slipUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 inline-block underline underline-offset-2"
-                >
-                  View receipt
-                </a>
-              )}
+              {proof.hasSlip && <ViewReceiptButton bookingId={bookingId} />}
             </div>
           )}
 
