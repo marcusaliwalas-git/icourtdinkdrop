@@ -379,7 +379,7 @@ export default async function HomePage() {
           <p className="mt-1 text-sm text-muted-foreground">Rates vary by time of day — see exact pricing when you book.</p>
         )}
         <p className="mt-3 text-sm text-muted-foreground">
-          No card required — pay cash or GCash at the counter.
+          No card required. Pay online via our preferred banks, which you can select when making a booking.
         </p>
       </section>
 
