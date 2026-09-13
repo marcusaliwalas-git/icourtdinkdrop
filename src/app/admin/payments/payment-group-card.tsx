@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminConfirmBookingGroup, adminRejectBookingGroup } from "./actions";
 import { adminConfirmBooking, adminCancelBooking } from "@/app/admin/calendar/actions";
-import { ViewReceiptButton } from "@/app/admin/calendar/view-receipt-button";
 
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
@@ -28,7 +27,7 @@ export function PaymentGroupCard({
   totalCents,
   referenceCode,
   paymentReference,
-  hasSlip,
+  slipUrl,
 }: {
   groupId: string | null;
   firstBookingId: string;
@@ -38,7 +37,7 @@ export function PaymentGroupCard({
   totalCents: number;
   referenceCode: string;
   paymentReference: string | null;
-  hasSlip: boolean;
+  slipUrl: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -88,8 +87,10 @@ export function PaymentGroupCard({
           {paymentReference && (
             <span className="text-xs text-muted-foreground">Payment ref: {paymentReference}</span>
           )}
-          {hasSlip && (
-            <ViewReceiptButton bookingId={firstBookingId} className="w-fit text-xs text-primary hover:underline disabled:opacity-60" />
+          {slipUrl && (
+            <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+              View proof ↗
+            </a>
           )}
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
