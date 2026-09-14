@@ -6,6 +6,7 @@ import { AvailabilityGrid } from "./availability-grid";
 import { DatePickerPopover } from "./date-picker-popover";
 import { getTenant } from "@/lib/tenant";
 import { featureEnabled } from "@/lib/features";
+import { compareCourtName } from "@/lib/courts";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export default async function BookPage({
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
   // Coaching is a per-venue capability; when it's off, offer no coaches so the booking sheet hides
   // the add-on entirely.

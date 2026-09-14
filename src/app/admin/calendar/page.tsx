@@ -4,6 +4,7 @@ import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate }
 import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
 import { getTenant } from "@/lib/tenant";
+import { compareCourtName } from "@/lib/courts";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function AdminCalendarPage({
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);

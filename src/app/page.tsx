@@ -5,6 +5,7 @@ import { minutesToLabel, timeToMinutes } from "@/lib/home-status";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { allRatesCents } from "@/lib/pricing";
 import { getTenant } from "@/lib/tenant";
+import { compareCourtName } from "@/lib/courts";
 import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS, mediaSizeClass } from "@/lib/home-defaults";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function HomePage() {
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
   const { data: sections } = await supabase
     .from("venue_sections")

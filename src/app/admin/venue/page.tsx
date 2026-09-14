@@ -6,6 +6,7 @@ import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { getTenant } from "@/lib/tenant";
+import { compareCourtName } from "@/lib/courts";
 
 export default async function AdminVenuePage() {
   const supabase = await createClient();
@@ -79,6 +80,7 @@ export default async function AdminVenuePage() {
       .eq("venue_id", venue.id)
       .order("sort_order"),
   ]);
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const { data: ratePeriods } = courtIds.length

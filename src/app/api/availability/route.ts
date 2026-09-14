@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenant } from "@/lib/tenant";
 import { buildAvailabilityGrid } from "@/lib/availability";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
+import { compareCourtName } from "@/lib/courts";
 
 // Public, uncached availability feed for the DinkDrop marketplace to sync THIS venue's open court
 // hours. No auth (DinkDrop fetches with no credentials), read-only, no side effects.
@@ -48,6 +49,7 @@ export async function GET() {
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
   const courtIds = (courts ?? []).map((c) => c.id);
   if (courtIds.length === 0) {
     return NextResponse.json({ slots: [] }, { headers });

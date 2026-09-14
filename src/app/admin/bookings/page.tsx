@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BookingsTable } from "./bookings-table";
 import { getTenant } from "@/lib/tenant";
+import { compareCourtName } from "@/lib/courts";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,7 @@ export default async function AdminBookingsPage({
     .select("id, name")
     .eq("venue_id", venue.id)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
   let query = supabase
     .from("bookings")
