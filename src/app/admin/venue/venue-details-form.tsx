@@ -19,6 +19,7 @@ type Venue = {
   max_advance_days: number;
   cancellation_cutoff_hours: number;
   guidelines: string | null;
+  calendar_default_view: string | null;
 } | null;
 
 const ACCEPTED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
@@ -170,6 +171,23 @@ export function VenueDetailsForm({ venue }: { venue: Venue }) {
         <p className="text-xs text-muted-foreground">
           Shown to customers on a confirmed booking — in the confirmation email and on their My bookings
           page. One rule per line. Leave blank to show nothing.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="calendarDefaultView">Default calendar view</Label>
+        <select
+          id="calendarDefaultView"
+          name="calendarDefaultView"
+          defaultValue={venue?.calendar_default_view ?? "grid"}
+          className="h-9 w-fit rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <option value="grid">Grid</option>
+          <option value="timeline">Timeline</option>
+          <option value="find">Find a time</option>
+        </select>
+        <p className="text-xs text-muted-foreground">
+          The view your admin Calendar opens on. Staff can still switch views; their choice is
+          remembered on their own device.
         </p>
       </div>
       <Button type="submit" disabled={isPending} className="w-fit">

@@ -59,6 +59,17 @@ function rateTierIndex(cents: number, minCents: number, maxCents: number): numbe
   return Math.round(((cents - minCents) / (maxCents - minCents)) * (RATE_TIERS.length - 1));
 }
 
+type GuestView = "grid" | "timeline" | "find";
+const VIEW_STORAGE_KEY = "book-calendar-view";
+const GUEST_VIEWS: { key: GuestView; label: string }[] = [
+  { key: "grid", label: "Grid" },
+  { key: "timeline", label: "Timeline" },
+  { key: "find", label: "Find a time" },
+];
+const GUEST_DURATIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+const TL_HOUR_W = 78; // px per hour column in the timeline
+const TL_COURT_W = 132; // px for the sticky court column
+
 export function AvailabilityGrid({
   timezone,
   courts,
@@ -68,6 +79,7 @@ export function AvailabilityGrid({
   coaches,
   paymentAccounts,
   isLoggedIn,
+  defaultView,
 }: {
   timezone: string;
   courts: Court[];
@@ -77,11 +89,36 @@ export function AvailabilityGrid({
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
+  /** The venue's default calendar view; a booker's own saved choice overrides it. */
+  defaultView: string;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sheetOpen, setSheetOpen] = useState(false);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
+
+  // View switcher (grid / timeline / find a time). Starts on the venue default (matches SSR), then
+  // adopts this browser's remembered choice once mounted.
+  const [view, setView] = useState<GuestView>(defaultView === "timeline" || defaultView === "find" ? defaultView : "grid");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+      if (saved === "grid" || saved === "timeline" || saved === "find") setView(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  function chooseView(v: GuestView) {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  }
+  // Find-a-time inputs.
+  const [findStart, setFindStart] = useState(0);
+  const [findDuration, setFindDuration] = useState(1);
 
   useEffect(() => {
     if (courtIds.length === 0) return;
@@ -222,11 +259,96 @@ export function AvailabilityGrid({
   const minRate = distinctRates[0] ?? 0;
   const maxRate = distinctRates[distinctRates.length - 1] ?? 0;
 
+  // Add a whole window of open hours on one court to the cart (used by Find a time).
+  function selectRange(courtId: string, startIdx: number, dur: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (let i = startIdx; i < startIdx + dur; i++) {
+        if (rows[i]?.cells[courtId] === "available") next.add(cellKey(courtId, i));
+      }
+      return next;
+    });
+  }
+
+  // One slot button — shared by the grid and the timeline so their behaviour never diverges. Open
+  // slots show the per-hour price and toggle into the cart; booked/closed/past are inert.
+  function renderCell(court: Court, rowIdx: number) {
+    const status = rows[rowIdx]?.cells[court.id];
+    const isAvailableCell = status === "available";
+    const isSelected = selected.has(cellKey(court.id, rowIdx));
+    const cents = rateByCell.get(cellKey(court.id, rowIdx));
+    const price = cents != null ? pesosCompact(cents) : undefined;
+    const tierClass = cents != null ? RATE_TIERS[rateTierIndex(cents, minRate, maxRate)] : "";
+    return (
+      <button
+        type="button"
+        disabled={!isAvailableCell}
+        onClick={() => toggleCell(court.id, rowIdx)}
+        aria-pressed={isSelected}
+        aria-label={`${court.name} at ${rows[rowIdx]?.label}, ${
+          isAvailableCell ? `${price} per hour` : STATUS_LABEL[status] || "unavailable"
+        }${isSelected ? ", selected" : ""}`}
+        className={cn(
+          "h-11 w-full rounded-md text-xs font-medium transition-all duration-150",
+          isAvailableCell && tierClass,
+          status === "booked" && "bg-muted text-muted-foreground",
+          status === "closed" && "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+          status === "past" && "bg-transparent text-transparent",
+          isSelected &&
+            "bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(159,206,32,0.5),0_0_20px_-4px_rgba(159,206,32,0.6)] hover:bg-primary hover:text-primary-foreground dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground"
+        )}
+      >
+        {isAvailableCell ? (
+          <span className="flex flex-col leading-tight">
+            <span>{price}</span>
+            {isSelected && <span className="text-[0.6rem] font-normal opacity-90">Selected</span>}
+          </span>
+        ) : (
+          STATUS_LABEL[status]
+        )}
+      </button>
+    );
+  }
+
+  // Find a time: for the chosen start + duration, which courts are free (and the window's price).
+  const findResults = courts.map((court) => {
+    if (findStart + findDuration > rows.length) return { court, available: false as const, reason: "Outside hours" };
+    let cents = 0;
+    let ok = true;
+    for (let i = findStart; i < findStart + findDuration; i++) {
+      if (rows[i]?.cells[court.id] !== "available") { ok = false; break; }
+      cents += rateByCell.get(cellKey(court.id, i)) ?? 0;
+    }
+    if (ok) return { court, available: true as const, cents };
+    const win = rows.slice(findStart, findStart + findDuration).map((r) => r.cells[court.id]);
+    const reason = win.includes("booked") ? "Booked" : win.includes("closed") ? "Closed" : "Past";
+    return { court, available: false as const, reason };
+  });
+  const findOpen = findResults.filter((r): r is { court: Court; available: true; cents: number } => r.available);
+
   return (
     <>
+      <div className="inline-flex w-fit gap-1 rounded-full border border-input bg-background p-1">
+        {GUEST_VIEWS.map((v) => (
+          <button
+            key={v.key}
+            type="button"
+            onClick={() => chooseView(v.key)}
+            aria-pressed={view === v.key}
+            className={cn(
+              "rounded-full px-3 py-1 text-sm transition-colors",
+              view === v.key ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
       <p className="text-xs text-muted-foreground">
-        Each open slot shows its price per hour{isLoggedIn ? " (your member rate where it applies)" : ""}. Tap any
-        slots — across courts and times — then review and book them together.
+        {view === "find"
+          ? "Pick a start time and how long you want to play — we'll show the open courts and their price."
+          : `Each open slot shows its price per hour${isLoggedIn ? " (your member rate where it applies)" : ""}. Tap any slots — across courts and times — then review and book them together.`}
       </p>
 
       {distinctRates.length > 1 && (
@@ -241,6 +363,16 @@ export function AvailabilityGrid({
         </div>
       )}
 
+      {view !== "find" && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-primary/50 bg-primary/30" /> Selected</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-muted" /> Booked</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-amber-50 dark:bg-amber-500/20" /> Closed</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-dashed border-border" /> Past</span>
+        </div>
+      )}
+
+      {view === "grid" && (
       <div className={cn("overflow-x-auto rounded-md border", segments.length > 0 && "mb-24")}>
         <table className="w-full min-w-max border-collapse text-sm">
           <thead>
@@ -277,45 +409,11 @@ export function AvailabilityGrid({
                   <span className="text-xs font-medium text-foreground">{row.label}</span>
                   <span className="block text-[0.65rem] text-muted-foreground">– {row.endLabel}</span>
                 </td>
-                {courts.map((court) => {
-                  const status = row.cells[court.id];
-                  const isAvailableCell = status === "available";
-                  const isSelected = selected.has(cellKey(court.id, rowIdx));
-                  const cents = rateByCell.get(cellKey(court.id, rowIdx));
-                  const price = cents != null ? pesosCompact(cents) : undefined;
-                  const tierClass = cents != null ? RATE_TIERS[rateTierIndex(cents, minRate, maxRate)] : "";
-                  return (
-                    <td key={court.id} className="border-l p-1 align-top">
-                      <button
-                        type="button"
-                        disabled={!isAvailableCell}
-                        onClick={() => toggleCell(court.id, rowIdx)}
-                        aria-pressed={isSelected}
-                        aria-label={`${court.name} at ${row.label}, ${
-                          isAvailableCell ? `${price} per hour` : STATUS_LABEL[status] || "unavailable"
-                        }${isSelected ? ", selected" : ""}`}
-                        className={cn(
-                          "h-11 w-full min-w-24 rounded-md text-xs font-medium transition-all duration-150",
-                          isAvailableCell && tierClass,
-                          status === "booked" && "bg-muted text-muted-foreground",
-                          status === "closed" && "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
-                          status === "past" && "bg-transparent text-transparent",
-                          isSelected &&
-                            "bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(159,206,32,0.5),0_0_20px_-4px_rgba(159,206,32,0.6)] hover:bg-primary hover:text-primary-foreground dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground"
-                        )}
-                      >
-                        {isAvailableCell ? (
-                          <span className="flex flex-col leading-tight">
-                            <span>{price}</span>
-                            {isSelected && <span className="text-[0.6rem] font-normal opacity-90">Selected</span>}
-                          </span>
-                        ) : (
-                          STATUS_LABEL[status]
-                        )}
-                      </button>
-                    </td>
-                  );
-                })}
+                {courts.map((court) => (
+                  <td key={court.id} className="border-l p-1 align-top min-w-24">
+                    {renderCell(court, rowIdx)}
+                  </td>
+                ))}
               </tr>
               </Fragment>
               );
@@ -323,6 +421,108 @@ export function AvailabilityGrid({
           </tbody>
         </table>
       </div>
+      )}
+
+      {view === "timeline" && (
+        <div className={cn("overflow-auto rounded-md border", segments.length > 0 && "mb-24")} style={{ maxHeight: "70vh" }}>
+          <div style={{ width: TL_COURT_W + rows.length * TL_HOUR_W, position: "relative" }}>
+            <div className="sticky top-0 z-20 flex bg-background">
+              <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-b bg-background px-3 text-xs font-medium text-muted-foreground" style={{ width: TL_COURT_W, height: 36 }}>
+                Court
+              </div>
+              <div className="flex border-b">
+                {rows.map((r) => (
+                  <div key={r.startsAtIso} className="shrink-0 border-l border-border/40 px-2 text-[0.65rem] leading-9 text-muted-foreground" style={{ width: TL_HOUR_W }}>
+                    {r.label}
+                    {r.nextDay ? " +1" : ""}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {courts.map((court) => (
+              <div key={court.id} className="flex border-b border-border/40">
+                <div className="sticky left-0 z-10 flex shrink-0 items-center border-r bg-background px-3 text-sm font-medium" style={{ width: TL_COURT_W, height: 52 }}>
+                  <span className="truncate">{court.name}</span>
+                </div>
+                <div className="flex">
+                  {rows.map((r, rowIdx) => (
+                    <div key={r.startsAtIso} className="shrink-0 p-1" style={{ width: TL_HOUR_W }}>
+                      {renderCell(court, rowIdx)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === "find" && (
+        <div className={cn("flex flex-col gap-4", segments.length > 0 && "mb-24")}>
+          <div className="flex flex-wrap items-end gap-3 rounded-md border p-3">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="bfStart" className="text-sm font-medium">Start time</label>
+              <select
+                id="bfStart"
+                value={findStart}
+                onChange={(e) => setFindStart(Number(e.target.value))}
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {rows.map((r, i) => (
+                  <option key={r.startsAtIso} value={i}>
+                    {r.label}
+                    {r.nextDay ? " (+1 day)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="bfDur" className="text-sm font-medium">Duration</label>
+              <select
+                id="bfDur"
+                value={findDuration}
+                onChange={(e) => setFindDuration(Number(e.target.value))}
+                className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {GUEST_DURATIONS.map((h) => (
+                  <option key={h} value={h}>
+                    {h} {h === 1 ? "hour" : "hours"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {rows[findStart]?.label}
+              {rows[findStart + findDuration - 1]?.endLabel ? `–${rows[findStart + findDuration - 1].endLabel}` : ""}
+            </p>
+          </div>
+
+          <div>
+            <h2 className="mb-2 text-sm font-medium">
+              {findOpen.length} of {courts.length} {findOpen.length === 1 ? "court" : "courts"} available
+            </h2>
+            {findOpen.length === 0 ? (
+              <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                No courts are free for that window. Try another time or a shorter duration.
+              </p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-border/60 rounded-md border">
+                {findOpen.map(({ court, cents }) => (
+                  <li key={court.id} className="flex items-center justify-between gap-3 p-3">
+                    <span className="font-medium">{court.name}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground">{pesos(cents)}</span>
+                      <Button size="sm" onClick={() => selectRange(court.id, findStart, findDuration)}>
+                        Add
+                      </Button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       {segments.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur">

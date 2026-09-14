@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildAdminCalendarGrid } from "@/lib/availability";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
-import { CalendarGrid } from "./calendar-grid";
+import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
 import { getTenant } from "@/lib/tenant";
 
@@ -108,7 +108,13 @@ export default async function AdminCalendarPage({
       {grid.closedAllDay ? (
         <p className="text-muted-foreground">No operating hours set for this day.</p>
       ) : (
-        <CalendarGrid timezone={venue.timezone} courts={courts ?? []} rows={grid.rows} />
+        <CalendarViews
+          timezone={venue.timezone}
+          courts={courts ?? []}
+          rows={grid.rows}
+          dateLabel={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
+          defaultView={venue.calendar_default_view ?? "grid"}
+        />
       )}
     </div>
   );

@@ -20,6 +20,8 @@ export const venueSchema = z.object({
   // Court guidelines / etiquette shown on confirmed bookings (email + My bookings). One rule per
   // line; optional.
   guidelines: z.string().trim().max(2000).optional().or(z.literal("")),
+  // Which view the admin calendar opens on by default (staff can still switch per browser).
+  calendarDefaultView: z.enum(["grid", "timeline", "find"]).default("grid"),
 });
 
 /** Split the stored guidelines text into individual rules (one per non-empty line). Shared by the

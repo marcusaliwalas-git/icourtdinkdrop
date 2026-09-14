@@ -49,6 +49,7 @@ export async function upsertVenue(
     maxAdvanceDays: Number(formData.get("maxAdvanceDays")),
     cancellationCutoffHours: Number(formData.get("cancellationCutoffHours")),
     guidelines: formData.get("guidelines") || undefined,
+    calendarDefaultView: formData.get("calendarDefaultView") || "grid",
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -70,6 +71,7 @@ export async function upsertVenue(
     max_advance_days: parsed.data.maxAdvanceDays,
     cancellation_cutoff_hours: parsed.data.cancellationCutoffHours,
     guidelines: parsed.data.guidelines || null,
+    calendar_default_view: parsed.data.calendarDefaultView,
   };
 
   // Editing an existing venue: RLS lets an admin update their own venue.

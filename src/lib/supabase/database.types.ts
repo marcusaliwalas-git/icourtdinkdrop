@@ -1006,6 +1006,7 @@ export type Database = {
           announcement_link: string | null
           announcement_text: string | null
           announcement_type: string
+          calendar_default_view: string
           cancellation_cutoff_hours: number
           contact: string | null
           created_at: string
@@ -1048,6 +1049,7 @@ export type Database = {
           announcement_link?: string | null
           announcement_text?: string | null
           announcement_type?: string
+          calendar_default_view?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string
@@ -1090,6 +1092,7 @@ export type Database = {
           announcement_link?: string | null
           announcement_text?: string | null
           announcement_type?: string
+          calendar_default_view?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
           created_at?: string
