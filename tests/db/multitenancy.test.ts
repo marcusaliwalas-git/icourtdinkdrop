@@ -15,6 +15,7 @@ type Tenant = {
   memberId: string;
   bookingId: string;
   coachId: string;
+  expenseId: string;
 };
 
 async function seedTenant(client: PoolClient, name: string): Promise<Tenant> {
@@ -50,7 +51,13 @@ async function seedTenant(client: PoolClient, name: string): Promise<Tenant> {
     `insert into coaches (id, venue_id, name, hourly_rate_cents, is_active) values ($1, $2, 'Coach', 60000, true)`,
     [coachId, venueId]
   );
-  return { venueId, courtId, adminId, memberId, bookingId, coachId };
+  const expenseId = randomUUID();
+  await client.query(
+    `insert into expenses (id, venue_id, incurred_on, amount_cents, category, note)
+     values ($1, $2, current_date, 300000, 'rent', 'seed')`,
+    [expenseId, venueId]
+  );
+  return { venueId, courtId, adminId, memberId, bookingId, coachId, expenseId };
 }
 
 /** Run subsequent statements as the given user under the `authenticated` role (RLS applies). */
@@ -346,6 +353,80 @@ describe("multi-tenant isolation (RLS)", () => {
       await asSuperuser(client);
       const { rows } = await client.query(`select venue_id from profiles where id = $1`, [a.memberId]);
       expect(rows[0].venue_id).toBe(a.venueId); // the guard trigger froze it
+    });
+  });
+
+  it("an admin sees only their own venue's expenses", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+
+      await actAs(client, a.adminId);
+      const { rows } = await client.query(`select id, venue_id from expenses`);
+      expect(rows.every((r) => r.venue_id === a.venueId)).toBe(true);
+      expect(rows.map((r) => r.id)).toContain(a.expenseId);
+      expect(rows.map((r) => r.id)).not.toContain(b.expenseId);
+    });
+  });
+
+  it("an admin cannot read, update, or delete another venue's expense", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+
+      await actAs(client, a.adminId);
+      // B's expense is invisible to A — a targeted select returns nothing…
+      const read = await client.query(`select id from expenses where id = $1`, [b.expenseId]);
+      expect(read.rowCount).toBe(0);
+      // …and update/delete affect zero rows (RLS hides it entirely).
+      const upd = await client.query(`update expenses set amount_cents = 1 where id = $1`, [b.expenseId]);
+      expect(upd.rowCount).toBe(0);
+      const del = await client.query(`delete from expenses where id = $1`, [b.expenseId]);
+      expect(del.rowCount).toBe(0);
+    });
+  });
+
+  it("an admin cannot log an expense against another venue (RLS with check)", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+
+      await actAs(client, a.adminId);
+      // Own venue: allowed.
+      const own = await client.query(
+        `insert into expenses (venue_id, incurred_on, amount_cents, category) values ($1, current_date, 5000, 'utilities') returning id`,
+        [a.venueId]
+      );
+      expect(own.rowCount).toBe(1);
+      // Another venue: the with-check policy rejects it.
+      await client.query(`savepoint sp_ins`);
+      await expect(
+        client.query(
+          `insert into expenses (venue_id, incurred_on, amount_cents, category) values ($1, current_date, 5000, 'utilities')`,
+          [b.venueId]
+        )
+      ).rejects.toThrow(/row-level security/);
+      await client.query(`rollback to savepoint sp_ins`);
+    });
+  });
+
+  it("a non-admin member cannot read or write any expenses", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+
+      await actAs(client, a.memberId);
+      // No read access even to their own venue's expenses (financials are admin-only).
+      const read = await client.query(`select id from expenses`);
+      expect(read.rowCount).toBe(0);
+      // And they cannot insert one for their own venue.
+      await client.query(`savepoint sp_member`);
+      await expect(
+        client.query(
+          `insert into expenses (venue_id, incurred_on, amount_cents, category) values ($1, current_date, 5000, 'other')`,
+          [a.venueId]
+        )
+      ).rejects.toThrow(/row-level security/);
+      await client.query(`rollback to savepoint sp_member`);
     });
   });
 });

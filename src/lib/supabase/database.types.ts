@@ -421,6 +421,47 @@ export type Database = {
           },
         ]
       }
+      expenses: {
+        Row: {
+          amount_cents: number
+          category: string
+          created_at: string
+          created_by: string | null
+          id: string
+          incurred_on: string
+          note: string | null
+          venue_id: string
+        }
+        Insert: {
+          amount_cents: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          incurred_on: string
+          note?: string | null
+          venue_id: string
+        }
+        Update: {
+          amount_cents?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          incurred_on?: string
+          note?: string | null
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       court_rate_periods: {
         Row: {
           court_id: string
