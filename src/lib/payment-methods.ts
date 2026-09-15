@@ -42,3 +42,14 @@ export function paymentStatusLabel(value: string | null | undefined): string {
   if (!value) return "—";
   return PAYMENT_STATUS_LABELS[value] ?? value;
 }
+
+/** One label for the Payment column: prefer how it was paid (Cash / Paid online / Complimentary)
+ * when a method was recorded, otherwise fall back to the status (e.g. an online customer booking
+ * shows "Paid online" from its status; an unpaid walk-in shows "Pay at venue"). */
+export function bookingPaymentLabel(
+  method: string | null | undefined,
+  status: string | null | undefined
+): string {
+  if (method) return paymentMethodLabel(method);
+  return paymentStatusLabel(status);
+}
