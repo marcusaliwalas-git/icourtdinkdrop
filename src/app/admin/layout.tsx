@@ -35,7 +35,7 @@ export default async function AdminLayout({
     <div className="flex min-h-svh flex-col">
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <nav className="mx-auto flex max-w-5xl items-center gap-5 p-4 text-sm">
-          <AdminNavLink href="/admin/venue" className="flex items-center gap-2 border-transparent" aria-label={`${tenant?.name ?? "Venue"} Admin`}>
+          <AdminNavLink href="/admin" className="flex items-center gap-2 border-transparent" aria-label={`${tenant?.name ?? "Venue"} Admin`}>
             {tenant?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={tenant.logo_url} alt="" className="h-6 w-auto object-contain" />
