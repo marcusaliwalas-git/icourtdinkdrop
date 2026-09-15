@@ -242,7 +242,9 @@ export async function setBookingPayment(input: unknown): Promise<WalkInResult> {
     ? "pay_at_venue"
     : paymentMethod === "online"
       ? "paid_online"
-      : "paid_at_venue";
+      : paymentMethod === "complimentary"
+        ? "complimentary"
+        : "paid_at_venue";
 
   const { supabase } = await requireAdmin();
   const { data, error } = await supabase

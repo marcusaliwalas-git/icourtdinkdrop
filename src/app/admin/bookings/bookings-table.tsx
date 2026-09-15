@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
+import { paymentStatusLabel } from "@/lib/payment-methods";
 import { BookingActionSheet } from "../calendar/booking-action-sheet";
 
 interface Booking {
@@ -136,7 +137,7 @@ export function BookingsTable({ bookings, timezone }: { bookings: Booking[]; tim
                     {formatInTimezone(end, "h:mm a", timezone)}
                   </TableCell>
                   <TableCell>{pesos(b.total_cents)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{b.payment_status}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{paymentStatusLabel(b.payment_status)}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[b.status] ?? "secondary"}>{b.status}</Badge>
                   </TableCell>
