@@ -13,6 +13,7 @@ import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
 import { getTenant } from "@/lib/tenant";
 import { MemberActions } from "./member-actions";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function MemberDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdmin();
   const { id } = await params;
   const supabase = await createClient();
 

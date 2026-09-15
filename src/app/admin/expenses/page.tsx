@@ -7,6 +7,7 @@ import { formatInTimezone } from "@/lib/time";
 import { periodBounds, shiftAnchor } from "@/lib/period-range";
 import { summarizeExpenses } from "@/lib/expenses";
 import { ExpensesManager } from "./expenses-manager";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function AdminExpensesPage({
 }: {
   searchParams: Promise<{ anchor?: string }>;
 }) {
+  await requireAdmin();
   const params = await searchParams;
   const venue = await getTenant();
   if (!venue) return <p className="text-muted-foreground">Set up your venue first.</p>;

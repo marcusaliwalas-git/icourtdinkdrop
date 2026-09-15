@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteAnnouncement } from "@/components/site-announcement";
 import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
-import { isVenueAdmin } from "@/lib/auth";
+import { isVenueStaff } from "@/lib/auth";
 import { featureEnabled } from "@/lib/features";
 import { normalizeTheme, LIGHT_THEME } from "@/lib/themes";
 import { normalizeFont } from "@/lib/fonts";
@@ -52,7 +52,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [tenant, isAdmin] = await Promise.all([getTenant(), isVenueAdmin()]);
+  // Staff (admin or front desk) get the header's Admin link; /admin itself is guarded per-page.
+  const [tenant, isAdmin] = await Promise.all([getTenant(), isVenueStaff()]);
   const theme = normalizeTheme(tenant?.theme);
   const font = normalizeFont(tenant?.font);
   // The app is dark-first; the one light theme drops the `dark` class so every component renders its

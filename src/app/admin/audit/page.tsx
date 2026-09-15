@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatInTimezone } from "@/lib/time";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function AuditLogPage({
 }: {
   searchParams: Promise<{ entity?: string }>;
 }) {
+  await requireAdmin();
   const { entity } = await searchParams;
   const supabase = await createClient();
   const venue = await getTenant();

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { requireAdmin, isSuperAdmin } from "@/lib/auth";
+import { requireStaff, isSuperAdmin } from "@/lib/auth";
 import { getTenant } from "@/lib/tenant";
 import { featureEnabled } from "@/lib/features";
 import { AdminNavLink } from "./nav-link";
@@ -10,7 +10,10 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireAdmin();
+  // Both admins and front-desk staff enter here; front desk sees a reduced nav (the four
+  // operational tabs) and admin-only pages guard themselves with requireAdmin().
+  const { role } = await requireStaff();
+  const isAdmin = role === "admin";
   const tenant = await getTenant();
   const superAdmin = await isSuperAdmin();
   const coachesEnabled = featureEnabled(tenant?.features, "coaches");
@@ -47,17 +50,19 @@ export default async function AdminLayout({
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
           <AdminNavLink href="/admin/payments">Payments</AdminNavLink>
-          <AdminNavDropdown label="People" items={peopleItems} />
-          <AdminNavDropdown
-            label="Setup"
-            items={[
-              { href: "/admin/venue", label: "Venue & Courts" },
-              { href: "/admin/homepage", label: "Home page" },
-              { href: "/admin/announcement", label: "Announcement" },
-              { href: "/admin/footer", label: "Footer" },
-            ]}
-          />
-          <AdminNavDropdown label="Reports" items={reportsItems} />
+          {isAdmin && <AdminNavDropdown label="People" items={peopleItems} />}
+          {isAdmin && (
+            <AdminNavDropdown
+              label="Setup"
+              items={[
+                { href: "/admin/venue", label: "Venue & Courts" },
+                { href: "/admin/homepage", label: "Home page" },
+                { href: "/admin/announcement", label: "Announcement" },
+                { href: "/admin/footer", label: "Footer" },
+              ]}
+            />
+          )}
+          {isAdmin && <AdminNavDropdown label="Reports" items={reportsItems} />}
           {superAdmin && <AdminNavLink href="/superadmin" className="ml-auto text-primary">Platform ↗</AdminNavLink>}
           <AdminNavLink href="/" className={superAdmin ? "" : "ml-auto"}>Back to site</AdminNavLink>
         </nav>

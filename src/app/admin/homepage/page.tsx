@@ -5,10 +5,12 @@ import { DEFAULT_HOW_NOTE, DEFAULT_HOW_STEPS } from "@/lib/home-defaults";
 import { HeroEditor } from "./hero-editor";
 import { HowItWorksEditor } from "./how-it-works-editor";
 import { SectionsManager, type Section } from "./sections-manager";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHomepagePage() {
+  await requireAdmin();
   const supabase = await createClient();
   const venue = await getTenant();
 

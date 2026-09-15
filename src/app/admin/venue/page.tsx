@@ -7,8 +7,10 @@ import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
+import { requireAdmin } from "@/lib/auth";
 
 export default async function AdminVenuePage() {
+  await requireAdmin();
   const supabase = await createClient();
 
   const venue = await getTenant();

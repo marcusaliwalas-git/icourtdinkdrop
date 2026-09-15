@@ -39,6 +39,54 @@ export async function requireAdmin() {
   return { supabase, user };
 }
 
+/** The current user's staff role at the *current* venue: "admin", "front_desk", or null. Used to
+ * gate the admin area (both roles enter) and to drive which nav tabs show. Same dual-read as
+ * requireAdmin: venue_memberships first, legacy profiles.role + venue_id as an admin fallback. */
+export async function currentVenueRole(): Promise<"admin" | "front_desk" | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const tenant = await getTenant();
+  if (tenant) {
+    const { data: vm } = await supabase
+      .from("venue_memberships")
+      .select("role")
+      .eq("profile_id", user.id)
+      .eq("venue_id", tenant.id)
+      .maybeSingle();
+    if (vm?.role === "admin" || vm?.role === "front_desk") return vm.role;
+  }
+  const { data: profile } = await supabase.from("profiles").select("role, venue_id").eq("id", user.id).single();
+  if (profile?.role === "admin" && (!tenant || profile.venue_id === tenant.id)) return "admin";
+  return null;
+}
+
+/** Gate for the shared admin area (Front desk, Calendar, Bookings, Payments) — open to both admins
+ * and front-desk staff of the current venue. Admin-only pages/actions still call requireAdmin. */
+export async function requireStaff() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/login?next=/admin");
+  }
+  const role = await currentVenueRole();
+  if (!role) {
+    redirect("/");
+  }
+  return { supabase, user, role };
+}
+
+/** Whether the current user is staff (admin or front desk) of the current venue — for showing the
+ * header's Admin link to front-desk users too. */
+export async function isVenueStaff(): Promise<boolean> {
+  return (await currentVenueRole()) !== null;
+}
+
 /** Whether the current user is an admin of the *current* venue (the resolved host). Boolean
  * version of requireAdmin, for conditionally showing the header's Admin link. Same dual-read:
  * venue_memberships first, legacy profiles.role + venue_id as fallback. */

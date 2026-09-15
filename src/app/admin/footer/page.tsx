@@ -2,10 +2,12 @@ import Link from "next/link";
 import { getTenant } from "@/lib/tenant";
 import { parseSocials, parseLinks } from "@/lib/footer";
 import { FooterEditor } from "./footer-editor";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminFooterPage() {
+  await requireAdmin();
   const venue = await getTenant();
 
   if (!venue) {

@@ -8,6 +8,7 @@ import { summarizeExpenses, netProfitCents } from "@/lib/expenses";
 import { getTenant } from "@/lib/tenant";
 import { featureEnabled } from "@/lib/features";
 import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,7 @@ export default async function AdminSalesPage({
 }: {
   searchParams: Promise<{ period?: string; anchor?: string; from?: string; to?: string }>;
 }) {
+  await requireAdmin();
   const params = await searchParams;
   const supabase = await createClient();
 
