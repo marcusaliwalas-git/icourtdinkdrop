@@ -79,7 +79,11 @@ function accumulate(
 }
 
 export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
-  const realized = rows.filter((r) => REALIZED_STATUSES.includes(r.status));
+  // Complimentary (comped/free) bookings are settled but never revenue — excluded from realized
+  // totals, counts, and every breakdown, so they don't appear on the sales tab at all.
+  const realized = rows.filter(
+    (r) => REALIZED_STATUSES.includes(r.status) && r.paymentMethod !== "complimentary"
+  );
   const awaiting = rows.filter((r) => AWAITING_STATUSES.includes(r.status));
 
   const realizedCents = realized.reduce((sum, r) => sum + r.totalCents, 0);

@@ -28,7 +28,7 @@ import {
 } from "./actions";
 import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
-import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, paymentMethodLabel } from "@/lib/payment-methods";
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, paymentMethodLabel, COMPLIMENTARY_METHOD } from "@/lib/payment-methods";
 
 const UNPAID = "unpaid";
 
@@ -255,9 +255,11 @@ export function BookingActionSheet({
             <div className="rounded-md border p-3 text-sm">
               <p className="font-medium">Payment</p>
               <p className="mt-1 text-muted-foreground">
-                {proof!.paymentStatus === "paid_at_venue"
-                  ? `Paid · ${paymentMethodLabel(proof!.paymentMethod)}`
-                  : "Not paid yet"}
+                {proof!.paymentStatus !== "paid_at_venue"
+                  ? "Not paid yet"
+                  : proof!.paymentMethod === COMPLIMENTARY_METHOD
+                    ? "Complimentary (free — not counted in sales)"
+                    : `Paid · ${paymentMethodLabel(proof!.paymentMethod)}`}
               </p>
               <div className="mt-2">
                 <Select value={paymentDraft} onValueChange={onSavePayment} disabled={isPending}>

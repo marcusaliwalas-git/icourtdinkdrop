@@ -78,6 +78,18 @@ describe("summarizeSales", () => {
     ]);
   });
 
+  it("excludes complimentary (free) bookings from revenue, count, and every breakdown", () => {
+    const s = summarizeSales([
+      row({ paymentMethod: "cash", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 30000 }),
+    ]);
+    expect(s.realizedCents).toBe(50000);
+    expect(s.bookingCount).toBe(1);
+    expect(s.byMethod).toEqual([{ key: "cash", label: "Cash", cents: 50000, count: 1 }]);
+    expect(s.byMethod.some((b) => b.key === "complimentary")).toBe(false);
+  });
+
   it("orders the weekday breakdown Monday→Sunday, not by revenue", () => {
     const s = summarizeSales([
       row({ isoWeekday: 7, totalCents: 90000 }), // Sunday, highest revenue
