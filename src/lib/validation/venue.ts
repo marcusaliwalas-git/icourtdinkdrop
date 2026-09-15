@@ -123,6 +123,9 @@ export const ratePeriodSchema = z.object({
     .transform((t) => (t === "00:00" ? "24:00" : t)),
   hourlyRateCents: z.number().int().min(0),
   memberRateCents: z.number().int().min(0).optional(),
+  // Weekdays this rate applies to (0 = Sunday … 6 = Saturday). Empty means every day, so a
+  // time-only rate needs no days selected and behaves exactly as before.
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).default([]),
 });
 
 export type RatePeriodInput = z.infer<typeof ratePeriodSchema>;

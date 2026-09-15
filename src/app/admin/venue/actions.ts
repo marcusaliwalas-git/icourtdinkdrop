@@ -383,6 +383,7 @@ export async function addRatePeriod(formData: FormData): Promise<ActionResult> {
     memberRateCents: formData.get("memberRate")
       ? Math.round(Number(formData.get("memberRate")) * 100)
       : undefined,
+    daysOfWeek: formData.getAll("daysOfWeek").map(Number),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -398,6 +399,8 @@ export async function addRatePeriod(formData: FormData): Promise<ActionResult> {
     end_time: parsed.data.endTime,
     hourly_rate_cents: parsed.data.hourlyRateCents,
     member_rate_cents: parsed.data.memberRateCents ?? null,
+    // Empty selection means "every day" — store null so pricing treats it as unscoped.
+    days_of_week: parsed.data.daysOfWeek.length > 0 ? parsed.data.daysOfWeek : null,
   });
 
   if (error) return { error: error.message };

@@ -251,7 +251,7 @@ export async function getRescheduleContext(bookingId: string): Promise<Reschedul
     supabase.from("operating_hours").select("day_of_week, open_time, close_time").eq("venue_id", court.venue_id),
     supabase
       .from("court_rate_periods")
-      .select("start_time, end_time, hourly_rate_cents, member_rate_cents")
+      .select("start_time, end_time, hourly_rate_cents, member_rate_cents, days_of_week")
       .eq("court_id", booking.court_id),
   ]);
 
