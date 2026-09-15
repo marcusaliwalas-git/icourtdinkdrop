@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { getTenant } from "@/lib/tenant";
 
 type ActionResult = { error?: string; success?: boolean };
 
@@ -13,11 +14,15 @@ async function logAudit(
   before: unknown,
   after: unknown
 ) {
+  // A profile can belong to several venues, so stamp the audit row with the venue the action is
+  // happening in (the current host) rather than leaving the trigger to guess the member's home venue.
+  const venue = await getTenant();
   await supabase.from("audit_log").insert({
     actor_id: actorId,
     action,
     entity: "profile",
     entity_id: entityId,
+    venue_id: venue?.id ?? null,
     before,
     after,
   });

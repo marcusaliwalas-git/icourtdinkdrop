@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildAdminCalendarGrid } from "@/lib/availability";
-import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
-import { CalendarGrid } from "./calendar-grid";
+import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
+import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
+import { getTenant } from "@/lib/tenant";
+import { compareCourtName } from "@/lib/courts";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +16,7 @@ export default async function AdminCalendarPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;
@@ -35,15 +32,18 @@ export default async function AdminCalendarPage({
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
-  const dayEnd = endOfLocalDayUtc(date, venue.timezone);
+  // Extend the booking/closure window into the next calendar day so an overnight session's
+  // early-morning slots (which render on this day's grid) still pull their bookings.
+  const dayEnd = endOfLocalDayUtc(nextLocalDate(date), venue.timezone);
 
   const [{ data: dayHours }, { data: bookings }, { data: closures }] = await Promise.all([
     supabase
       .from("operating_hours")
-      .select("open_time, close_time")
+      .select("open_time, close_time, closes_next_day")
       .eq("venue_id", venue.id)
       .eq("day_of_week", dayOfWeek),
     courtIds.length
@@ -110,7 +110,13 @@ export default async function AdminCalendarPage({
       {grid.closedAllDay ? (
         <p className="text-muted-foreground">No operating hours set for this day.</p>
       ) : (
-        <CalendarGrid timezone={venue.timezone} courts={courts ?? []} rows={grid.rows} />
+        <CalendarViews
+          timezone={venue.timezone}
+          courts={courts ?? []}
+          rows={grid.rows}
+          dateLabel={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
+          defaultView={venue.calendar_default_view ?? "grid"}
+        />
       )}
     </div>
   );

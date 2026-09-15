@@ -9,6 +9,8 @@ function row(overrides: Partial<SalesInputRow>): SalesInputRow {
     courtId: "court-1",
     courtName: "Court 1",
     isoWeekday: 1,
+    paymentMethod: null,
+    paymentStatus: "paid_at_venue",
     ...overrides,
   };
 }
@@ -60,6 +62,36 @@ describe("summarizeSales", () => {
       { key: "walkin", label: "Walk-in", cents: 60000, count: 2 },
       { key: "online", label: "Online", cents: 50000, count: 1 },
     ]);
+  });
+
+  it("attributes revenue by method, falling back to payment status for online/venue", () => {
+    const s = summarizeSales([
+      row({ paymentMethod: "cash", paymentStatus: "paid_at_venue", totalCents: 30000 }),
+      row({ paymentMethod: "cash", paymentStatus: "paid_at_venue", totalCents: 20000 }),
+      row({ paymentMethod: "online", paymentStatus: "paid_online", totalCents: 40000 }),
+      // Online customer booking: no explicit method, but paid_online → counts as "Paid online".
+      row({ paymentMethod: null, paymentStatus: "paid_online", totalCents: 15000 }),
+      // Pre-feature in-person booking: no method, settled at venue → "Paid at venue".
+      row({ paymentMethod: null, paymentStatus: "paid_at_venue", totalCents: 5000 }),
+      row({ status: "cancelled", paymentMethod: "cash", paymentStatus: "paid_at_venue", totalCents: 99999 }),
+    ]);
+    expect(s.byMethod).toEqual([
+      { key: "online", label: "Paid online", cents: 55000, count: 2 },
+      { key: "cash", label: "Cash", cents: 50000, count: 2 },
+      { key: "paid_at_venue", label: "Paid at venue", cents: 5000, count: 1 },
+    ]);
+  });
+
+  it("excludes complimentary (free) bookings from revenue, count, and every breakdown", () => {
+    const s = summarizeSales([
+      row({ paymentMethod: "cash", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 30000 }),
+    ]);
+    expect(s.realizedCents).toBe(50000);
+    expect(s.bookingCount).toBe(1);
+    expect(s.byMethod).toEqual([{ key: "cash", label: "Cash", cents: 50000, count: 1 }]);
+    expect(s.byMethod.some((b) => b.key === "complimentary")).toBe(false);
   });
 
   it("orders the weekday breakdown Monday→Sunday, not by revenue", () => {

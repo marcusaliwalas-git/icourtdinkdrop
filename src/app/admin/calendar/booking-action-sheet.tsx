@@ -11,8 +11,38 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow, getBookingPaymentProof } from "./actions";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  adminCancelBooking,
+  adminConfirmBooking,
+  adminMarkNoShow,
+  adminVoidBooking,
+  getBookingPaymentProof,
+  setBookingPayment,
+} from "./actions";
+import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
+import {
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_LABELS,
+  paymentMethodLabel,
+  COMPLIMENTARY_METHOD,
+  ONLINE_METHOD,
+} from "@/lib/payment-methods";
+
+const UNPAID = "unpaid";
+
+const SOURCE_LABELS: Record<string, string> = {
+  walkin: "Walk-in",
+  online: "Online",
+  admin: "Admin",
+};
 
 export function BookingActionSheet({
   open,
@@ -32,8 +62,24 @@ export function BookingActionSheet({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [proof, setProof] = useState<{ paymentReference: string | null; slipUrl: string | null } | null>(null);
-  const [mode, setMode] = useState<"actions" | "reschedule">("actions");
+  const [proof, setProof] = useState<{
+    paymentReference: string | null;
+    slipUrl: string | null;
+    paymentMethod: string | null;
+    paymentStatus: string | null;
+    paymentRemarks: string | null;
+    source: string | null;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    referenceCode: string | null;
+  } | null>(null);
+  const [paymentDraft, setPaymentDraft] = useState<string>(UNPAID);
+  const [remarksDraft, setRemarksDraft] = useState<string>("");
+  const [group, setGroup] = useState<{ groupId: string | null; pendingCount: number }>({ groupId: null, pendingCount: 0 });
+  const [mode, setMode] = useState<"actions" | "reschedule" | "void">("actions");
+  const [reason, setReason] = useState("");
+  const isCart = group.groupId != null && group.pendingCount > 1;
 
   const hasStarted = startsAtIso !== "" && new Date(startsAtIso) <= new Date();
   const isPendingConfirmation = status === "pending";
@@ -41,11 +87,47 @@ export function BookingActionSheet({
   useEffect(() => {
     if (!open || !bookingId) {
       setProof(null);
+      setGroup({ groupId: null, pendingCount: 0 });
       setMode("actions");
+      setReason("");
+      setError(null);
       return;
     }
-    getBookingPaymentProof(bookingId).then(setProof);
+    getBookingPaymentProof(bookingId).then((p) => {
+      setProof(p);
+      setPaymentDraft(p.paymentMethod ?? UNPAID);
+      setRemarksDraft(p.paymentRemarks ?? "");
+    });
+    getBookingGroupPending(bookingId).then(setGroup);
   }, [open, bookingId]);
+
+  function savePayment(method: string, remarks: string) {
+    setError(null);
+    startTransition(async () => {
+      const result = await setBookingPayment({
+        bookingId,
+        paymentMethod: method === UNPAID ? null : method,
+        paymentRemarks: method === "online" ? remarks : undefined,
+      });
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      getBookingPaymentProof(bookingId).then(setProof);
+      router.refresh();
+    });
+  }
+
+  // Picking a non-online method saves immediately; "Paid online" reveals the remarks field and
+  // waits for the Save button, so the bank + reference can be entered first.
+  function onSelectMethod(next: string) {
+    setPaymentDraft(next);
+    if (next !== "online") savePayment(next, "");
+  }
+
+  // Payment can be recorded/edited for admin-created bookings (walk-in/admin source); the online
+  // customer slip-verification flow is left alone.
+  const canEditPayment = proof != null && proof.source != null && proof.source !== "online";
 
   function onConfirm() {
     setError(null);
@@ -53,6 +135,20 @@ export function BookingActionSheet({
       const result = await adminConfirmBooking(bookingId);
       if (!result.success) {
         setError(result.message);
+        return;
+      }
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  function onConfirmGroup() {
+    if (!group.groupId) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await adminConfirmBookingGroup(group.groupId!);
+      if (!result.success) {
+        setError(result.error ?? "Couldn't confirm the cart.");
         return;
       }
       onOpenChange(false);
@@ -86,6 +182,19 @@ export function BookingActionSheet({
     });
   }
 
+  function onVoid() {
+    setError(null);
+    startTransition(async () => {
+      const result = await adminVoidBooking(bookingId, reason);
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
   if (!bookingId) return null;
 
   return (
@@ -100,16 +209,76 @@ export function BookingActionSheet({
               router.refresh();
             }}
           />
+        ) : mode === "void" ? (
+          <div className="flex flex-col gap-4 p-4">
+            <SheetHeader className="p-0">
+              <SheetTitle>Void booking</SheetTitle>
+              <SheetDescription>
+                Removes this booking from reports and frees its slot. It stays in the audit log with
+                your reason. Use this for a mistaken entry or a past booking that shouldn&apos;t count —
+                not for a customer cancelling ahead of time.
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="voidReason" className="text-sm font-medium">
+                Reason
+              </label>
+              <textarea
+                id="voidReason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder="e.g. Duplicate entry / entered on the wrong court"
+                className="rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <SheetFooter className="flex-col gap-2 p-0 sm:flex-col">
+              <Button variant="destructive" disabled={isPending || !reason.trim()} onClick={onVoid}>
+                Void booking
+              </Button>
+              <Button variant="outline" disabled={isPending} onClick={() => { setMode("actions"); setError(null); }}>
+                Back
+              </Button>
+            </SheetFooter>
+          </div>
         ) : (
         <div className="flex flex-col gap-4 p-4">
           <SheetHeader className="p-0">
             <SheetTitle>{label}</SheetTitle>
             <SheetDescription>
               {isPendingConfirmation
-                ? "This booking is awaiting confirmation."
+                ? isCart
+                  ? `1 of ${group.pendingCount} slots in one payment, awaiting confirmation.`
+                  : "This booking is awaiting confirmation."
                 : "What would you like to do with this booking?"}
             </SheetDescription>
           </SheetHeader>
+
+          <div className="rounded-md border p-3 text-sm">
+            <dl className="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1.5">
+              <dt className="text-muted-foreground">Name</dt>
+              <dd>{proof?.name ?? "—"}</dd>
+              <dt className="text-muted-foreground">Email</dt>
+              <dd className="break-all">{proof?.email ?? "—"}</dd>
+              {proof?.phone && (
+                <>
+                  <dt className="text-muted-foreground">Mobile</dt>
+                  <dd>{proof.phone}</dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">Reference</dt>
+              <dd className="font-mono">{proof?.referenceCode ?? "—"}</dd>
+              <dt className="text-muted-foreground">Type</dt>
+              <dd>{proof?.source ? SOURCE_LABELS[proof.source] ?? proof.source : "—"}</dd>
+              <dt className="text-muted-foreground">Status</dt>
+              <dd className="capitalize">{status.replace(/_/g, " ")}</dd>
+            </dl>
+          </div>
 
           {proof && (proof.paymentReference || proof.slipUrl) && (
             <div className="rounded-md border p-3 text-sm">
@@ -130,17 +299,70 @@ export function BookingActionSheet({
             </div>
           )}
 
+          {canEditPayment && (
+            <div className="rounded-md border p-3 text-sm">
+              <p className="font-medium">Payment</p>
+              <p className="mt-1 text-muted-foreground">
+                {proof!.paymentMethod == null
+                  ? "Not paid yet"
+                  : proof!.paymentMethod === COMPLIMENTARY_METHOD
+                    ? "Complimentary (free — not counted in sales)"
+                    : proof!.paymentMethod === ONLINE_METHOD
+                      ? `Paid online${proof!.paymentRemarks ? ` · ${proof!.paymentRemarks}` : ""}`
+                      : `Paid · ${paymentMethodLabel(proof!.paymentMethod)}`}
+              </p>
+              <div className="mt-2 flex flex-col gap-2">
+                <Select value={paymentDraft} onValueChange={onSelectMethod} disabled={isPending}>
+                  <SelectTrigger aria-label="Payment method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {PAYMENT_METHOD_LABELS[m]}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={UNPAID}>Not paid yet</SelectItem>
+                  </SelectContent>
+                </Select>
+                {paymentDraft === ONLINE_METHOD && (
+                  <>
+                    <input
+                      value={remarksDraft}
+                      onChange={(e) => setRemarksDraft(e.target.value)}
+                      placeholder="Bank & reference, e.g. BPI · ref 1234567"
+                      className="rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    />
+                    <Button size="sm" disabled={isPending} onClick={() => savePayment("online", remarksDraft)}>
+                      Save payment
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <SheetFooter className="flex-col gap-2 p-0 sm:flex-col">
+            {isPendingConfirmation && isCart && (
+              <Button disabled={isPending} onClick={onConfirmGroup}>
+                Confirm all {group.pendingCount} slots
+              </Button>
+            )}
             {isPendingConfirmation && (
-              <Button disabled={isPending} onClick={onConfirm}>
-                Confirm booking
+              <Button variant={isCart ? "outline" : "default"} disabled={isPending} onClick={onConfirm}>
+                {isCart ? "Confirm this slot only" : "Confirm booking"}
               </Button>
             )}
             {!isPendingConfirmation && hasStarted && (
               <Button variant="outline" disabled={isPending} onClick={onNoShow}>
                 Mark as no-show
+              </Button>
+            )}
+            {hasStarted && (
+              <Button variant="destructive" disabled={isPending} onClick={() => { setMode("void"); setError(null); }}>
+                Void booking
               </Button>
             )}
             {!hasStarted && (

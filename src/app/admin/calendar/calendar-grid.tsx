@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { cn } from "@/lib/utils";
+import { formatInTimezone } from "@/lib/time";
 import type { AdminTimeRow } from "@/lib/availability";
 import { WalkInSheet } from "./walk-in-sheet";
 import { BookingActionSheet } from "./booking-action-sheet";
@@ -47,10 +48,26 @@ export function CalendarGrid({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.startsAtIso} className="border-t">
-                <td className="sticky left-0 z-10 bg-background p-2 text-xs whitespace-nowrap text-muted-foreground">
-                  {row.label}
+            {rows.map((row, idx) => {
+              // One full-width divider at the midnight boundary: the first slot that spills into the
+              // next calendar day. Everything below it is that day (its date is on the divider).
+              const startsNextDay = row.nextDay && (idx === 0 || !rows[idx - 1].nextDay);
+              return (
+              <Fragment key={row.startsAtIso}>
+              {startsNextDay && (
+                <tr>
+                  <td
+                    colSpan={courts.length + 1}
+                    className="border-t bg-muted/40 px-2 py-1.5 text-xs font-medium tracking-wide text-muted-foreground"
+                  >
+                    {formatInTimezone(new Date(row.startsAtIso), "EEEE, MMMM d", timezone)} →
+                  </td>
+                </tr>
+              )}
+              <tr className="border-t">
+                <td className="sticky left-0 z-10 bg-background p-2 whitespace-nowrap">
+                  <span className="text-xs font-medium text-foreground">{row.label}</span>
+                  <span className="block text-[0.65rem] text-muted-foreground">– {row.endLabel}</span>
                 </td>
                 {courts.map((court) => {
                   const cell = row.cells[court.id];
@@ -94,12 +111,23 @@ export function CalendarGrid({
                           Closed
                         </div>
                       )}
-                      {cell.status === "past" && <div className="h-11 w-full min-w-28" />}
+                      {cell.status === "past" && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSlot({ courtId: court.id, courtName: court.name, startsAtIso: row.startsAtIso })}
+                          title="Add a missed booking for this past slot"
+                          className="h-11 w-full min-w-28 rounded-sm text-xs font-medium text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+                        >
+                          + Add past
+                        </button>
+                      )}
                     </td>
                   );
                 })}
               </tr>
-            ))}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -26,6 +26,8 @@ export interface SalesInputRow {
   courtId: string;
   courtName: string;
   isoWeekday: number; // 1=Mon … 7=Sun, in venue-local time
+  paymentMethod: string | null; // 'cash' | 'online' | 'complimentary' | null (not explicitly set)
+  paymentStatus: string; // used to attribute a booking with no explicit method (e.g. online)
 }
 
 export interface SalesBreakdown {
@@ -45,6 +47,9 @@ export interface SalesSummary {
   byCourt: SalesBreakdown[];
   bySource: SalesBreakdown[];
   byWeekday: SalesBreakdown[];
+  /** Realized revenue split by how it was paid (cash / GCash / bank transfer); bookings with no
+   * recorded method — e.g. online slip payments — fall under "Not recorded". */
+  byMethod: SalesBreakdown[];
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -52,6 +57,22 @@ const SOURCE_LABELS: Record<string, string> = {
   walkin: "Walk-in",
   admin: "Admin",
 };
+
+const METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  online: "Paid online",
+};
+
+/** Which "By payment method" bucket a realized booking belongs to. Prefer the explicitly recorded
+ * method (Cash / Paid online); otherwise attribute by payment status so online customer bookings
+ * (paid_online, no method) count as "Paid online" and in-person ones as "Paid at venue", rather
+ * than all collapsing into "Not recorded". Only genuinely unknown rows stay "Not recorded". */
+function paymentBucket(method: string | null, status: string): { key: string; label: string } {
+  if (method) return { key: method, label: METHOD_LABELS[method] ?? method };
+  if (status === "paid_online") return { key: "online", label: "Paid online" };
+  if (status === "paid_at_venue") return { key: "paid_at_venue", label: "Paid at venue" };
+  return { key: "unrecorded", label: "Not recorded" };
+}
 
 function accumulate(
   map: Map<string, SalesBreakdown>,
@@ -69,7 +90,11 @@ function accumulate(
 }
 
 export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
-  const realized = rows.filter((r) => REALIZED_STATUSES.includes(r.status));
+  // Complimentary (comped/free) bookings are settled but never revenue — excluded from realized
+  // totals, counts, and every breakdown, so they don't appear on the sales tab at all.
+  const realized = rows.filter(
+    (r) => REALIZED_STATUSES.includes(r.status) && r.paymentMethod !== "complimentary"
+  );
   const awaiting = rows.filter((r) => AWAITING_STATUSES.includes(r.status));
 
   const realizedCents = realized.reduce((sum, r) => sum + r.totalCents, 0);
@@ -78,11 +103,14 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
   const byCourt = new Map<string, SalesBreakdown>();
   const bySource = new Map<string, SalesBreakdown>();
   const byWeekday = new Map<string, SalesBreakdown>();
+  const byMethod = new Map<string, SalesBreakdown>();
 
   for (const r of realized) {
     accumulate(byCourt, r.courtId, r.courtName, r.totalCents);
     accumulate(bySource, r.source, SOURCE_LABELS[r.source] ?? r.source, r.totalCents);
     accumulate(byWeekday, String(r.isoWeekday), WEEKDAY_LABELS[r.isoWeekday] ?? String(r.isoWeekday), r.totalCents);
+    const bucket = paymentBucket(r.paymentMethod, r.paymentStatus);
+    accumulate(byMethod, bucket.key, bucket.label, r.totalCents);
   }
 
   return {
@@ -95,6 +123,7 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
     bySource: [...bySource.values()].sort((a, b) => b.cents - a.cents),
     // Chronological Mon→Sun, not by revenue, so the week reads naturally.
     byWeekday: [...byWeekday.values()].sort((a, b) => Number(a.key) - Number(b.key)),
+    byMethod: [...byMethod.values()].sort((a, b) => b.cents - a.cents),
   };
 }
 
