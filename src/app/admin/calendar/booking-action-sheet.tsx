@@ -38,6 +38,12 @@ import {
 
 const UNPAID = "unpaid";
 
+const SOURCE_LABELS: Record<string, string> = {
+  walkin: "Walk-in",
+  online: "Online",
+  admin: "Admin",
+};
+
 export function BookingActionSheet({
   open,
   onOpenChange,
@@ -267,6 +273,8 @@ export function BookingActionSheet({
               )}
               <dt className="text-muted-foreground">Reference</dt>
               <dd className="font-mono">{proof?.referenceCode ?? "—"}</dd>
+              <dt className="text-muted-foreground">Type</dt>
+              <dd>{proof?.source ? SOURCE_LABELS[proof.source] ?? proof.source : "—"}</dd>
               <dt className="text-muted-foreground">Status</dt>
               <dd className="capitalize">{status.replace(/_/g, " ")}</dd>
             </dl>
