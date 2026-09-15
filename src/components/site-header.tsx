@@ -70,7 +70,7 @@ export function SiteHeader({
         {coachesEnabled && <NavLink href="/coaches" pathname={pathname}>Coaches</NavLink>}
         <NavLink href="/bookings" pathname={pathname}>My bookings</NavLink>
         {isAdmin && (
-          <NavLink href="/admin/venue" pathname={pathname} className="text-primary hover:text-primary">
+          <NavLink href="/admin" pathname={pathname} className="text-primary hover:text-primary">
             Admin
           </NavLink>
         )}
