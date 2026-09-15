@@ -65,7 +65,7 @@ async function summarizeRange(
   // venue's sales pooled together on whichever host they're on.
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("status, total_cents, source, court_id, time_range, payment_method, courts!inner(name, venue_id)")
+    .select("status, total_cents, source, court_id, time_range, payment_method, payment_status, courts!inner(name, venue_id)")
     .eq("courts.venue_id", venueId)
     .filter("time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
     .limit(10000);
@@ -80,6 +80,7 @@ async function summarizeRange(
       courtName: (b.courts as unknown as { name: string } | null)?.name ?? "—",
       isoWeekday: Number(formatInTimezone(start, "i", timezone)),
       paymentMethod: b.payment_method,
+      paymentStatus: b.payment_status,
     };
   });
 
