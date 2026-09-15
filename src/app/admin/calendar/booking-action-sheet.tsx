@@ -65,6 +65,7 @@ export function BookingActionSheet({
     source: string | null;
     name: string | null;
     email: string | null;
+    phone: string | null;
     referenceCode: string | null;
   } | null>(null);
   const [paymentDraft, setPaymentDraft] = useState<string>(UNPAID);
@@ -258,6 +259,12 @@ export function BookingActionSheet({
               <dd>{proof?.name ?? "—"}</dd>
               <dt className="text-muted-foreground">Email</dt>
               <dd className="break-all">{proof?.email ?? "—"}</dd>
+              {proof?.phone && (
+                <>
+                  <dt className="text-muted-foreground">Mobile</dt>
+                  <dd>{proof.phone}</dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Reference</dt>
               <dd className="font-mono">{proof?.referenceCode ?? "—"}</dd>
               <dt className="text-muted-foreground">Status</dt>
