@@ -35,6 +35,7 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   paid_at_venue: "paid",
   awaiting_verification: "payment awaiting verification",
   paid_online: "paid online",
+  complimentary: "complimentary",
   refunded: "refunded",
   partially_refunded: "partially refunded",
 };

@@ -24,3 +24,21 @@ export function paymentMethodLabel(value: string | null | undefined): string {
   if (!value) return "—";
   return PAYMENT_METHOD_LABELS[value as PaymentMethod] ?? value;
 }
+
+/** Friendly labels for bookings.payment_status (whether/how a booking is settled), for admin
+ * surfaces that would otherwise show the raw token (e.g. "paid_at_venue"). */
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pay_at_venue: "Pay at venue",
+  paid_at_venue: "Paid at venue",
+  awaiting_verification: "Awaiting verification",
+  paid_online: "Paid online",
+  complimentary: "Complimentary",
+  refunded: "Refunded",
+  partially_refunded: "Partially refunded",
+};
+
+/** Human label for a stored payment_status (falls back to the raw value for anything unexpected). */
+export function paymentStatusLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  return PAYMENT_STATUS_LABELS[value] ?? value;
+}
