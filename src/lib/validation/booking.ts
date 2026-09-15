@@ -34,10 +34,12 @@ export const createBookingSchema = z
     // than here, since this schema is shared with createWalkInBooking (see admin/calendar/actions.ts).
     paymentReference: z.string().trim().min(1).max(100).optional(),
     paymentSlipPath: z.string().trim().min(1).max(300).optional(),
-    // How a walk-in paid at the counter (cash / gcash / bank_transfer). Admin/walk-in only —
-    // online bookings never set it (they go through the slip-upload flow). Optional; when set, the
-    // booking is created already paid_at_venue.
+    // How a walk-in paid at the counter (cash / online / complimentary). Admin/walk-in only —
+    // online customer bookings never set it (they go through the slip-upload flow). Optional; when
+    // set, the booking is created already settled.
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
+    // Free-text note for a "Paid online" walk-in — which bank and the reference number.
+    paymentRemarks: z.string().trim().max(300).optional(),
   })
   // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
   // name is the only invalid combination.
@@ -53,6 +55,8 @@ export const bookingPaymentSchema = z.object({
   bookingId: z.uuid(),
   // null clears the method and marks the booking unpaid again (pay_at_venue).
   paymentMethod: z.enum(PAYMENT_METHODS).nullable(),
+  // Bank + reference for a "Paid online" booking; ignored for other methods.
+  paymentRemarks: z.string().trim().max(300).optional(),
 });
 
 export type BookingPaymentInput = z.infer<typeof bookingPaymentSchema>;

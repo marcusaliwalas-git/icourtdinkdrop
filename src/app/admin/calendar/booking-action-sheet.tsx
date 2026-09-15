@@ -28,7 +28,13 @@ import {
 } from "./actions";
 import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
-import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, paymentMethodLabel, COMPLIMENTARY_METHOD } from "@/lib/payment-methods";
+import {
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_LABELS,
+  paymentMethodLabel,
+  COMPLIMENTARY_METHOD,
+  ONLINE_METHOD,
+} from "@/lib/payment-methods";
 
 const UNPAID = "unpaid";
 
@@ -55,8 +61,11 @@ export function BookingActionSheet({
     slipUrl: string | null;
     paymentMethod: string | null;
     paymentStatus: string | null;
+    paymentRemarks: string | null;
+    source: string | null;
   } | null>(null);
   const [paymentDraft, setPaymentDraft] = useState<string>(UNPAID);
+  const [remarksDraft, setRemarksDraft] = useState<string>("");
   const [group, setGroup] = useState<{ groupId: string | null; pendingCount: number }>({ groupId: null, pendingCount: 0 });
   const [mode, setMode] = useState<"actions" | "reschedule" | "void">("actions");
   const [reason, setReason] = useState("");
@@ -77,17 +86,18 @@ export function BookingActionSheet({
     getBookingPaymentProof(bookingId).then((p) => {
       setProof(p);
       setPaymentDraft(p.paymentMethod ?? UNPAID);
+      setRemarksDraft(p.paymentRemarks ?? "");
     });
     getBookingGroupPending(bookingId).then(setGroup);
   }, [open, bookingId]);
 
-  function onSavePayment(next: string) {
-    setPaymentDraft(next);
+  function savePayment(method: string, remarks: string) {
     setError(null);
     startTransition(async () => {
       const result = await setBookingPayment({
         bookingId,
-        paymentMethod: next === UNPAID ? null : next,
+        paymentMethod: method === UNPAID ? null : method,
+        paymentRemarks: method === "online" ? remarks : undefined,
       });
       if (!result.success) {
         setError(result.message);
@@ -98,9 +108,16 @@ export function BookingActionSheet({
     });
   }
 
-  // In-person payment can be recorded/edited here; the online slip-verification flow is left alone.
-  const canEditPayment =
-    proof != null && (proof.paymentStatus === "pay_at_venue" || proof.paymentStatus === "paid_at_venue");
+  // Picking a non-online method saves immediately; "Paid online" reveals the remarks field and
+  // waits for the Save button, so the bank + reference can be entered first.
+  function onSelectMethod(next: string) {
+    setPaymentDraft(next);
+    if (next !== "online") savePayment(next, "");
+  }
+
+  // Payment can be recorded/edited for admin-created bookings (walk-in/admin source); the online
+  // customer slip-verification flow is left alone.
+  const canEditPayment = proof != null && proof.source != null && proof.source !== "online";
 
   function onConfirm() {
     setError(null);
@@ -255,14 +272,16 @@ export function BookingActionSheet({
             <div className="rounded-md border p-3 text-sm">
               <p className="font-medium">Payment</p>
               <p className="mt-1 text-muted-foreground">
-                {proof!.paymentStatus !== "paid_at_venue"
+                {proof!.paymentMethod == null
                   ? "Not paid yet"
                   : proof!.paymentMethod === COMPLIMENTARY_METHOD
                     ? "Complimentary (free — not counted in sales)"
-                    : `Paid · ${paymentMethodLabel(proof!.paymentMethod)}`}
+                    : proof!.paymentMethod === ONLINE_METHOD
+                      ? `Paid online${proof!.paymentRemarks ? ` · ${proof!.paymentRemarks}` : ""}`
+                      : `Paid · ${paymentMethodLabel(proof!.paymentMethod)}`}
               </p>
-              <div className="mt-2">
-                <Select value={paymentDraft} onValueChange={onSavePayment} disabled={isPending}>
+              <div className="mt-2 flex flex-col gap-2">
+                <Select value={paymentDraft} onValueChange={onSelectMethod} disabled={isPending}>
                   <SelectTrigger aria-label="Payment method">
                     <SelectValue />
                   </SelectTrigger>
@@ -275,6 +294,19 @@ export function BookingActionSheet({
                     <SelectItem value={UNPAID}>Not paid yet</SelectItem>
                   </SelectContent>
                 </Select>
+                {paymentDraft === ONLINE_METHOD && (
+                  <>
+                    <input
+                      value={remarksDraft}
+                      onChange={(e) => setRemarksDraft(e.target.value)}
+                      placeholder="Bank & reference, e.g. BPI · ref 1234567"
+                      className="rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    />
+                    <Button size="sm" disabled={isPending} onClick={() => savePayment("online", remarksDraft)}>
+                      Save payment
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           )}

@@ -48,6 +48,7 @@ export function WalkInSheet({
   const [phone, setPhone] = useState("");
   const [durationHours, setDurationHours] = useState("1");
   const [payment, setPayment] = useState<string>("cash");
+  const [remarks, setRemarks] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -56,6 +57,7 @@ export function WalkInSheet({
     setPhone("");
     setDurationHours("1");
     setPayment("cash");
+    setRemarks("");
     setError(null);
   }
 
@@ -70,6 +72,7 @@ export function WalkInSheet({
         guestName: name,
         guestPhone: phone,
         paymentMethod: payment === UNPAID ? undefined : payment,
+        paymentRemarks: payment === "online" ? remarks : undefined,
       });
       if (!result.success) {
         setError(result.message);
@@ -143,6 +146,17 @@ export function WalkInSheet({
               </SelectContent>
             </Select>
           </div>
+          {payment === "online" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="wiRemarks">Bank & reference number</Label>
+              <Input
+                id="wiRemarks"
+                placeholder="e.g. BPI · ref 1234567"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+              />
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

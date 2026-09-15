@@ -59,8 +59,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 const METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
-  gcash: "GCash",
-  bank_transfer: "Bank transfer",
+  online: "Paid online",
 };
 
 function accumulate(

@@ -44,7 +44,8 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
   }
 
   const { supabase } = await requireAdmin();
-  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes, paymentMethod } = parsed.data;
+  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes, paymentMethod, paymentRemarks } =
+    parsed.data;
 
   const { data, error } = await supabase.rpc("create_booking", {
     p_court_id: courtId,
@@ -57,6 +58,8 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
     p_source: "walkin",
     p_notes: notes ?? null,
     p_payment_method: paymentMethod ?? null,
+    // Remarks only make sense for an online payment; drop them otherwise.
+    p_payment_remarks: paymentMethod === "online" ? paymentRemarks || null : null,
   });
 
   if (error) {
@@ -185,6 +188,8 @@ export type BookingPaymentProof = {
   slipUrl: string | null;
   paymentMethod: string | null;
   paymentStatus: string | null;
+  paymentRemarks: string | null;
+  source: string | null;
 };
 
 /** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
@@ -195,7 +200,7 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
   const { supabase } = await requireAdmin();
   const { data } = await supabase
     .from("bookings")
-    .select("payment_reference, payment_slip_path, payment_method, payment_status")
+    .select("payment_reference, payment_slip_path, payment_method, payment_status, payment_remarks, source")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -203,6 +208,8 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
     paymentReference: data?.payment_reference ?? null,
     paymentMethod: data?.payment_method ?? null,
     paymentStatus: data?.payment_status ?? null,
+    paymentRemarks: data?.payment_remarks ?? null,
+    source: data?.source ?? null,
   };
 
   if (!data?.payment_slip_path) {
@@ -218,28 +225,36 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
 }
 
 /**
- * Record (or clear) how a booking was paid, from the admin calendar — e.g. a walk-in paid cash, or
- * an owner correcting the method later. Setting a method marks it paid_at_venue; clearing it marks
- * the booking unpaid (pay_at_venue). Scoped to in-person payment states so it never disturbs the
- * online slip-verification flow (awaiting_verification / paid_online). RLS limits the write to an
- * admin of the booking's venue.
+ * Record (or clear) how a booking was paid, from the admin calendar — e.g. a walk-in paid cash or
+ * online, or an owner correcting it later. Setting a method settles the booking (online ->
+ * paid_online, cash/complimentary -> paid_at_venue); clearing it marks the booking unpaid
+ * (pay_at_venue). Scoped to admin-created bookings (walk-in/admin source) so it never touches the
+ * online customer slip-verification flow. RLS limits the write to an admin of the booking's venue.
  */
 export async function setBookingPayment(input: unknown): Promise<WalkInResult> {
   const parsed = bookingPaymentSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  const { bookingId, paymentMethod } = parsed.data;
+  const { bookingId, paymentMethod, paymentRemarks } = parsed.data;
+
+  const paymentStatus = !paymentMethod
+    ? "pay_at_venue"
+    : paymentMethod === "online"
+      ? "paid_online"
+      : "paid_at_venue";
 
   const { supabase } = await requireAdmin();
   const { data, error } = await supabase
     .from("bookings")
     .update({
       payment_method: paymentMethod,
-      payment_status: paymentMethod ? "paid_at_venue" : "pay_at_venue",
+      payment_status: paymentStatus,
+      // Remarks belong to an online payment; clear them for any other method.
+      payment_remarks: paymentMethod === "online" ? paymentRemarks || null : null,
     })
     .eq("id", bookingId)
-    .in("payment_status", ["pay_at_venue", "paid_at_venue"])
+    .in("source", ["walkin", "admin"])
     .select("id");
 
   if (error) return { success: false, code: "UNKNOWN", message: error.message };
