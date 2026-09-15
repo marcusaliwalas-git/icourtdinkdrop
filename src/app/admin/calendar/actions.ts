@@ -190,6 +190,12 @@ export type BookingPaymentProof = {
   paymentStatus: string | null;
   paymentRemarks: string | null;
   source: string | null;
+  // Booker identity for the calendar detail sheet. For a guest these come from the booking's own
+  // columns; for a member they fall back to the linked profile (full_name / mirrored email / phone).
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  referenceCode: string | null;
 };
 
 /** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
@@ -200,16 +206,27 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
   const { supabase } = await requireAdmin();
   const { data } = await supabase
     .from("bookings")
-    .select("payment_reference, payment_slip_path, payment_method, payment_status, payment_remarks, source")
+    .select(
+      "payment_reference, payment_slip_path, payment_method, payment_status, payment_remarks, source, guest_name, guest_email, guest_phone, reference_code, profiles(full_name, email, phone)"
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
+  const profile = (data?.profiles ?? null) as unknown as {
+    full_name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
   const base = {
     paymentReference: data?.payment_reference ?? null,
     paymentMethod: data?.payment_method ?? null,
     paymentStatus: data?.payment_status ?? null,
     paymentRemarks: data?.payment_remarks ?? null,
     source: data?.source ?? null,
+    name: data?.guest_name ?? profile?.full_name ?? null,
+    email: data?.guest_email ?? profile?.email ?? null,
+    phone: data?.guest_phone ?? profile?.phone ?? null,
+    referenceCode: data?.reference_code ?? null,
   };
 
   if (!data?.payment_slip_path) {
