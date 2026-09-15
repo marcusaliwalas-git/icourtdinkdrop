@@ -180,6 +180,8 @@ export type Database = {
           notes: string | null
           party_size: number
           payment_reference: string | null
+          payment_method: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
           reference_code: string
@@ -205,6 +207,8 @@ export type Database = {
           notes?: string | null
           party_size?: number
           payment_reference?: string | null
+          payment_method?: string | null
+          payment_remarks?: string | null
           payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string
@@ -230,6 +234,8 @@ export type Database = {
           notes?: string | null
           party_size?: number
           payment_reference?: string | null
+          payment_method?: string | null
+          payment_remarks?: string | null
           payment_slip_path?: string | null
           payment_status?: string
           reference_code?: string

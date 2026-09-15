@@ -22,6 +22,7 @@ const MESSAGES: Record<string, string> = {
   NOT_CONFIRMED: "Confirm this booking before checking the customer in.",
   SLOT_TAKEN: "Sorry, that slot was just taken. Pick another.",
   COACH_NOT_FOUND: "That coach isn't available. Pick another or continue without one.",
+  INVALID_PAYMENT_METHOD: "Choose a valid payment method.",
 };
 
 /** Maps a Postgres/PostgREST error (from an RPC call) to a stable code + friendly message. */

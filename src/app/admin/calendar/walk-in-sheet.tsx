@@ -23,6 +23,10 @@ import {
 import { createWalkInBooking } from "./actions";
 import { formatInTimezone } from "@/lib/time";
 import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+
+// Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
+const UNPAID = "unpaid";
 
 export function WalkInSheet({
   open,
@@ -43,6 +47,8 @@ export function WalkInSheet({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [durationHours, setDurationHours] = useState("1");
+  const [payment, setPayment] = useState<string>("cash");
+  const [remarks, setRemarks] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -50,6 +56,8 @@ export function WalkInSheet({
     setName("");
     setPhone("");
     setDurationHours("1");
+    setPayment("cash");
+    setRemarks("");
     setError(null);
   }
 
@@ -63,6 +71,8 @@ export function WalkInSheet({
         durationMinutes: Number(durationHours) * 60,
         guestName: name,
         guestPhone: phone,
+        paymentMethod: payment === UNPAID ? undefined : payment,
+        paymentRemarks: payment === "online" ? remarks : undefined,
       });
       if (!result.success) {
         setError(result.message);
@@ -120,6 +130,33 @@ export function WalkInSheet({
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="wiPayment">Payment</Label>
+            <Select value={payment} onValueChange={setPayment}>
+              <SelectTrigger id="wiPayment">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {PAYMENT_METHOD_LABELS[m]}
+                  </SelectItem>
+                ))}
+                <SelectItem value={UNPAID}>Not paid yet</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {payment === "online" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="wiRemarks">Bank & reference number</Label>
+              <Input
+                id="wiRemarks"
+                placeholder="e.g. BPI · ref 1234567"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+              />
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

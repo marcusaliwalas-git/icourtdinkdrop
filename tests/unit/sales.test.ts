@@ -9,6 +9,7 @@ function row(overrides: Partial<SalesInputRow>): SalesInputRow {
     courtId: "court-1",
     courtName: "Court 1",
     isoWeekday: 1,
+    paymentMethod: null,
     ...overrides,
   };
 }
@@ -60,6 +61,33 @@ describe("summarizeSales", () => {
       { key: "walkin", label: "Walk-in", cents: 60000, count: 2 },
       { key: "online", label: "Online", cents: 50000, count: 1 },
     ]);
+  });
+
+  it("breaks realized revenue down by payment method, bucketing missing as Not recorded", () => {
+    const s = summarizeSales([
+      row({ paymentMethod: "cash", totalCents: 30000 }),
+      row({ paymentMethod: "cash", totalCents: 20000 }),
+      row({ paymentMethod: "online", totalCents: 40000 }),
+      row({ paymentMethod: null, totalCents: 10000 }), // e.g. an online slip payment
+      row({ status: "cancelled", paymentMethod: "cash", totalCents: 99999 }),
+    ]);
+    expect(s.byMethod).toEqual([
+      { key: "cash", label: "Cash", cents: 50000, count: 2 },
+      { key: "online", label: "Paid online", cents: 40000, count: 1 },
+      { key: "unrecorded", label: "Not recorded", cents: 10000, count: 1 },
+    ]);
+  });
+
+  it("excludes complimentary (free) bookings from revenue, count, and every breakdown", () => {
+    const s = summarizeSales([
+      row({ paymentMethod: "cash", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 30000 }),
+    ]);
+    expect(s.realizedCents).toBe(50000);
+    expect(s.bookingCount).toBe(1);
+    expect(s.byMethod).toEqual([{ key: "cash", label: "Cash", cents: 50000, count: 1 }]);
+    expect(s.byMethod.some((b) => b.key === "complimentary")).toBe(false);
   });
 
   it("orders the weekday breakdown Monday→Sunday, not by revenue", () => {
