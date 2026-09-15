@@ -1618,6 +1618,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_membership_role: {
+        Args: { p_profile: string; p_role: string; p_venue: string }
+        Returns: string
+      }
       set_venue_feature: {
         Args: { p_enabled: boolean; p_key: string; p_venue: string }
         Returns: Json

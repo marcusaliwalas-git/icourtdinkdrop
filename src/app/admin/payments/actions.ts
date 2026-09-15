@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { getTenant } from "@/lib/tenant";
 import { tenantEmailBrand } from "@/lib/site-url";
 import { mapBookingError } from "@/lib/booking-errors";
@@ -20,7 +20,7 @@ function revalidateAll() {
 
 /** Confirm every pending booking in a cart and send one confirmation email listing all slots. */
 export async function adminConfirmBookingGroup(groupId: string): Promise<Result> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { error } = await supabase.rpc("confirm_booking_group", { p_group_id: groupId });
   if (error) return { success: false, error: mapBookingError(error).message };
 
@@ -68,7 +68,7 @@ export async function adminConfirmBookingGroup(groupId: string): Promise<Result>
 /** How many other pending slots share this booking's cart — so the calendar action sheet can offer
  * "Confirm all" instead of confirming one slot at a time. */
 export async function getBookingGroupPending(bookingId: string): Promise<{ groupId: string | null; pendingCount: number }> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { data: b } = await supabase.from("bookings").select("booking_group_id").eq("id", bookingId).maybeSingle();
   const groupId = b?.booking_group_id ?? null;
   if (!groupId) return { groupId: null, pendingCount: 0 };
@@ -82,7 +82,7 @@ export async function getBookingGroupPending(bookingId: string): Promise<{ group
 
 /** Reject (cancel) every not-yet-started booking in a cart. */
 export async function adminRejectBookingGroup(groupId: string): Promise<Result> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { error } = await supabase.rpc("cancel_booking_group", { p_group_id: groupId });
   if (error) return { success: false, error: mapBookingError(error).message };
   revalidateAll();

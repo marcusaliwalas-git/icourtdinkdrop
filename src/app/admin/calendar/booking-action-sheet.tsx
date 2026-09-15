@@ -73,6 +73,7 @@ export function BookingActionSheet({
     email: string | null;
     phone: string | null;
     referenceCode: string | null;
+    isAdmin: boolean;
   } | null>(null);
   const [paymentDraft, setPaymentDraft] = useState<string>(UNPAID);
   const [remarksDraft, setRemarksDraft] = useState<string>("");
@@ -360,7 +361,7 @@ export function BookingActionSheet({
                 Mark as no-show
               </Button>
             )}
-            {hasStarted && (
+            {hasStarted && proof?.isAdmin && (
               <Button variant="destructive" disabled={isPending} onClick={() => { setMode("void"); setError(null); }}>
                 Void booking
               </Button>

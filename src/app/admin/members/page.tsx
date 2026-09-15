@@ -4,6 +4,8 @@ import { getTenant } from "@/lib/tenant";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { requireAdmin } from "@/lib/auth";
+import { FrontDeskToggle } from "./front-desk-toggle";
 import {
   Table,
   TableBody,
@@ -20,6 +22,7 @@ export default async function MembersPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  await requireAdmin();
   const { q } = await searchParams;
   const supabase = await createClient();
   const venue = await getTenant();
@@ -87,6 +90,7 @@ export default async function MembersPage({
             <TableHead>Role</TableHead>
             <TableHead>No-shows</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Front desk</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -106,12 +110,15 @@ export default async function MembersPage({
                 <TableCell>
                   {restricted ? <Badge variant="destructive">Restricted</Badge> : <Badge variant="secondary">OK</Badge>}
                 </TableCell>
+                <TableCell>
+                  <FrontDeskToggle profileId={m.id} role={m.role} />
+                </TableCell>
               </TableRow>
             );
           })}
           {(members ?? []).length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
+              <TableCell colSpan={7} className="text-center text-muted-foreground">
                 No members found.
               </TableCell>
             </TableRow>

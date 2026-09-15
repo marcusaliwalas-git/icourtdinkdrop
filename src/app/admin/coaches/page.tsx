@@ -5,6 +5,7 @@ import { CoachesManager, type Coach } from "./coaches-manager";
 import { RequestsList, type CoachRequest } from "./requests-list";
 import { getTenant } from "@/lib/tenant";
 import { featureEnabled } from "@/lib/features";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ type RequestRow = {
 };
 
 export default async function AdminCoachesPage() {
+  await requireAdmin();
   const supabase = await createClient();
 
   const venue = await getTenant();

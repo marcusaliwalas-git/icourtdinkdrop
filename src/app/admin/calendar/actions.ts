@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireStaff } from "@/lib/auth";
 import { createBookingSchema, bookingPaymentSchema } from "@/lib/validation/booking";
 import { guidelineLines } from "@/lib/validation/venue";
 import { mapBookingError } from "@/lib/booking-errors";
@@ -43,7 +43,7 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
     return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes, paymentMethod, paymentRemarks } =
     parsed.data;
 
@@ -72,7 +72,7 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
 }
 
 export async function adminCancelBooking(bookingId: string): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { data, error } = await supabase.rpc("cancel_booking", { p_booking_id: bookingId });
   if (error) {
     const mapped = mapBookingError(error);
@@ -112,7 +112,7 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
  * no customer email is sent (a "voided" notice for a past booking would only confuse).
  */
 export async function adminVoidBooking(bookingId: string, reason: string): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireAdmin(); // void is a financial/audit correction — admin only
   const trimmed = reason.trim();
   if (!trimmed) {
     return { success: false, code: "REASON_REQUIRED", message: "Enter a reason for voiding this booking." };
@@ -131,7 +131,7 @@ export async function adminVoidBooking(bookingId: string, reason: string): Promi
 /** Front-desk check-in: toggle a booking's "arrived" marker. A customer must be confirmed to check
  * in (verify payment via Confirm first); undo clears it. */
 export async function adminSetCheckedIn(bookingId: string, checkedIn: boolean): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { error } = await supabase.rpc("set_booking_checked_in", {
     p_booking_id: bookingId,
     p_checked_in: checkedIn,
@@ -146,7 +146,7 @@ export async function adminSetCheckedIn(bookingId: string, checkedIn: boolean): 
 }
 
 export async function adminConfirmBooking(bookingId: string): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { data, error } = await supabase.rpc("confirm_booking", { p_booking_id: bookingId });
   if (error) {
     const mapped = mapBookingError(error);
@@ -196,6 +196,8 @@ export type BookingPaymentProof = {
   email: string | null;
   phone: string | null;
   referenceCode: string | null;
+  // Whether the viewer is a full admin (vs front-desk staff) — gates admin-only actions like Void.
+  isAdmin: boolean;
 };
 
 /** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
@@ -203,7 +205,7 @@ export type BookingPaymentProof = {
  * client-side/anon read, so a slip can't be enumerated or guessed even by another admin's
  * browser session. */
 export async function getBookingPaymentProof(bookingId: string): Promise<BookingPaymentProof> {
-  const { supabase } = await requireAdmin();
+  const { supabase, role } = await requireStaff();
   const { data } = await supabase
     .from("bookings")
     .select(
@@ -227,6 +229,7 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
     email: data?.guest_email ?? profile?.email ?? null,
     phone: data?.guest_phone ?? profile?.phone ?? null,
     referenceCode: data?.reference_code ?? null,
+    isAdmin: role === "admin",
   };
 
   if (!data?.payment_slip_path) {
@@ -263,7 +266,7 @@ export async function setBookingPayment(input: unknown): Promise<WalkInResult> {
         ? "complimentary"
         : "paid_at_venue";
 
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { data, error } = await supabase
     .from("bookings")
     .update({
@@ -306,7 +309,7 @@ export interface RescheduleContext {
 /** Everything the reschedule UI needs to list valid new start times and preview the price
  * (via lib/pricing) live, without a round-trip per slot the admin tries. */
 export async function getRescheduleContext(bookingId: string): Promise<RescheduleContext | null> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
 
   const { data: booking } = await supabase
     .from("bookings")
@@ -383,7 +386,7 @@ export async function adminRescheduleBooking(
   newCourtId: string,
   newStartsAtIso: string
 ): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { data, error } = await supabase.rpc("reschedule_booking", {
     p_booking_id: bookingId,
     p_new_court_id: newCourtId,
@@ -423,7 +426,7 @@ export async function adminRescheduleBooking(
 }
 
 export async function adminMarkNoShow(bookingId: string): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { error } = await supabase.rpc("mark_no_show", { p_booking_id: bookingId });
   if (error) {
     const mapped = mapBookingError(error);

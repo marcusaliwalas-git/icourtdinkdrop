@@ -429,4 +429,100 @@ describe("multi-tenant isolation (RLS)", () => {
       await client.query(`rollback to savepoint sp_member`);
     });
   });
+
+  // Front-desk staff: can run booking/payment ops for their own venue, but nothing admin-only.
+  async function seedFrontDesk(client: PoolClient, venueId: string): Promise<string> {
+    const fd = await createMemberProfile(client);
+    await client.query(`update profiles set role = 'player', venue_id = null where id = $1`, [fd]);
+    await client.query(
+      `insert into venue_memberships (profile_id, venue_id, role) values ($1, $2, 'front_desk')
+       on conflict (profile_id, venue_id) do update set role = 'front_desk'`,
+      [fd, venueId]
+    );
+    return fd;
+  }
+
+  it("a front-desk member can confirm and cancel their own venue's bookings", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const fd = await seedFrontDesk(client, a.venueId);
+
+      const pendingId = randomUUID();
+      await client.query(
+        `insert into bookings (id, court_id, guest_name, guest_phone, time_range, status, party_size, total_cents, payment_status, source)
+         values ($1, $2, 'Guest', '09170000000', tstzrange(now() + interval '2 day', now() + interval '2 day 1 hour', '[)'), 'pending', 1, 50000, 'awaiting_verification', 'online')`,
+        [pendingId, a.courtId]
+      );
+
+      await actAs(client, fd);
+      // Reads their venue's bookings (RLS select via staff).
+      const list = await client.query(`select id from bookings where id = $1`, [pendingId]);
+      expect(list.rowCount).toBe(1);
+      // Confirms and then cancels via the RPCs (staff-guarded).
+      const conf = await client.query(`select status from confirm_booking(p_booking_id => $1)`, [pendingId]);
+      expect(conf.rows[0].status).toBe("confirmed");
+      const canc = await client.query(`select status from cancel_booking(p_booking_id => $1)`, [pendingId]);
+      expect(canc.rows[0].status).toBe("cancelled");
+    });
+  });
+
+  it("a front-desk member of A cannot act on B's booking or read B's bookings", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const b = await seedTenant(client, "Venue B");
+      const fd = await seedFrontDesk(client, a.venueId);
+
+      await actAs(client, fd);
+      const read = await client.query(`select id from bookings where id = $1`, [b.bookingId]);
+      expect(read.rowCount).toBe(0); // B's booking is invisible
+      await client.query(`savepoint sp_fd`);
+      await expect(client.query(`select cancel_booking(p_booking_id => $1)`, [b.bookingId])).rejects.toThrow(
+        /NOT_AUTHORIZED/
+      );
+      await client.query(`rollback to savepoint sp_fd`);
+    });
+  });
+
+  it("a front-desk member cannot read expenses or change venue settings (admin-only)", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const fd = await seedFrontDesk(client, a.venueId);
+
+      await actAs(client, fd);
+      // Expenses are admin-only — invisible to front desk.
+      const exp = await client.query(`select id from expenses`);
+      expect(exp.rowCount).toBe(0);
+      // Cannot edit the venue's courts (admin-write RLS).
+      const upd = await client.query(`update courts set name = 'hacked' where id = $1`, [a.courtId]);
+      expect(upd.rowCount).toBe(0);
+    });
+  });
+
+  it("a venue admin can set a member to front_desk, but never to admin", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+
+      await actAs(client, a.adminId);
+      const set = await client.query(`select set_membership_role($1, $2, 'front_desk') as role`, [a.venueId, a.memberId]);
+      expect(set.rows[0].role).toBe("front_desk");
+      // Cannot grant admin via this RPC.
+      await client.query(`savepoint sp_role`);
+      await expect(client.query(`select set_membership_role($1, $2, 'admin')`, [a.venueId, a.memberId])).rejects.toThrow(
+        /INVALID_ROLE/
+      );
+      await client.query(`rollback to savepoint sp_role`);
+    });
+  });
+
+  it("a front-desk member cannot assign roles (not an admin)", async () => {
+    await withRollback(async (client) => {
+      const a = await seedTenant(client, "Venue A");
+      const fd = await seedFrontDesk(client, a.venueId);
+
+      await actAs(client, fd);
+      await expect(
+        client.query(`select set_membership_role($1, $2, 'front_desk')`, [a.venueId, a.memberId])
+      ).rejects.toThrow(/NOT_AUTHORIZED/);
+    });
+  });
 });

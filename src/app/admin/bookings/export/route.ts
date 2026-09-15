@@ -1,11 +1,11 @@
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import { getTenant } from "@/lib/tenant";
 import { toCsv } from "@/lib/csv";
 import { parseTstzRange } from "@/lib/availability";
 import { formatInTimezone } from "@/lib/time";
 
 export async function GET(request: Request) {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const tenant = await getTenant();
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");

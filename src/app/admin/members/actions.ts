@@ -64,3 +64,28 @@ export async function setBookingRestriction(
   revalidatePath("/admin/members");
   return { success: true };
 }
+
+/**
+ * Promote a venue member to front-desk staff, or demote back to a regular member. Runs the
+ * set_membership_role RPC, which is admin-only (is_admin_of the venue), can only set player or
+ * front_desk (never admin), and refuses to touch an existing admin's row.
+ */
+export async function setMemberFrontDesk(profileId: string, makeFrontDesk: boolean): Promise<ActionResult> {
+  const { supabase, user } = await requireAdmin();
+  const venue = await getTenant();
+  if (!venue) return { error: "No venue in context." };
+
+  const role = makeFrontDesk ? "front_desk" : "player";
+  const { error } = await supabase.rpc("set_membership_role", {
+    p_venue: venue.id,
+    p_profile: profileId,
+    p_role: role,
+  });
+  if (error) return { error: error.message };
+
+  await logAudit(supabase, user.id, makeFrontDesk ? "front_desk_assigned" : "front_desk_removed", profileId, null, {
+    role,
+  });
+  revalidatePath("/admin/members");
+  return { success: true };
+}
