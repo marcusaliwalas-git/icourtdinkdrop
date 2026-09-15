@@ -23,6 +23,10 @@ import {
 import { createWalkInBooking } from "./actions";
 import { formatInTimezone } from "@/lib/time";
 import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+
+// Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
+const UNPAID = "unpaid";
 
 export function WalkInSheet({
   open,
@@ -43,6 +47,7 @@ export function WalkInSheet({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [durationHours, setDurationHours] = useState("1");
+  const [payment, setPayment] = useState<string>("cash");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -50,6 +55,7 @@ export function WalkInSheet({
     setName("");
     setPhone("");
     setDurationHours("1");
+    setPayment("cash");
     setError(null);
   }
 
@@ -63,6 +69,7 @@ export function WalkInSheet({
         durationMinutes: Number(durationHours) * 60,
         guestName: name,
         guestPhone: phone,
+        paymentMethod: payment === UNPAID ? undefined : payment,
       });
       if (!result.success) {
         setError(result.message);
@@ -117,6 +124,22 @@ export function WalkInSheet({
                     {durationLabel(h)}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="wiPayment">Payment</Label>
+            <Select value={payment} onValueChange={setPayment}>
+              <SelectTrigger id="wiPayment">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {PAYMENT_METHOD_LABELS[m]}
+                  </SelectItem>
+                ))}
+                <SelectItem value={UNPAID}>Not paid yet</SelectItem>
               </SelectContent>
             </Select>
           </div>

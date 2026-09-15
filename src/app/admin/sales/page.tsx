@@ -65,7 +65,7 @@ async function summarizeRange(
   // venue's sales pooled together on whichever host they're on.
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("status, total_cents, source, court_id, time_range, courts!inner(name, venue_id)")
+    .select("status, total_cents, source, court_id, time_range, payment_method, courts!inner(name, venue_id)")
     .eq("courts.venue_id", venueId)
     .filter("time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
     .limit(10000);
@@ -79,6 +79,7 @@ async function summarizeRange(
       courtId: b.court_id,
       courtName: (b.courts as unknown as { name: string } | null)?.name ?? "—",
       isoWeekday: Number(formatInTimezone(start, "i", timezone)),
+      paymentMethod: b.payment_method,
     };
   });
 
@@ -296,6 +297,7 @@ export default async function AdminSalesPage({
       <div className="grid gap-4 lg:grid-cols-3">
         <BreakdownCard title="By court" rows={s.byCourt} total={s.realizedCents} />
         <BreakdownCard title="By source" rows={s.bySource} total={s.realizedCents} />
+        <BreakdownCard title="By payment method" rows={s.byMethod} total={s.realizedCents} />
         <BreakdownCard title="By day of week" rows={s.byWeekday} total={s.realizedCents} />
       </div>
     </div>

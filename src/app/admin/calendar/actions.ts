@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
-import { createBookingSchema } from "@/lib/validation/booking";
+import { createBookingSchema, bookingPaymentSchema } from "@/lib/validation/booking";
 import { guidelineLines } from "@/lib/validation/venue";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
@@ -44,7 +44,7 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
   }
 
   const { supabase } = await requireAdmin();
-  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes } = parsed.data;
+  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes, paymentMethod } = parsed.data;
 
   const { data, error } = await supabase.rpc("create_booking", {
     p_court_id: courtId,
@@ -56,6 +56,7 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
     p_guest_phone: guestPhone ?? null,
     p_source: "walkin",
     p_notes: notes ?? null,
+    p_payment_method: paymentMethod ?? null,
   });
 
   if (error) {
@@ -182,6 +183,8 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
 export type BookingPaymentProof = {
   paymentReference: string | null;
   slipUrl: string | null;
+  paymentMethod: string | null;
+  paymentStatus: string | null;
 };
 
 /** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
@@ -192,12 +195,18 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
   const { supabase } = await requireAdmin();
   const { data } = await supabase
     .from("bookings")
-    .select("payment_reference, payment_slip_path")
+    .select("payment_reference, payment_slip_path, payment_method, payment_status")
     .eq("id", bookingId)
     .maybeSingle();
 
+  const base = {
+    paymentReference: data?.payment_reference ?? null,
+    paymentMethod: data?.payment_method ?? null,
+    paymentStatus: data?.payment_status ?? null,
+  };
+
   if (!data?.payment_slip_path) {
-    return { paymentReference: data?.payment_reference ?? null, slipUrl: null };
+    return { ...base, slipUrl: null };
   }
 
   const adminClient = createAdminClient();
@@ -205,7 +214,41 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
     .from("payment-slips")
     .createSignedUrl(data.payment_slip_path, 60 * 10);
 
-  return { paymentReference: data.payment_reference, slipUrl: signed?.signedUrl ?? null };
+  return { ...base, slipUrl: signed?.signedUrl ?? null };
+}
+
+/**
+ * Record (or clear) how a booking was paid, from the admin calendar — e.g. a walk-in paid cash, or
+ * an owner correcting the method later. Setting a method marks it paid_at_venue; clearing it marks
+ * the booking unpaid (pay_at_venue). Scoped to in-person payment states so it never disturbs the
+ * online slip-verification flow (awaiting_verification / paid_online). RLS limits the write to an
+ * admin of the booking's venue.
+ */
+export async function setBookingPayment(input: unknown): Promise<WalkInResult> {
+  const parsed = bookingPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { bookingId, paymentMethod } = parsed.data;
+
+  const { supabase } = await requireAdmin();
+  const { data, error } = await supabase
+    .from("bookings")
+    .update({
+      payment_method: paymentMethod,
+      payment_status: paymentMethod ? "paid_at_venue" : "pay_at_venue",
+    })
+    .eq("id", bookingId)
+    .in("payment_status", ["pay_at_venue", "paid_at_venue"])
+    .select("id");
+
+  if (error) return { success: false, code: "UNKNOWN", message: error.message };
+  if (!data?.length) {
+    return { success: false, code: "NOT_ALLOWED", message: "This booking's payment can't be edited here." };
+  }
+
+  revalidatePath("/admin/calendar");
+  return { success: true, referenceCode: "" };
 }
 
 export interface RescheduleContext {

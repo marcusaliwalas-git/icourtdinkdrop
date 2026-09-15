@@ -26,6 +26,7 @@ export interface SalesInputRow {
   courtId: string;
   courtName: string;
   isoWeekday: number; // 1=Mon … 7=Sun, in venue-local time
+  paymentMethod: string | null; // 'cash' | 'gcash' | 'bank_transfer' | null (not recorded)
 }
 
 export interface SalesBreakdown {
@@ -45,12 +46,21 @@ export interface SalesSummary {
   byCourt: SalesBreakdown[];
   bySource: SalesBreakdown[];
   byWeekday: SalesBreakdown[];
+  /** Realized revenue split by how it was paid (cash / GCash / bank transfer); bookings with no
+   * recorded method — e.g. online slip payments — fall under "Not recorded". */
+  byMethod: SalesBreakdown[];
 }
 
 const SOURCE_LABELS: Record<string, string> = {
   online: "Online",
   walkin: "Walk-in",
   admin: "Admin",
+};
+
+const METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  gcash: "GCash",
+  bank_transfer: "Bank transfer",
 };
 
 function accumulate(
@@ -78,11 +88,14 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
   const byCourt = new Map<string, SalesBreakdown>();
   const bySource = new Map<string, SalesBreakdown>();
   const byWeekday = new Map<string, SalesBreakdown>();
+  const byMethod = new Map<string, SalesBreakdown>();
 
   for (const r of realized) {
     accumulate(byCourt, r.courtId, r.courtName, r.totalCents);
     accumulate(bySource, r.source, SOURCE_LABELS[r.source] ?? r.source, r.totalCents);
     accumulate(byWeekday, String(r.isoWeekday), WEEKDAY_LABELS[r.isoWeekday] ?? String(r.isoWeekday), r.totalCents);
+    const methodKey = r.paymentMethod ?? "unrecorded";
+    accumulate(byMethod, methodKey, METHOD_LABELS[methodKey] ?? "Not recorded", r.totalCents);
   }
 
   return {
@@ -95,6 +108,7 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
     bySource: [...bySource.values()].sort((a, b) => b.cents - a.cents),
     // Chronological Mon→Sun, not by revenue, so the week reads naturally.
     byWeekday: [...byWeekday.values()].sort((a, b) => Number(a.key) - Number(b.key)),
+    byMethod: [...byMethod.values()].sort((a, b) => b.cents - a.cents),
   };
 }
 

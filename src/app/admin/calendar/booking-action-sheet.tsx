@@ -11,9 +11,26 @@ import {
   SheetFooter,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { adminCancelBooking, adminConfirmBooking, adminMarkNoShow, adminVoidBooking, getBookingPaymentProof } from "./actions";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  adminCancelBooking,
+  adminConfirmBooking,
+  adminMarkNoShow,
+  adminVoidBooking,
+  getBookingPaymentProof,
+  setBookingPayment,
+} from "./actions";
 import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, paymentMethodLabel } from "@/lib/payment-methods";
+
+const UNPAID = "unpaid";
 
 export function BookingActionSheet({
   open,
@@ -33,7 +50,13 @@ export function BookingActionSheet({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [proof, setProof] = useState<{ paymentReference: string | null; slipUrl: string | null } | null>(null);
+  const [proof, setProof] = useState<{
+    paymentReference: string | null;
+    slipUrl: string | null;
+    paymentMethod: string | null;
+    paymentStatus: string | null;
+  } | null>(null);
+  const [paymentDraft, setPaymentDraft] = useState<string>(UNPAID);
   const [group, setGroup] = useState<{ groupId: string | null; pendingCount: number }>({ groupId: null, pendingCount: 0 });
   const [mode, setMode] = useState<"actions" | "reschedule" | "void">("actions");
   const [reason, setReason] = useState("");
@@ -51,9 +74,33 @@ export function BookingActionSheet({
       setError(null);
       return;
     }
-    getBookingPaymentProof(bookingId).then(setProof);
+    getBookingPaymentProof(bookingId).then((p) => {
+      setProof(p);
+      setPaymentDraft(p.paymentMethod ?? UNPAID);
+    });
     getBookingGroupPending(bookingId).then(setGroup);
   }, [open, bookingId]);
+
+  function onSavePayment(next: string) {
+    setPaymentDraft(next);
+    setError(null);
+    startTransition(async () => {
+      const result = await setBookingPayment({
+        bookingId,
+        paymentMethod: next === UNPAID ? null : next,
+      });
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      getBookingPaymentProof(bookingId).then(setProof);
+      router.refresh();
+    });
+  }
+
+  // In-person payment can be recorded/edited here; the online slip-verification flow is left alone.
+  const canEditPayment =
+    proof != null && (proof.paymentStatus === "pay_at_venue" || proof.paymentStatus === "paid_at_venue");
 
   function onConfirm() {
     setError(null);
@@ -201,6 +248,32 @@ export function BookingActionSheet({
                   View receipt
                 </a>
               )}
+            </div>
+          )}
+
+          {canEditPayment && (
+            <div className="rounded-md border p-3 text-sm">
+              <p className="font-medium">Payment</p>
+              <p className="mt-1 text-muted-foreground">
+                {proof!.paymentStatus === "paid_at_venue"
+                  ? `Paid · ${paymentMethodLabel(proof!.paymentMethod)}`
+                  : "Not paid yet"}
+              </p>
+              <div className="mt-2">
+                <Select value={paymentDraft} onValueChange={onSavePayment} disabled={isPending}>
+                  <SelectTrigger aria-label="Payment method">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {PAYMENT_METHOD_LABELS[m]}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={UNPAID}>Not paid yet</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 
