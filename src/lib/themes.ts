@@ -7,7 +7,7 @@ export const VENUE_THEMES = [
   { key: "default", label: "Midnight Lime", swatch: "#9fce20" },
   { key: "ocean", label: "Ocean", swatch: "#38bdf8" },
   { key: "sunset", label: "Sunset", swatch: "#fb923c" },
-  { key: "grape", label: "Grape", swatch: "#a78bfa" },
+  { key: "grape", label: "Grape", swatch: "#c026d3" },
   { key: "light", label: "Daylight", swatch: "#059669" },
   { key: "gold", label: "Midnight Gold", swatch: "#EBB82D" },
 ] as const;

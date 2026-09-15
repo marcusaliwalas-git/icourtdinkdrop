@@ -182,32 +182,34 @@
   --sidebar-ring: #fdba74;
 }
 
+/* Grape — tuned to the Sta Maria PaddlePoint palette: a deep purple ground with the logo's gold
+   as the accent (buttons, links, "open now") and violet surfaces. */
 .dark[data-theme="grape"] {
-  --background: #0b0713;
-  --foreground: #f3eefe;
-  --card: #17102a;
-  --card-foreground: #f3eefe;
-  --popover: #17102a;
-  --popover-foreground: #f3eefe;
-  --primary: #a78bfa;
-  --primary-foreground: #14032a;
-  --secondary: #201735;
-  --secondary-foreground: #f3eefe;
-  --muted: #160f26;
-  --muted-foreground: #b0a3cc;
-  --accent: #201735;
-  --accent-foreground: #f3eefe;
+  --background: #1c0d31;
+  --foreground: #f5eefe;
+  --card: #271747;
+  --card-foreground: #f5eefe;
+  --popover: #271747;
+  --popover-foreground: #f5eefe;
+  --primary: #f5c51d;
+  --primary-foreground: #241a02;
+  --secondary: #33205a;
+  --secondary-foreground: #f5eefe;
+  --muted: #241541;
+  --muted-foreground: #bcaee0;
+  --accent: #33205a;
+  --accent-foreground: #f5eefe;
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: #a78bfa;
-  --sidebar: #17102a;
-  --sidebar-foreground: #f3eefe;
-  --sidebar-primary: #a78bfa;
-  --sidebar-primary-foreground: #14032a;
-  --sidebar-accent: #201735;
-  --sidebar-accent-foreground: #f3eefe;
+  --ring: #f5c51d;
+  --sidebar: #271747;
+  --sidebar-foreground: #f5eefe;
+  --sidebar-primary: #f5c51d;
+  --sidebar-primary-foreground: #241a02;
+  --sidebar-accent: #33205a;
+  --sidebar-accent-foreground: #f5eefe;
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: #c4b5fd;
+  --sidebar-ring: #f7d451;
 }
 
 /* Midnight Gold — deep navy ground (#0b1a30) with #1D395E surfaces and #EBB82D gold accents. */
