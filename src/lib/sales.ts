@@ -26,7 +26,8 @@ export interface SalesInputRow {
   courtId: string;
   courtName: string;
   isoWeekday: number; // 1=Mon … 7=Sun, in venue-local time
-  paymentMethod: string | null; // 'cash' | 'gcash' | 'bank_transfer' | null (not recorded)
+  paymentMethod: string | null; // 'cash' | 'online' | 'complimentary' | null (not explicitly set)
+  paymentStatus: string; // used to attribute a booking with no explicit method (e.g. online)
 }
 
 export interface SalesBreakdown {
@@ -61,6 +62,17 @@ const METHOD_LABELS: Record<string, string> = {
   cash: "Cash",
   online: "Paid online",
 };
+
+/** Which "By payment method" bucket a realized booking belongs to. Prefer the explicitly recorded
+ * method (Cash / Paid online); otherwise attribute by payment status so online customer bookings
+ * (paid_online, no method) count as "Paid online" and in-person ones as "Paid at venue", rather
+ * than all collapsing into "Not recorded". Only genuinely unknown rows stay "Not recorded". */
+function paymentBucket(method: string | null, status: string): { key: string; label: string } {
+  if (method) return { key: method, label: METHOD_LABELS[method] ?? method };
+  if (status === "paid_online") return { key: "online", label: "Paid online" };
+  if (status === "paid_at_venue") return { key: "paid_at_venue", label: "Paid at venue" };
+  return { key: "unrecorded", label: "Not recorded" };
+}
 
 function accumulate(
   map: Map<string, SalesBreakdown>,
@@ -97,8 +109,8 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
     accumulate(byCourt, r.courtId, r.courtName, r.totalCents);
     accumulate(bySource, r.source, SOURCE_LABELS[r.source] ?? r.source, r.totalCents);
     accumulate(byWeekday, String(r.isoWeekday), WEEKDAY_LABELS[r.isoWeekday] ?? String(r.isoWeekday), r.totalCents);
-    const methodKey = r.paymentMethod ?? "unrecorded";
-    accumulate(byMethod, methodKey, METHOD_LABELS[methodKey] ?? "Not recorded", r.totalCents);
+    const bucket = paymentBucket(r.paymentMethod, r.paymentStatus);
+    accumulate(byMethod, bucket.key, bucket.label, r.totalCents);
   }
 
   return {
