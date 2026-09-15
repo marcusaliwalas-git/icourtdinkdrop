@@ -169,8 +169,16 @@ export async function addVenueAdmin(venueId: string, input: unknown): Promise<Re
   await requireSuperAdmin();
   const admin = createAdminClient();
 
-  // Already has an account → just make them an admin of this venue.
-  const { data: existingId } = await admin.rpc("admin_user_id_by_email", { p_email: email });
+  // Find the person by the email the super admin typed. First the login email in auth.users; if
+  // that misses, fall back to the mirrored profiles.email — these can drift (e.g. the account's
+  // login email was changed but the profile mirror wasn't), and the admin surfaces show the profile
+  // email, so a super admin naturally searches by it. venue_memberships keys on profile_id, so
+  // promoting by the profile id works either way.
+  let existingId = (await admin.rpc("admin_user_id_by_email", { p_email: email })).data;
+  if (!existingId) {
+    const { data: prof } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
+    if (prof) existingId = prof.id;
+  }
   if (existingId) {
     const { error } = await admin
       .from("venue_memberships")
