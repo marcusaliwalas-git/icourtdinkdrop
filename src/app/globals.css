@@ -241,6 +241,37 @@
   --sidebar-ring: #f3cd5f;
 }
 
+/* Hardcourt — taken from an outdoor hardcourt: an azure court-blue ground (the playing surface)
+   with slate-charcoal as the accent (buttons, "open now", framing the way the surround frames the
+   court) and the cream boundary line as the focus ring, the colour that sits between the two. */
+.dark[data-theme="hardcourt"] {
+  --background: #135d8c;
+  --foreground: #f1f7fb;
+  --card: #17689b;
+  --card-foreground: #f1f7fb;
+  --popover: #17689b;
+  --popover-foreground: #f1f7fb;
+  --primary: #2a3742;
+  --primary-foreground: #eef2f7;
+  --secondary: #1c74a8;
+  --secondary-foreground: #f1f7fb;
+  --muted: #155f8f;
+  --muted-foreground: #c2dcef;
+  --accent: #2a3742;
+  --accent-foreground: #eef2f7;
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 22%);
+  --ring: #e6ddb0;
+  --sidebar: #17689b;
+  --sidebar-foreground: #f1f7fb;
+  --sidebar-primary: #2a3742;
+  --sidebar-primary-foreground: #eef2f7;
+  --sidebar-accent: #1c74a8;
+  --sidebar-accent-foreground: #f1f7fb;
+  --sidebar-border: oklch(1 0 0 / 18%);
+  --sidebar-ring: #efe8c6;
+}
+
 /* Daylight — the one light theme. The layout drops the `.dark` class for this theme, so it skins
    the base :root tokens (and every component falls back to its light-first base). */
 :root[data-theme="light"] {
