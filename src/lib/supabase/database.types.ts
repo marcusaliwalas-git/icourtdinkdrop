@@ -419,6 +419,7 @@ export type Database = {
         Row: {
           court_id: string
           created_at: string
+          days_of_week: number[] | null
           end_time: string
           hourly_rate_cents: number
           id: string
@@ -428,6 +429,7 @@ export type Database = {
         Insert: {
           court_id: string
           created_at?: string
+          days_of_week?: number[] | null
           end_time: string
           hourly_rate_cents: number
           id?: string
@@ -437,6 +439,7 @@ export type Database = {
         Update: {
           court_id?: string
           created_at?: string
+          days_of_week?: number[] | null
           end_time?: string
           hourly_rate_cents?: number
           id?: string
