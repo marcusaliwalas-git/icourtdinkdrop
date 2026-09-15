@@ -63,6 +63,9 @@ export function BookingActionSheet({
     paymentStatus: string | null;
     paymentRemarks: string | null;
     source: string | null;
+    name: string | null;
+    email: string | null;
+    referenceCode: string | null;
   } | null>(null);
   const [paymentDraft, setPaymentDraft] = useState<string>(UNPAID);
   const [remarksDraft, setRemarksDraft] = useState<string>("");
@@ -248,6 +251,19 @@ export function BookingActionSheet({
                 : "What would you like to do with this booking?"}
             </SheetDescription>
           </SheetHeader>
+
+          <div className="rounded-md border p-3 text-sm">
+            <dl className="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1.5">
+              <dt className="text-muted-foreground">Name</dt>
+              <dd>{proof?.name ?? "—"}</dd>
+              <dt className="text-muted-foreground">Email</dt>
+              <dd className="break-all">{proof?.email ?? "—"}</dd>
+              <dt className="text-muted-foreground">Reference</dt>
+              <dd className="font-mono">{proof?.referenceCode ?? "—"}</dd>
+              <dt className="text-muted-foreground">Status</dt>
+              <dd className="capitalize">{status.replace(/_/g, " ")}</dd>
+            </dl>
+          </div>
 
           {proof && (proof.paymentReference || proof.slipUrl) && (
             <div className="rounded-md border p-3 text-sm">
