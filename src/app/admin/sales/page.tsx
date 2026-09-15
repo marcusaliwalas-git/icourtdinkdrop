@@ -4,6 +4,7 @@ import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/ti
 import { parseTstzRange } from "@/lib/availability";
 import { periodBounds, shiftAnchor, type CalendarPeriod } from "@/lib/period-range";
 import { summarizeSales, percentChange, type SalesInputRow, type SalesBreakdown } from "@/lib/sales";
+import { summarizeExpenses, netProfitCents } from "@/lib/expenses";
 import { getTenant } from "@/lib/tenant";
 import { featureEnabled } from "@/lib/features";
 import { notFound } from "next/navigation";
@@ -143,6 +144,20 @@ export default async function AdminSalesPage({
   const s = current.summary;
   const change = percentChange(s.realizedCents, previous.summary.realizedCents);
 
+  // Expenses + net profit for the selected range (only when the venue has the Expenses capability).
+  const expensesEnabled = featureEnabled(venue.features, "expenses");
+  const { data: expenseRows } = expensesEnabled
+    ? await supabase
+        .from("expenses")
+        .select("amount_cents, category")
+        .eq("venue_id", venue.id)
+        .gte("incurred_on", from)
+        .lte("incurred_on", to)
+        .limit(5000)
+    : { data: null };
+  const expenses = summarizeExpenses((expenseRows ?? []).map((e) => ({ amountCents: e.amount_cents, category: e.category })));
+  const netCents = netProfitCents(s.realizedCents, expenses.totalCents);
+
   // Avg daily sales for the selected range, and vs the previous comparable window.
   const avgDaily = avgDailyCents(s.realizedCents, from, to, today);
   const avgDailyPrev = avgDailyCents(previous.summary.realizedCents, prev.from, prev.to, today);
@@ -277,6 +292,19 @@ export default async function AdminSalesPage({
         </StatCard>
       </div>
 
+      {expensesEnabled && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <StatCard label="Expenses" value={pesos(expenses.totalCents)}>
+            <span className="text-muted-foreground">{expenses.count} logged this range</span>
+          </StatCard>
+          <StatCard label="Net profit" value={pesos(netCents)}>
+            <span className={netCents >= 0 ? "text-primary" : "text-destructive"}>
+              revenue − expenses
+            </span>
+          </StatCard>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
         Realized revenue counts confirmed, completed, and no-show bookings (payment kept — no refunds). Pending
         bookings awaiting payment verification are shown separately and excluded; cancelled bookings count as zero.
@@ -300,6 +328,9 @@ export default async function AdminSalesPage({
         <BreakdownCard title="By source" rows={s.bySource} total={s.realizedCents} />
         <BreakdownCard title="By payment method" rows={s.byMethod} total={s.realizedCents} />
         <BreakdownCard title="By day of week" rows={s.byWeekday} total={s.realizedCents} />
+        {expensesEnabled && expenses.count > 0 && (
+          <BreakdownCard title="Expenses by category" rows={expenses.byCategory} total={expenses.totalCents} />
+        )}
       </div>
     </div>
   );

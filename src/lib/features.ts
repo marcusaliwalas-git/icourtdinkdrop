@@ -13,6 +13,11 @@ export const VENUE_FEATURES = [
     label: "Analytics",
     description: "The admin Sales and Top Customers reports.",
   },
+  {
+    key: "expenses",
+    label: "Expenses",
+    description: "The admin Expenses tracker and the net-profit figures on the Sales report.",
+  },
 ] as const;
 
 export type VenueFeatureKey = (typeof VENUE_FEATURES)[number]["key"];

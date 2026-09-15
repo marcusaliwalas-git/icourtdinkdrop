@@ -15,6 +15,7 @@ export default async function AdminLayout({
   const superAdmin = await isSuperAdmin();
   const coachesEnabled = featureEnabled(tenant?.features, "coaches");
   const analyticsEnabled = featureEnabled(tenant?.features, "analytics");
+  const expensesEnabled = featureEnabled(tenant?.features, "expenses");
 
   const peopleItems = [
     { href: "/admin/members", label: "Members" },
@@ -23,6 +24,7 @@ export default async function AdminLayout({
   ];
   const reportsItems = [
     ...(analyticsEnabled ? [{ href: "/admin/sales", label: "Sales" }] : []),
+    ...(expensesEnabled ? [{ href: "/admin/expenses", label: "Expenses" }] : []),
     { href: "/admin/audit", label: "Audit Log" },
   ];
 
