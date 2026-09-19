@@ -1025,5 +1025,32 @@ describe("reschedule_booking", () => {
       ).rejects.toThrow(/OUTSIDE_BOOKING_WINDOW/);
     });
   });
+
+  it("treats a membership starting today in the venue's timezone as active (not UTC)", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client, { maxAdvanceDays: 14 });
+      await client.query(`update venues set member_advance_days = 30 where id = $1`, [venueId]);
+      const member = await createMemberProfile(client, { active: true, venueId });
+      // Grant a membership that starts on the venue's LOCAL today, exactly as the admin grant does.
+      // On a venue ahead of UTC this date can be one day past UTC's current_date; the perk must
+      // still apply (regression: it previously read as not-yet-active during local early mornings).
+      await client.query(
+        `update memberships
+           set starts_on = (now() at time zone (select timezone from venues where id = $2))::date,
+               ends_on   = (now() at time zone (select timezone from venues where id = $2))::date + 365
+         where profile_id = $1 and venue_id = $2`,
+        [member, venueId]
+      );
+      // 20 days out is beyond the public 14-day window but within the member's 30-day window.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(20),
+        durationMinutes: 60,
+        bookedBy: member,
+        source: "online",
+      });
+      expect(booking.booked_as_member).toBe(true);
+    });
+  });
 });
 
