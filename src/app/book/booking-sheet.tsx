@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -112,6 +112,10 @@ export function BookingSheet({
     whatsAppShareLink: string;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  // One bounded key per sheet session: stable across retries of this attempt (so a double-tap
+  // de-dupes to the same booking), and a fixed length regardless of cart size — the old
+  // court@time-per-slot key blew past the 200-char limit at 3+ slots and failed validation.
+  const idempotencyKey = useMemo(() => `cart-${crypto.randomUUID()}`, []);
 
   if (segments.length === 0 && !confirmation) return null;
 
@@ -169,7 +173,7 @@ export function BookingSheet({
         coachId: coachId || null,
         paymentReference: paymentReference.trim() || undefined,
         paymentSlipPath: path,
-        idempotencyKey: `cart-${segments.map((s) => `${s.courtId}@${s.startsAtIso}`).join(",")}-${Date.now()}`,
+        idempotencyKey,
       });
 
       if (!result.success) {
