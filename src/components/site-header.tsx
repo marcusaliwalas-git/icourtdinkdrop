@@ -39,11 +39,13 @@ export function SiteHeader({
   logoUrl,
   brandName,
   isAdmin = false,
+  signedIn = false,
   coachesEnabled = true,
 }: {
   logoUrl?: string | null;
   brandName?: string | null;
   isAdmin?: boolean;
+  signedIn?: boolean;
   coachesEnabled?: boolean;
 }) {
   const pathname = usePathname();
@@ -74,9 +76,21 @@ export function SiteHeader({
             Admin
           </NavLink>
         )}
-        <NavLink href="/account" pathname={pathname} className="ml-auto">
-          Account
-        </NavLink>
+        {signedIn ? (
+          // Signed in: a filled status dot marks the active session, linking to the account page.
+          <NavLink href="/account" pathname={pathname} className="ml-auto flex items-center gap-1.5">
+            <span aria-hidden className="h-2 w-2 rounded-full bg-primary" />
+            <span>Account</span>
+            <span className="sr-only">(signed in)</span>
+          </NavLink>
+        ) : (
+          // Guest: no session — an outline dot plus a Sign in call to action.
+          <NavLink href="/login" pathname={pathname} className="ml-auto flex items-center gap-1.5">
+            <span aria-hidden className="h-2 w-2 rounded-full border border-muted-foreground" />
+            <span>Sign in</span>
+            <span className="sr-only">(browsing as guest)</span>
+          </NavLink>
+        )}
       </nav>
     </header>
   );
