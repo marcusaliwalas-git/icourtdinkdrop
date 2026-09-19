@@ -8,6 +8,7 @@ import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
 import { requireAdmin } from "@/lib/auth";
+import { featureEnabled } from "@/lib/features";
 
 export default async function AdminVenuePage() {
   await requireAdmin();
@@ -107,7 +108,7 @@ export default async function AdminVenuePage() {
           <TabsTrigger value="closures">Closures</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="max-w-lg">
-          <VenueDetailsForm venue={venue} />
+          <VenueDetailsForm venue={venue} officialMembersEnabled={featureEnabled(venue.features, "official_members")} />
         </TabsContent>
         <TabsContent value="courts">
           <CourtsManager

@@ -11,6 +11,7 @@ function row(overrides: Partial<SalesInputRow>): SalesInputRow {
     isoWeekday: 1,
     paymentMethod: null,
     paymentStatus: "paid_at_venue",
+    bookedAsMember: false,
     ...overrides,
   };
 }
@@ -92,6 +93,19 @@ describe("summarizeSales", () => {
     expect(s.bookingCount).toBe(1);
     expect(s.byMethod).toEqual([{ key: "cash", label: "Cash", cents: 50000, count: 1 }]);
     expect(s.byMethod.some((b) => b.key === "complimentary")).toBe(false);
+  });
+
+  it("splits realized revenue by membership (member vs non-member)", () => {
+    const s = summarizeSales([
+      row({ bookedAsMember: true, totalCents: 30000 }),
+      row({ bookedAsMember: true, totalCents: 20000 }),
+      row({ bookedAsMember: false, totalCents: 90000 }),
+      row({ status: "cancelled", bookedAsMember: true, totalCents: 99999 }),
+    ]);
+    expect(s.byMembership).toEqual([
+      { key: "nonmember", label: "Non-member", cents: 90000, count: 1 },
+      { key: "member", label: "Member", cents: 50000, count: 2 },
+    ]);
   });
 
   it("orders the weekday breakdown Monday→Sunday, not by revenue", () => {

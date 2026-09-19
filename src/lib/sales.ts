@@ -28,6 +28,7 @@ export interface SalesInputRow {
   isoWeekday: number; // 1=Mon … 7=Sun, in venue-local time
   paymentMethod: string | null; // 'cash' | 'online' | 'complimentary' | null (not explicitly set)
   paymentStatus: string; // used to attribute a booking with no explicit method (e.g. online)
+  bookedAsMember: boolean; // was the member rate applied at booking time
 }
 
 export interface SalesBreakdown {
@@ -50,6 +51,8 @@ export interface SalesSummary {
   /** Realized revenue split by how it was paid (cash / GCash / bank transfer); bookings with no
    * recorded method — e.g. online slip payments — fall under "Not recorded". */
   byMethod: SalesBreakdown[];
+  /** Realized revenue split by whether the member rate was applied at booking time. */
+  byMembership: SalesBreakdown[];
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -104,6 +107,7 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
   const bySource = new Map<string, SalesBreakdown>();
   const byWeekday = new Map<string, SalesBreakdown>();
   const byMethod = new Map<string, SalesBreakdown>();
+  const byMembership = new Map<string, SalesBreakdown>();
 
   for (const r of realized) {
     accumulate(byCourt, r.courtId, r.courtName, r.totalCents);
@@ -111,6 +115,12 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
     accumulate(byWeekday, String(r.isoWeekday), WEEKDAY_LABELS[r.isoWeekday] ?? String(r.isoWeekday), r.totalCents);
     const bucket = paymentBucket(r.paymentMethod, r.paymentStatus);
     accumulate(byMethod, bucket.key, bucket.label, r.totalCents);
+    accumulate(
+      byMembership,
+      r.bookedAsMember ? "member" : "nonmember",
+      r.bookedAsMember ? "Member" : "Non-member",
+      r.totalCents
+    );
   }
 
   return {
@@ -124,6 +134,7 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
     // Chronological Mon→Sun, not by revenue, so the week reads naturally.
     byWeekday: [...byWeekday.values()].sort((a, b) => Number(a.key) - Number(b.key)),
     byMethod: [...byMethod.values()].sort((a, b) => b.cents - a.cents),
+    byMembership: [...byMembership.values()].sort((a, b) => b.cents - a.cents),
   };
 }
 

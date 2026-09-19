@@ -958,4 +958,72 @@ describe("reschedule_booking", () => {
       ).rejects.toThrow(/NOT_AUTHORIZED/);
     });
   });
+
+  it("charges an active member the member rate and flags the booking as a member booking", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client, {
+        hourlyRateCents: 100000,
+        memberRateCents: 60000,
+      });
+      const member = await createMemberProfile(client, { active: true, venueId });
+
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        bookedBy: member,
+        source: "online",
+      });
+      expect(booking.total_cents).toBe(60000); // member rate, not 100000
+      expect(booking.booked_as_member).toBe(true);
+    });
+  });
+
+  it("charges a non-member the standard rate and does not flag it", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client, {
+        hourlyRateCents: 100000,
+        memberRateCents: 60000,
+      });
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Non Member",
+        guestPhone: "+639170000101",
+      });
+      expect(booking.total_cents).toBe(100000);
+      expect(booking.booked_as_member).toBe(false);
+    });
+  });
+
+  it("lets an active member book past the standard window, up to the member window", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client, { maxAdvanceDays: 14 });
+      await client.query(`update venues set member_advance_days = 30 where id = $1`, [venueId]);
+      const member = await createMemberProfile(client, { active: true, venueId });
+
+      // Day 20 is beyond the public 14-day window but within the member's 30-day window.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(20),
+        durationMinutes: 60,
+        bookedBy: member,
+        source: "online",
+      });
+      expect(booking.booked_as_member).toBe(true);
+
+      // A non-member at the same distance is rejected by the standard window.
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(20, 12),
+          durationMinutes: 60,
+          guestName: "Too Far",
+          guestPhone: "+639170000102",
+        })
+      ).rejects.toThrow(/OUTSIDE_BOOKING_WINDOW/);
+    });
+  });
 });
+

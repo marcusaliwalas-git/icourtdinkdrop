@@ -167,6 +167,7 @@ export type Database = {
         Row: {
           booked_by: string | null
           booking_group_id: string | null
+          booked_as_member: boolean
           checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
@@ -194,6 +195,7 @@ export type Database = {
         Insert: {
           booked_by?: string | null
           booking_group_id?: string | null
+          booked_as_member?: boolean
           checked_in_at?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
@@ -221,6 +223,7 @@ export type Database = {
         Update: {
           booked_by?: string | null
           booking_group_id?: string | null
+          booked_as_member?: boolean
           checked_in_at?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
@@ -1083,6 +1086,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           max_advance_days: number
+          member_advance_days: number | null
           min_lead_minutes: number
           name: string
           photos: string[]
@@ -1126,6 +1130,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           max_advance_days?: number
+          member_advance_days?: number | null
           min_lead_minutes?: number
           name: string
           photos?: string[]
@@ -1169,6 +1174,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           max_advance_days?: number
+          member_advance_days?: number | null
           min_lead_minutes?: number
           name?: string
           photos?: string[]
