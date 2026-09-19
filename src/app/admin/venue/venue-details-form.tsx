@@ -17,6 +17,7 @@ type Venue = {
   email_from: string | null;
   min_lead_minutes: number;
   max_advance_days: number;
+  member_advance_days: number | null;
   cancellation_cutoff_hours: number;
   guidelines: string | null;
   calendar_default_view: string | null;
@@ -25,7 +26,13 @@ type Venue = {
 const ACCEPTED_LOGO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
-export function VenueDetailsForm({ venue }: { venue: Venue }) {
+export function VenueDetailsForm({
+  venue,
+  officialMembersEnabled = false,
+}: {
+  venue: Venue;
+  officialMembersEnabled?: boolean;
+}) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string>(venue?.logo_url ?? "");
@@ -146,6 +153,20 @@ export function VenueDetailsForm({ venue }: { venue: Venue }) {
             required
           />
         </div>
+        {officialMembersEnabled && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="memberAdvanceDays">Member booking window (days)</Label>
+            <Input
+              id="memberAdvanceDays"
+              name="memberAdvanceDays"
+              type="number"
+              min={1}
+              placeholder="Same as above"
+              defaultValue={venue?.member_advance_days ?? ""}
+            />
+            <p className="text-xs text-muted-foreground">How far ahead official members can book. Blank = same as everyone.</p>
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="cancellationCutoffHours">Free cancel until (hrs before)</Label>
           <Input

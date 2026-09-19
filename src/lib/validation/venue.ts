@@ -16,6 +16,8 @@ export const venueSchema = z.object({
   emailFrom: z.email("Enter a valid sender email, e.g. bookings@yourvenue.com").optional().or(z.literal("")),
   minLeadMinutes: z.number().int().min(0).max(1440).default(60),
   maxAdvanceDays: z.number().int().min(1).max(180).default(14),
+  // How far ahead an active (official) member may book. Null = same window as everyone else.
+  memberAdvanceDays: z.number().int().min(1).max(365).nullable().default(null),
   cancellationCutoffHours: z.number().int().min(0).max(168).default(3),
   // Court guidelines / etiquette shown on confirmed bookings (email + My bookings). One rule per
   // line; optional.

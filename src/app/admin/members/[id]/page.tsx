@@ -13,7 +13,9 @@ import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
 import { getTenant } from "@/lib/tenant";
 import { MemberActions } from "./member-actions";
+import { OfficialMemberActions } from "./official-member-actions";
 import { requireAdmin } from "@/lib/auth";
+import { featureEnabled } from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
@@ -53,16 +55,24 @@ export default async function MemberDetailPage({
     .limit(50);
   if (venue) bookingsQuery = bookingsQuery.eq("courts.venue_id", venue.id);
 
-  const [{ data: memberships }, { data: bookings }] = await Promise.all([
-    supabase
-      .from("memberships")
-      .select("id, tier, status, starts_on, ends_on")
-      .eq("profile_id", id)
-      .order("starts_on", { ascending: false }),
-    bookingsQuery,
-  ]);
+  let membershipsQuery = supabase
+    .from("memberships")
+    .select("id, tier, status, starts_on, ends_on")
+    .eq("profile_id", id)
+    .order("starts_on", { ascending: false });
+  if (venue) membershipsQuery = membershipsQuery.eq("venue_id", venue.id);
+
+  const [{ data: memberships }, { data: bookings }] = await Promise.all([membershipsQuery, bookingsQuery]);
 
   const restricted = profile.booking_restricted_until && new Date(profile.booking_restricted_until) > new Date();
+
+  // The current active membership at this venue (drives the official-member controls). "Active"
+  // means status active and today is within its date window.
+  const officialMembersEnabled = venue ? featureEnabled(venue.features, "official_members") : false;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const activeMembership = (memberships ?? []).find(
+    (m) => m.status === "active" && m.starts_on <= todayStr && (!m.ends_on || m.ends_on >= todayStr)
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,6 +97,10 @@ export default async function MemberDetailPage({
         noShowCount={profile.no_show_count}
         restrictedUntil={profile.booking_restricted_until}
       />
+
+      {officialMembersEnabled && (
+        <OfficialMemberActions profileId={profile.id} activeUntil={activeMembership?.ends_on ?? null} />
+      )}
 
       <div>
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Memberships</h2>

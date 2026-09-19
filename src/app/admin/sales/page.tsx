@@ -67,7 +67,7 @@ async function summarizeRange(
   // venue's sales pooled together on whichever host they're on.
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("status, total_cents, source, court_id, time_range, payment_method, payment_status, courts!inner(name, venue_id)")
+    .select("status, total_cents, source, court_id, time_range, payment_method, payment_status, booked_as_member, courts!inner(name, venue_id)")
     .eq("courts.venue_id", venueId)
     .filter("time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
     .limit(10000);
@@ -83,6 +83,7 @@ async function summarizeRange(
       isoWeekday: Number(formatInTimezone(start, "i", timezone)),
       paymentMethod: b.payment_method,
       paymentStatus: b.payment_status,
+      bookedAsMember: b.booked_as_member,
     };
   });
 
@@ -147,6 +148,7 @@ export default async function AdminSalesPage({
   const change = percentChange(s.realizedCents, previous.summary.realizedCents);
 
   // Expenses + net profit for the selected range (only when the venue has the Expenses capability).
+  const officialMembersEnabled = featureEnabled(venue.features, "official_members");
   const expensesEnabled = featureEnabled(venue.features, "expenses");
   const { data: expenseRows } = expensesEnabled
     ? await supabase
@@ -329,6 +331,9 @@ export default async function AdminSalesPage({
         <BreakdownCard title="By court" rows={s.byCourt} total={s.realizedCents} />
         <BreakdownCard title="By source" rows={s.bySource} total={s.realizedCents} />
         <BreakdownCard title="By payment method" rows={s.byMethod} total={s.realizedCents} />
+        {officialMembersEnabled && (
+          <BreakdownCard title="By membership" rows={s.byMembership} total={s.realizedCents} />
+        )}
         <BreakdownCard title="By day of week" rows={s.byWeekday} total={s.realizedCents} />
         {expensesEnabled && expenses.count > 0 && (
           <BreakdownCard title="Expenses by category" rows={expenses.byCategory} total={expenses.totalCents} />

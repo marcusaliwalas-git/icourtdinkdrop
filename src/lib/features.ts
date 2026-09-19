@@ -18,6 +18,12 @@ export const VENUE_FEATURES = [
     label: "Expenses",
     description: "The admin Expenses tracker and the net-profit figures on the Sales report.",
   },
+  {
+    key: "official_members",
+    label: "Official members",
+    description:
+      "Tag members as official (annual) to grant the member rate and a longer booking window, plus the member/non-member split on Sales.",
+  },
 ] as const;
 
 export type VenueFeatureKey = (typeof VENUE_FEATURES)[number]["key"];
