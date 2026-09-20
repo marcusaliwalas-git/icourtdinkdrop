@@ -1,10 +1,13 @@
 // Pure sales aggregation — no I/O, so the revenue rules live in one tested place. The page
 // fetches bookings and precomputes each row's venue-local weekday, then hands them here.
 
-// A booking counts as realized revenue once it's locked in and the payment is kept: confirmed,
-// completed, or no-show (under the venue's no-refund policy a no-show still paid and isn't
-// refunded, so the money is real). 'pending' is money not yet verified — surfaced separately,
-// never in the realized total. 'cancelled' is excluded entirely (nothing was paid / kept).
+import { isPaid } from "@/lib/payment-methods";
+
+// A booking counts as realized revenue only once it's both locked in (confirmed / completed /
+// no-show — under the venue's no-refund policy a no-show that paid keeps the money) *and* settled
+// (isPaid). A confirmed walk-in still owed at the venue (pay_at_venue) is money not yet collected,
+// so it's surfaced as "awaiting" — never in the realized total — until it's marked paid. 'pending'
+// (online, awaiting verification) is likewise awaiting. 'cancelled' is excluded entirely.
 export const REALIZED_STATUSES = ["confirmed", "completed", "no_show"];
 export const AWAITING_STATUSES = ["pending"];
 
@@ -42,7 +45,7 @@ export interface SalesSummary {
   realizedCents: number;
   bookingCount: number;
   avgCents: number;
-  /** Pending bookings whose payment isn't verified yet — shown apart from realized revenue. */
+  /** Bookings not yet paid (pending online + confirmed-but-owed) — shown apart from realized revenue. */
   awaitingCents: number;
   awaitingCount: number;
   byCourt: SalesBreakdown[];
@@ -94,11 +97,20 @@ function accumulate(
 
 export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
   // Complimentary (comped/free) bookings are settled but never revenue — excluded from realized
-  // totals, counts, and every breakdown, so they don't appear on the sales tab at all.
+  // totals, counts, and every breakdown, so they don't appear on the sales tab at all. Unpaid
+  // bookings (pay_at_venue / awaiting_verification) are likewise excluded from realized until
+  // settled — a booking must be locked in *and* paid to count.
   const realized = rows.filter(
-    (r) => REALIZED_STATUSES.includes(r.status) && r.paymentMethod !== "complimentary"
+    (r) => REALIZED_STATUSES.includes(r.status) && r.paymentMethod !== "complimentary" && isPaid(r.paymentStatus)
   );
-  const awaiting = rows.filter((r) => AWAITING_STATUSES.includes(r.status));
+  // Money expected but not yet collected: pending online bookings plus confirmed/locked-in
+  // bookings still owed at the venue. Complimentary is free, so it's never "awaiting".
+  const awaiting = rows.filter(
+    (r) =>
+      r.paymentMethod !== "complimentary" &&
+      (AWAITING_STATUSES.includes(r.status) ||
+        (REALIZED_STATUSES.includes(r.status) && !isPaid(r.paymentStatus)))
+  );
 
   const realizedCents = realized.reduce((sum, r) => sum + r.totalCents, 0);
   const bookingCount = realized.length;

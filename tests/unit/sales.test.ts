@@ -40,6 +40,20 @@ describe("summarizeSales", () => {
     expect(s.awaitingCount).toBe(2);
   });
 
+  it("excludes confirmed-but-unpaid bookings from realized revenue, surfacing them as awaiting", () => {
+    const s = summarizeSales([
+      row({ status: "confirmed", paymentStatus: "paid_at_venue", totalCents: 50000 }), // paid → realized
+      row({ status: "confirmed", paymentStatus: "pay_at_venue", totalCents: 30000 }), // unpaid walk-in
+      row({ status: "no_show", paymentStatus: "pay_at_venue", totalCents: 20000 }), // locked in but never paid
+    ]);
+    expect(s.realizedCents).toBe(50000);
+    expect(s.bookingCount).toBe(1);
+    expect(s.awaitingCents).toBe(50000);
+    expect(s.awaitingCount).toBe(2);
+    // The unpaid rows must not leak into any breakdown either.
+    expect(s.byCourt.reduce((sum, b) => sum + b.cents, 0)).toBe(50000);
+  });
+
   it("breaks realized revenue down by court, sorted by revenue", () => {
     const s = summarizeSales([
       row({ courtId: "c1", courtName: "Court 1", totalCents: 40000 }),
