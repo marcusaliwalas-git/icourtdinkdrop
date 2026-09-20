@@ -1052,5 +1052,31 @@ describe("reschedule_booking", () => {
       expect(booking.booked_as_member).toBe(true);
     });
   });
+
+  it("exempts admin walk-ins from the booking window (any future date allowed)", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client, { maxAdvanceDays: 7 });
+      // 60 days out — far beyond the 7-day public window.
+      const walkIn = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(60),
+        durationMinutes: 60,
+        guestName: "Front Desk Guest",
+        guestPhone: "+639170000201",
+        source: "walkin",
+      });
+      expect(walkIn.status).toBe("confirmed");
+      // A customer's online booking at the same distance is still rejected by the window.
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(60, 12),
+          durationMinutes: 60,
+          guestName: "Online Guest",
+          guestPhone: "+639170000202",
+        })
+      ).rejects.toThrow(/OUTSIDE_BOOKING_WINDOW/);
+    });
+  });
 });
 
