@@ -9,12 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { formatInTimezone } from "@/lib/time";
-import { isPaid } from "@/lib/payment-methods";
+import { isPaid, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/payment-methods";
 import {
   adminConfirmBooking,
   adminMarkNoShow,
   adminSetCheckedIn,
   getBookingPaymentProof,
+  setBookingPayment,
 } from "@/app/admin/calendar/actions";
 
 export type DeskBooking = {
@@ -36,6 +37,38 @@ export type DeskBooking = {
 
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
+}
+
+/** Record how an unpaid walk-in settled at the desk (cash / online / complimentary) before check-in.
+ * Marking it paid flips the entry's outline from red to green. */
+function MarkPaid({
+  disabled,
+  onMark,
+}: {
+  disabled: boolean;
+  onMark: (method: PaymentMethod) => void;
+}) {
+  const [method, setMethod] = useState<PaymentMethod>("cash");
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        aria-label="Payment method"
+        value={method}
+        onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+        disabled={disabled}
+        className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 dark:bg-input/30"
+      >
+        {PAYMENT_METHODS.map((m) => (
+          <option key={m} value={m} className="bg-card text-foreground">
+            {PAYMENT_METHOD_LABELS[m]}
+          </option>
+        ))}
+      </select>
+      <Button variant="outline" size="sm" disabled={disabled} onClick={() => onMark(method)}>
+        Mark paid
+      </Button>
+    </div>
+  );
 }
 
 export function FrontDesk({
@@ -171,7 +204,15 @@ export function FrontDesk({
                     {b.phone ? ` · ${b.phone}` : ""} · {pesos(b.totalCents)}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  {/* Unpaid walk-in/admin slots can be settled at the desk before check-in; online
+                      bookings still go through the payment-proof + Confirm flow. */}
+                  {!b.checkedIn && !b.isOnline && !isPaid(b.paymentStatus) && (
+                    <MarkPaid
+                      disabled={isPending}
+                      onMark={(method) => run(() => setBookingPayment({ bookingId: b.id, paymentMethod: method }))}
+                    />
+                  )}
                   {b.checkedIn ? (
                     <>
                       <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">

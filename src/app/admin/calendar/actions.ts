@@ -285,6 +285,8 @@ export async function setBookingPayment(input: unknown): Promise<WalkInResult> {
   }
 
   revalidatePath("/admin/calendar");
+  revalidatePath("/admin/front-desk");
+  revalidatePath("/admin/bookings");
   return { success: true, referenceCode: "" };
 }
 
