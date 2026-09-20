@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { formatInTimezone } from "@/lib/time";
+import { isPaid } from "@/lib/payment-methods";
 import {
   adminConfirmBooking,
   adminMarkNoShow,
@@ -23,6 +25,7 @@ export type DeskBooking = {
   endIso: string;
   courtName: string;
   customerName: string;
+  email: string | null;
   phone: string | null;
   partySize: number;
   totalCents: number;
@@ -148,16 +151,21 @@ export function FrontDesk({
             {g.rows.map((b) => (
               <div
                 key={b.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-border p-3 sm:flex-nowrap"
+                className={cn(
+                  "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border-2 p-3 sm:flex-nowrap",
+                  // Green outline once paid, red while payment is still owed — a glanceable status.
+                  isPaid(b.paymentStatus) ? "border-emerald-500/70" : "border-destructive/70"
+                )}
               >
                 <div className="w-28 shrink-0">
                   <p className="font-medium">{time(b.startIso)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {b.courtName} · {b.partySize} {b.partySize === 1 ? "player" : "players"}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{b.courtName}</p>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{b.customerName}</p>
+                  <p className="truncate font-medium">
+                    {b.customerName}
+                    {b.email ? <span className="text-muted-foreground"> ({b.email})</span> : ""}
+                  </p>
                   <p className="truncate text-xs text-muted-foreground">
                     <span className="font-mono">{b.referenceCode}</span>
                     {b.phone ? ` · ${b.phone}` : ""} · {pesos(b.totalCents)}
