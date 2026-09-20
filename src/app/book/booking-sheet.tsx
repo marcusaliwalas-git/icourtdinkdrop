@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { createBookings, type CreatedBooking } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 import { buildIcs } from "@/lib/ics";
+import { formatInTimezone } from "@/lib/time";
 
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
@@ -88,6 +89,7 @@ export function BookingSheet({
   coaches,
   paymentAccounts,
   isLoggedIn,
+  timezone,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -97,6 +99,7 @@ export function BookingSheet({
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
+  timezone: string;
 }) {
   const router = useRouter();
   const [coachId, setCoachId] = useState("");
@@ -263,7 +266,10 @@ export function BookingSheet({
                 <li key={`${s.courtId}-${s.startsAtIso}`} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                   <span>
                     <span className="font-medium">{s.courtName}</span>
-                    <span className="text-muted-foreground"> · {s.label}</span>
+                    <span className="text-muted-foreground">
+                      {" · "}
+                      {formatInTimezone(new Date(s.startsAtIso), "EEE, MMM d", timezone)} · {s.label}
+                    </span>
                   </span>
                   <span className="text-muted-foreground">{pesos(s.estimateCents)}</span>
                 </li>
