@@ -10,6 +10,7 @@ export const VENUE_THEMES = [
   { key: "grape", label: "Grape", swatch: "#c026d3" },
   { key: "light", label: "Daylight", swatch: "#059669" },
   { key: "gold", label: "Midnight Gold", swatch: "#EBB82D" },
+  { key: "onyx", label: "Onyx Gold", swatch: "#C9A24B" },
   { key: "hardcourt", label: "Hardcourt", swatch: "#2f90d0" },
 ] as const;
 
