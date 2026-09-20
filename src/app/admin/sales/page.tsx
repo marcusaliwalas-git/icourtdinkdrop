@@ -289,9 +289,9 @@ export default async function AdminSalesPage({
         </StatCard>
         <StatCard label="Avg check per booking" value={pesos(s.avgCents)} />
         <StatCard label="Bookings" value={String(s.bookingCount)} />
-        <StatCard label="Awaiting verification" value={pesos(s.awaitingCents)}>
+        <StatCard label="Awaiting payment" value={pesos(s.awaitingCents)}>
           <span className="text-muted-foreground">
-            {s.awaitingCount} pending — not yet counted
+            {s.awaitingCount} unpaid — not yet counted
           </span>
         </StatCard>
       </div>
@@ -310,9 +310,10 @@ export default async function AdminSalesPage({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Realized revenue counts confirmed, completed, and no-show bookings (payment kept — no refunds). Pending
-        bookings awaiting payment verification are shown separately and excluded; cancelled bookings count as zero.
-        Avg daily sales divides realized revenue by the number of days elapsed in the range.
+        Realized revenue counts confirmed, completed, and no-show bookings that are paid (payment kept — no
+        refunds). Unpaid bookings — pending online payments and walk-ins still owed at the venue — are shown
+        separately under Awaiting payment and excluded until settled; cancelled bookings count as zero. Avg daily
+        sales divides realized revenue by the number of days elapsed in the range.
       </p>
 
       {/* Revenue trends — realized revenue for the selected month/year vs the prior one. */}

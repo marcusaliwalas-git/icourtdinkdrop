@@ -249,7 +249,13 @@ export function FrontDesk({
                       >
                         No-show
                       </Button>
-                      <Button size="sm" disabled={isPending} onClick={() => run(() => adminSetCheckedIn(b.id, true))}>
+                      <Button
+                        size="sm"
+                        // No check-in until the booking is settled — mark payment (above) first.
+                        disabled={isPending || !isPaid(b.paymentStatus)}
+                        title={isPaid(b.paymentStatus) ? undefined : "Record payment before checking in"}
+                        onClick={() => run(() => adminSetCheckedIn(b.id, true))}
+                      >
                         Check in
                       </Button>
                     </>
