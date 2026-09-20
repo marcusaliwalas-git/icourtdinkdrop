@@ -51,6 +51,27 @@ export default async function BookPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Effective booking window for THIS viewer, matching create_booking's rule so the picker never
+  // offers a date the server will reject — which would strand a customer who already transferred
+  // payment. Active members get the venue's member window when set; everyone else the standard one.
+  let isMember = false;
+  if (user) {
+    const { data: activeMembership } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("profile_id", user.id)
+      .eq("venue_id", venue.id)
+      .eq("status", "active")
+      .lte("starts_on", today)
+      .or(`ends_on.is.null,ends_on.gte.${today}`)
+      .limit(1)
+      .maybeSingle();
+    isMember = !!activeMembership;
+  }
+  const advanceDays = isMember && venue.member_advance_days != null ? venue.member_advance_days : venue.max_advance_days;
+  const maxDate = addDays(today, advanceDays);
+  const beyondWindow = date > maxDate;
+
   const { data: courts } = await supabase
     .from("courts")
     .select("id, name, hourly_rate_cents, member_rate_cents")
@@ -147,16 +168,31 @@ export default async function BookPage({
         <QuickFilterLink href={hrefFor(quickDates.today)} active={date === quickDates.today}>
           Today
         </QuickFilterLink>
-        <QuickFilterLink href={hrefFor(quickDates.tomorrow)} active={date === quickDates.tomorrow}>
-          Tomorrow
-        </QuickFilterLink>
-        <QuickFilterLink href={hrefFor(quickDates.weekend)} active={date === quickDates.weekend}>
-          This weekend
-        </QuickFilterLink>
-        <DatePickerPopover date={date} venueId={undefined} />
+        {quickDates.tomorrow <= maxDate && (
+          <QuickFilterLink href={hrefFor(quickDates.tomorrow)} active={date === quickDates.tomorrow}>
+            Tomorrow
+          </QuickFilterLink>
+        )}
+        {quickDates.weekend <= maxDate && (
+          <QuickFilterLink href={hrefFor(quickDates.weekend)} active={date === quickDates.weekend}>
+            This weekend
+          </QuickFilterLink>
+        )}
+        <DatePickerPopover date={date} venueId={undefined} maxDate={maxDate} />
       </div>
 
-      {grid.closedAllDay ? (
+      <p className="text-xs text-muted-foreground">
+        Book up to {advanceDays} {advanceDays === 1 ? "day" : "days"} in advance.
+      </p>
+
+      {beyondWindow ? (
+        <p className="rounded-md border p-4 text-sm text-muted-foreground">
+          Bookings for this date aren&rsquo;t open yet — you can book up to {advanceDays}{" "}
+          {advanceDays === 1 ? "day" : "days"} ahead (through{" "}
+          {formatInTimezone(new Date(`${maxDate}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}). Please pick an earlier
+          date before paying.
+        </p>
+      ) : grid.closedAllDay ? (
         <p className="rounded-md border p-4 text-sm text-muted-foreground">
           The venue has no operating hours set for this day.
         </p>
