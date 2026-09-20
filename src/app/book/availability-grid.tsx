@@ -560,6 +560,7 @@ export function AvailabilityGrid({
         coaches={coaches}
         paymentAccounts={paymentAccounts}
         isLoggedIn={isLoggedIn}
+        timezone={timezone}
       />
     </>
   );
