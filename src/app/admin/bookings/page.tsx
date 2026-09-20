@@ -20,6 +20,9 @@ type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
 const PAYMENT_FILTERS = [
   { value: "all", label: "All payments" },
   { value: "pending", label: "Pending payment (unpaid)" },
+  { value: "cash", label: "Cash" },
+  { value: "online", label: "Paid online" },
+  { value: "complimentary", label: "Complimentary" },
 ] as const;
 
 type PaymentFilter = (typeof PAYMENT_FILTERS)[number]["value"];
@@ -75,8 +78,14 @@ export default async function AdminBookingsPage({
 
   const statuses = statusesFor(status);
   if (statuses) query = query.in("status", statuses);
-  // "Pending payment" = walk-in/prebook slots still owed at the venue (pay_at_venue).
+  // Payment filter mirrors the Payment column's method-or-status labelling:
+  //  - pending: walk-in/prebook slots still owed at the venue (pay_at_venue)
+  //  - cash / complimentary: matched by the recorded method
+  //  - online: recorded method 'online' OR an online customer booking (paid_online, no method)
   if (payment === "pending") query = query.eq("payment_status", "pay_at_venue");
+  else if (payment === "cash") query = query.eq("payment_method", "cash");
+  else if (payment === "complimentary") query = query.eq("payment_method", "complimentary");
+  else if (payment === "online") query = query.or("payment_method.eq.online,payment_status.eq.paid_online");
   if (courtId !== "all") query = query.eq("court_id", courtId);
   if (from || to) {
     const fromIso = from ? `${from}T00:00:00Z` : "-infinity";
