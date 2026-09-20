@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/auth";
+import { formatInTimezone } from "@/lib/time";
 import { FrontDeskToggle } from "./front-desk-toggle";
 import {
   Table,
@@ -59,6 +60,21 @@ export default async function MembersPage({
   }
   members.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
 
+  // Who holds an active official membership *today* (venue-local) — drives the "Official" column.
+  const today = venue ? formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone) : "";
+  const officialSet = new Set<string>();
+  if (venue) {
+    const { data: officials } = await supabase
+      .from("memberships")
+      .select("profile_id, ends_on")
+      .eq("venue_id", venue.id)
+      .eq("status", "active")
+      .lte("starts_on", today);
+    for (const row of officials ?? []) {
+      if (row.ends_on == null || row.ends_on >= today) officialSet.add(row.profile_id as string);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -88,6 +104,7 @@ export default async function MembersPage({
             <TableHead>Phone</TableHead>
             <TableHead>Skill</TableHead>
             <TableHead>Role</TableHead>
+            <TableHead>Official</TableHead>
             <TableHead>No-shows</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Front desk</TableHead>
@@ -106,6 +123,15 @@ export default async function MembersPage({
                 <TableCell>{m.phone ?? "-"}</TableCell>
                 <TableCell>{m.skill_level ?? "-"}</TableCell>
                 <TableCell className="capitalize">{m.role}</TableCell>
+                <TableCell>
+                  {officialSet.has(m.id) ? (
+                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                      Official
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>{m.no_show_count}</TableCell>
                 <TableCell>
                   {restricted ? <Badge variant="destructive">Restricted</Badge> : <Badge variant="secondary">OK</Badge>}
@@ -118,7 +144,7 @@ export default async function MembersPage({
           })}
           {(members ?? []).length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
+              <TableCell colSpan={8} className="text-center text-muted-foreground">
                 No members found.
               </TableCell>
             </TableRow>

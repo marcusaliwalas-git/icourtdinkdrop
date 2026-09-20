@@ -17,6 +17,13 @@ const STATUS_FILTERS = [
 
 type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
 
+const PAYMENT_FILTERS = [
+  { value: "all", label: "All payments" },
+  { value: "pending", label: "Pending payment (unpaid)" },
+] as const;
+
+type PaymentFilter = (typeof PAYMENT_FILTERS)[number]["value"];
+
 function statusesFor(filter: StatusFilter): string[] | null {
   switch (filter) {
     case "pending":
@@ -33,10 +40,11 @@ function statusesFor(filter: StatusFilter): string[] | null {
 export default async function AdminBookingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; court?: string; q?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ status?: string; court?: string; q?: string; from?: string; to?: string; payment?: string }>;
 }) {
   const params = await searchParams;
   const status = (STATUS_FILTERS.some((s) => s.value === params.status) ? params.status : "active") as StatusFilter;
+  const payment = (PAYMENT_FILTERS.some((p) => p.value === params.payment) ? params.payment : "all") as PaymentFilter;
   const courtId = params.court ?? "all";
   const q = params.q?.trim() ?? "";
   const { from, to } = params;
@@ -59,7 +67,7 @@ export default async function AdminBookingsPage({
   let query = supabase
     .from("bookings")
     .select(
-      "id, status, party_size, total_cents, payment_status, payment_method, source, guest_name, guest_phone, time_range, reference_code, booking_group_id, courts!inner(name, venue_id), profiles(full_name, phone, email)"
+      "id, status, party_size, total_cents, payment_status, payment_method, source, guest_name, guest_phone, time_range, reference_code, booking_group_id, created_at, courts!inner(name, venue_id), profiles(full_name, phone, email)"
     )
     .eq("courts.venue_id", venue.id) // scope to this venue — RLS alone pools all of a multi-venue admin's venues
     .order("time_range", { ascending: true })
@@ -67,6 +75,8 @@ export default async function AdminBookingsPage({
 
   const statuses = statusesFor(status);
   if (statuses) query = query.in("status", statuses);
+  // "Pending payment" = walk-in/prebook slots still owed at the venue (pay_at_venue).
+  if (payment === "pending") query = query.eq("payment_status", "pay_at_venue");
   if (courtId !== "all") query = query.eq("court_id", courtId);
   if (from || to) {
     const fromIso = from ? `${from}T00:00:00Z` : "-infinity";
@@ -93,7 +103,7 @@ export default async function AdminBookingsPage({
 
   function withParams(overrides: Record<string, string | undefined>): string {
     const next = new URLSearchParams();
-    const merged = { status, court: courtId, q, from, to, ...overrides };
+    const merged = { status, payment, court: courtId, q, from, to, ...overrides };
     for (const [key, value] of Object.entries(merged)) {
       if (value && value !== "all" && value !== "") next.set(key, value);
     }
@@ -116,7 +126,7 @@ export default async function AdminBookingsPage({
       </div>
 
       <form
-        key={`${status}-${courtId}-${q}-${from ?? ""}-${to ?? ""}`}
+        key={`${status}-${payment}-${courtId}-${q}-${from ?? ""}-${to ?? ""}`}
         className="flex flex-wrap items-end gap-3 rounded-xl border border-white/[0.08] bg-card p-4"
       >
         <div className="flex flex-col gap-1.5">
@@ -138,6 +148,23 @@ export default async function AdminBookingsPage({
             {STATUS_FILTERS.map((s) => (
               <option key={s.value} value={s.value} className="bg-card text-foreground">
                 {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="payment" className="text-sm font-medium">
+            Payment
+          </label>
+          <select
+            id="payment"
+            name="payment"
+            defaultValue={payment}
+            className="h-9 w-52 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 dark:bg-input/30"
+          >
+            {PAYMENT_FILTERS.map((p) => (
+              <option key={p.value} value={p.value} className="bg-card text-foreground">
+                {p.label}
               </option>
             ))}
           </select>
@@ -177,7 +204,7 @@ export default async function AdminBookingsPage({
         <Button type="submit" size="sm">
           Apply filters
         </Button>
-        {(status !== "active" || courtId !== "all" || q || from || to) && (
+        {(status !== "active" || payment !== "all" || courtId !== "all" || q || from || to) && (
           <Button asChild type="button" size="sm" variant="ghost">
             <Link href="/admin/bookings">Reset</Link>
           </Button>

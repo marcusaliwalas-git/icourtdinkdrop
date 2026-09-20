@@ -20,7 +20,7 @@ export default async function FrontDeskPage() {
   const { data } = await supabase
     .from("bookings")
     .select(
-      "id, status, checked_in_at, party_size, total_cents, payment_status, source, guest_name, guest_phone, time_range, reference_code, booking_group_id, courts!inner(name, venue_id), profiles(full_name, phone)"
+      "id, status, checked_in_at, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, booking_group_id, courts!inner(name, venue_id), profiles(full_name, phone, email)"
     )
     .eq("courts.venue_id", venue.id)
     .in("status", ["pending", "confirmed"])
@@ -30,7 +30,7 @@ export default async function FrontDeskPage() {
   const bookings: DeskBooking[] = (data ?? []).map((b) => {
     const { start, end } = parseTstzRange(b.time_range as string);
     const court = b.courts as unknown as { name: string } | null;
-    const profile = b.profiles as unknown as { full_name: string | null; phone: string | null } | null;
+    const profile = b.profiles as unknown as { full_name: string | null; phone: string | null; email: string | null } | null;
     return {
       id: b.id,
       status: b.status,
@@ -39,6 +39,7 @@ export default async function FrontDeskPage() {
       endIso: end.toISOString(),
       courtName: court?.name ?? "Court",
       customerName: profile?.full_name ?? b.guest_name ?? "Guest",
+      email: profile?.email ?? b.guest_email ?? null,
       phone: profile?.phone ?? b.guest_phone ?? null,
       partySize: b.party_size,
       totalCents: b.total_cents,

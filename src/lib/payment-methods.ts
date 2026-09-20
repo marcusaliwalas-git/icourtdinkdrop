@@ -28,7 +28,7 @@ export function paymentMethodLabel(value: string | null | undefined): string {
 /** Friendly labels for bookings.payment_status (whether/how a booking is settled), for admin
  * surfaces that would otherwise show the raw token (e.g. "paid_at_venue"). */
 export const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  pay_at_venue: "Pay at venue",
+  pay_at_venue: "Pending payment",
   paid_at_venue: "Paid at venue",
   awaiting_verification: "Awaiting verification",
   paid_online: "Paid online",
@@ -41,6 +41,12 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
 export function paymentStatusLabel(value: string | null | undefined): string {
   if (!value) return "—";
   return PAYMENT_STATUS_LABELS[value] ?? value;
+}
+
+/** Whether a booking's payment is settled (paid at venue, paid online, or comped). Anything else
+ * (pay_at_venue / awaiting_verification) is still owed. */
+export function isPaid(status: string | null | undefined): boolean {
+  return status === "paid_at_venue" || status === "paid_online" || status === "complimentary";
 }
 
 /** One label for the Payment column: prefer how it was paid (Cash / Paid online / Complimentary)
