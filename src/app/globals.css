@@ -241,6 +241,37 @@
   --sidebar-ring: #f3cd5f;
 }
 
+/* Onyx Gold — a lounge look drawn from the SUPRA logo: a near-black onyx ground with refined
+   metallic gold as the primary (buttons, focus) and champagne text, framed by faint gold hairline
+   borders that echo the logo's thin gold linework. */
+.dark[data-theme="onyx"] {
+  --background: #0a0908;
+  --foreground: #f3ead6;
+  --card: #14110c;
+  --card-foreground: #f3ead6;
+  --popover: #14110c;
+  --popover-foreground: #f3ead6;
+  --primary: #c9a24b;
+  --primary-foreground: #1a1408;
+  --secondary: #241d10;
+  --secondary-foreground: #f3ead6;
+  --muted: #17130c;
+  --muted-foreground: #c2b088;
+  --accent: #241d10;
+  --accent-foreground: #f3ead6;
+  --border: rgb(201 162 75 / 20%);
+  --input: rgb(201 162 75 / 26%);
+  --ring: #d9b85f;
+  --sidebar: #14110c;
+  --sidebar-foreground: #f3ead6;
+  --sidebar-primary: #c9a24b;
+  --sidebar-primary-foreground: #1a1408;
+  --sidebar-accent: #241d10;
+  --sidebar-accent-foreground: #f3ead6;
+  --sidebar-border: rgb(201 162 75 / 20%);
+  --sidebar-ring: #d9b85f;
+}
+
 /* Hardcourt — taken from an outdoor hardcourt: an azure court-blue ground (the playing surface)
    with slate-charcoal as the accent (buttons, "open now", framing the way the surround frames the
    court) and the cream boundary line as the focus ring, the colour that sits between the two. */
