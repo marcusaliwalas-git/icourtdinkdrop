@@ -2,19 +2,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getTenant } from "@/lib/tenant";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/auth";
 import { formatInTimezone } from "@/lib/time";
-import { FrontDeskToggle } from "./front-desk-toggle";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { MembersTable, type MemberRow } from "./members-table";
 
 export const dynamic = "force-dynamic";
 
@@ -33,19 +24,19 @@ export default async function MembersPage({
   type ProfileRow = {
     id: string;
     full_name: string | null;
+    email: string | null;
     phone: string | null;
-    skill_level: number | null;
     no_show_count: number;
     booking_restricted_until: string | null;
   };
   const { data: rows } = venue
     ? await supabase
         .from("venue_memberships")
-        .select("role, profiles(id, full_name, phone, skill_level, no_show_count, booking_restricted_until)")
+        .select("role, profiles(id, full_name, email, phone, no_show_count, booking_restricted_until)")
         .eq("venue_id", venue.id)
     : { data: [] as { role: string; profiles: ProfileRow | null }[] };
 
-  let members = (rows ?? [])
+  let profiles = (rows ?? [])
     .map((r) => {
       const p = r.profiles as unknown as ProfileRow | null;
       return p ? { ...p, role: r.role as string } : null;
@@ -54,11 +45,14 @@ export default async function MembersPage({
 
   if (q) {
     const needle = q.toLowerCase();
-    members = members.filter(
-      (m) => (m.full_name ?? "").toLowerCase().includes(needle) || (m.phone ?? "").includes(q)
+    profiles = profiles.filter(
+      (m) =>
+        (m.full_name ?? "").toLowerCase().includes(needle) ||
+        (m.email ?? "").toLowerCase().includes(needle) ||
+        (m.phone ?? "").includes(q)
     );
   }
-  members.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
+  profiles.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
 
   // Who holds an active official membership *today* (venue-local) — drives the "Official" column.
   const today = venue ? formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone) : "";
@@ -75,6 +69,17 @@ export default async function MembersPage({
     }
   }
 
+  const members: MemberRow[] = profiles.map((m) => ({
+    id: m.id,
+    name: m.full_name || "(no name)",
+    email: m.email,
+    phone: m.phone,
+    role: m.role,
+    official: officialSet.has(m.id),
+    noShowCount: m.no_show_count,
+    restricted: !!m.booking_restricted_until && new Date(m.booking_restricted_until) > new Date(),
+  }));
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -83,7 +88,7 @@ export default async function MembersPage({
           <form className="flex gap-2">
             <Input
               name="q"
-              placeholder="Search name or phone"
+              placeholder="Search name, email, or phone"
               defaultValue={q ?? ""}
               className="w-56"
             />
@@ -97,60 +102,7 @@ export default async function MembersPage({
         </div>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead>Skill</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Official</TableHead>
-            <TableHead>No-shows</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Front desk</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {members.map((m) => {
-            const restricted = m.booking_restricted_until && new Date(m.booking_restricted_until) > new Date();
-            return (
-              <TableRow key={m.id}>
-                <TableCell>
-                  <Link href={`/admin/members/${m.id}`} className="underline underline-offset-2">
-                    {m.full_name || "(no name)"}
-                  </Link>
-                </TableCell>
-                <TableCell>{m.phone ?? "-"}</TableCell>
-                <TableCell>{m.skill_level ?? "-"}</TableCell>
-                <TableCell className="capitalize">{m.role}</TableCell>
-                <TableCell>
-                  {officialSet.has(m.id) ? (
-                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
-                      Official
-                    </Badge>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell>{m.no_show_count}</TableCell>
-                <TableCell>
-                  {restricted ? <Badge variant="destructive">Restricted</Badge> : <Badge variant="secondary">OK</Badge>}
-                </TableCell>
-                <TableCell>
-                  <FrontDeskToggle profileId={m.id} role={m.role} />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-          {(members ?? []).length === 0 && (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
-                No members found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+      <MembersTable members={members} />
     </div>
   );
 }
