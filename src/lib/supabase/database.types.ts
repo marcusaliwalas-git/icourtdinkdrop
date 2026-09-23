@@ -1450,7 +1450,9 @@ export type Database = {
           p_idempotency_key?: string
           p_notes?: string
           p_party_size?: number
+          p_payment_method?: string
           p_payment_reference?: string
+          p_payment_remarks?: string
           p_payment_slip_path?: string
           p_player_names?: string[]
           p_segments: Json

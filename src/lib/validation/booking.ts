@@ -94,6 +94,19 @@ export const createBookingsSchema = z
 
 export type CreateBookingsInput = z.infer<typeof createBookingsSchema>;
 
+// Admin "book multiple walk-ins at once" (open-play sessions across several courts). Same segment
+// list as a customer cart, but with one payment recorded for the whole batch and no online slip.
+export const walkInBookingsSchema = z.object({
+  segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(48),
+  guestName: z.string().trim().min(1, "Enter a name for the booking.").max(120),
+  guestPhone: phSchema.optional().or(z.literal("")),
+  // null = booked now, settled at the venue later (pay_at_venue).
+  paymentMethod: z.enum(PAYMENT_METHODS).nullable(),
+  paymentRemarks: z.string().trim().max(300).optional(),
+});
+
+export type WalkInBookingsInput = z.infer<typeof walkInBookingsSchema>;
+
 export const cancelBookingSchema = z.object({
   bookingId: z.uuid(),
   referenceCode: z

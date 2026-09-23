@@ -6,6 +6,7 @@ import { formatInTimezone } from "@/lib/time";
 import type { AdminTimeRow } from "@/lib/availability";
 import { WalkInSheet } from "./walk-in-sheet";
 import { BookingActionSheet } from "./booking-action-sheet";
+import { slotKey, type SelectedSlot } from "./selection";
 
 interface Court {
   id: string;
@@ -16,10 +17,16 @@ export function CalendarGrid({
   timezone,
   courts,
   rows,
+  selectMode = false,
+  selectedKeys,
+  onToggleSelect,
 }: {
   timezone: string;
   courts: Court[];
   rows: AdminTimeRow[];
+  selectMode?: boolean;
+  selectedKeys?: Set<string>;
+  onToggleSelect?: (slot: SelectedSlot) => void;
 }) {
   const [selectedSlot, setSelectedSlot] = useState<{ courtId: string; courtName: string; startsAtIso: string } | null>(
     null
@@ -73,15 +80,37 @@ export function CalendarGrid({
                   const cell = row.cells[court.id];
                   return (
                     <td key={court.id} className="border-l p-1 align-top">
-                      {cell.status === "available" && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSlot({ courtId: court.id, courtName: court.name, startsAtIso: row.startsAtIso })}
-                          className="h-11 w-full min-w-28 rounded-sm bg-emerald-50 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300"
-                        >
-                          + Walk-in
-                        </button>
-                      )}
+                      {cell.status === "available" &&
+                        (selectMode ? (
+                          (() => {
+                            const isSel = selectedKeys?.has(slotKey(court.id, row.startsAtIso)) ?? false;
+                            return (
+                              <button
+                                type="button"
+                                aria-pressed={isSel}
+                                onClick={() =>
+                                  onToggleSelect?.({ courtId: court.id, courtName: court.name, startsAtIso: row.startsAtIso })
+                                }
+                                className={cn(
+                                  "h-11 w-full min-w-28 rounded-sm text-xs font-medium",
+                                  isSel
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300"
+                                )}
+                              >
+                                {isSel ? "✓ Selected" : "Select"}
+                              </button>
+                            );
+                          })()
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSlot({ courtId: court.id, courtName: court.name, startsAtIso: row.startsAtIso })}
+                            className="h-11 w-full min-w-28 rounded-sm bg-emerald-50 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300"
+                          >
+                            + Walk-in
+                          </button>
+                        ))}
                       {cell.status === "booked" && (
                         <button
                           type="button"

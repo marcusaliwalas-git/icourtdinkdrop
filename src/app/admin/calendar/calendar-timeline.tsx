@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { AdminTimeRow } from "@/lib/availability";
 import { WalkInSheet } from "./walk-in-sheet";
 import { BookingActionSheet } from "./booking-action-sheet";
+import { slotKey, type SelectedSlot } from "./selection";
 
 interface Court {
   id: string;
@@ -59,7 +60,21 @@ function segmentsFor(rows: AdminTimeRow[], courtId: string): Segment[] {
   return segs;
 }
 
-export function CalendarTimeline({ timezone, courts, rows }: { timezone: string; courts: Court[]; rows: AdminTimeRow[] }) {
+export function CalendarTimeline({
+  timezone,
+  courts,
+  rows,
+  selectMode = false,
+  selectedKeys,
+  onToggleSelect,
+}: {
+  timezone: string;
+  courts: Court[];
+  rows: AdminTimeRow[];
+  selectMode?: boolean;
+  selectedKeys?: Set<string>;
+  onToggleSelect?: (slot: SelectedSlot) => void;
+}) {
   const [selectedSlot, setSelectedSlot] = useState<{ courtId: string; courtName: string; startsAtIso: string } | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<{ id: string; label: string; startsAtIso: string; status: string } | null>(null);
 
@@ -156,6 +171,29 @@ export function CalendarTimeline({ timezone, courts, rows }: { timezone: string;
                     );
                   }
                   const isPast = seg.kind === "past";
+                  // Multi-select applies to open (not past) slots — tap to add/remove from the batch.
+                  if (selectMode && !isPast) {
+                    const isSel = selectedKeys?.has(slotKey(court.id, seg.startIso)) ?? false;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        aria-pressed={isSel}
+                        onClick={() =>
+                          onToggleSelect?.({ courtId: court.id, courtName: court.name, startsAtIso: seg.startIso })
+                        }
+                        className={cn(
+                          "absolute top-1.5 bottom-1.5 rounded-md text-xs font-medium",
+                          isSel
+                            ? "bg-primary text-primary-foreground"
+                            : "text-emerald-700/70 hover:bg-emerald-50 dark:text-emerald-300/70 dark:hover:bg-emerald-950"
+                        )}
+                        style={{ left: left + 2, width: width - 4 }}
+                      >
+                        {isSel ? "✓" : "Select"}
+                      </button>
+                    );
+                  }
                   return (
                     <button
                       key={idx}

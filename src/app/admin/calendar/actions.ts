@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin, requireStaff } from "@/lib/auth";
-import { createBookingSchema, bookingPaymentSchema } from "@/lib/validation/booking";
+import { createBookingSchema, bookingPaymentSchema, walkInBookingsSchema } from "@/lib/validation/booking";
 import { guidelineLines } from "@/lib/validation/venue";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
@@ -69,6 +69,50 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
 
   revalidatePath("/admin/calendar");
   return { success: true, referenceCode: data.reference_code };
+}
+
+export type WalkInBookingsResult =
+  | { success: true; count: number }
+  | { success: false; code: string; message: string };
+
+/** Book several walk-in slots at once — e.g. an open-play session holding 4 courts from 7-11pm.
+ * Reuses create_bookings (atomic; groups the slots under one booking_group_id) with source 'walkin'
+ * and one payment recorded for the whole batch. Contiguous hours are merged into one segment per
+ * court by the caller. */
+export async function createWalkInBookings(input: unknown): Promise<WalkInBookingsResult> {
+  const parsed = walkInBookingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const { supabase } = await requireStaff();
+  const { segments, guestName, guestPhone, paymentMethod, paymentRemarks } = parsed.data;
+
+  const { data, error } = await supabase.rpc("create_bookings", {
+    p_segments: segments.map((s) => ({
+      court_id: s.courtId,
+      starts_at: s.startsAt,
+      duration_minutes: s.durationMinutes,
+    })),
+    p_party_size: 1,
+    p_booked_by: null,
+    p_guest_name: guestName,
+    p_guest_phone: guestPhone || null,
+    p_source: "walkin",
+    p_payment_method: paymentMethod ?? undefined,
+    // Remarks only make sense for an online payment; drop them otherwise.
+    p_payment_remarks: paymentMethod === "online" ? paymentRemarks || undefined : undefined,
+  });
+
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/front-desk");
+  return { success: true, count: Array.isArray(data) ? data.length : segments.length };
 }
 
 export async function adminCancelBooking(bookingId: string): Promise<WalkInResult> {
