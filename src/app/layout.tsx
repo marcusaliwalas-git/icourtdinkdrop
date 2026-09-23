@@ -4,6 +4,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteAnnouncement } from "@/components/site-announcement";
+import { RequireNameDialog } from "@/components/require-name-dialog";
 import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
 import { isVenueStaff } from "@/lib/auth";
@@ -64,6 +65,13 @@ export default async function RootLayout({
   ]);
   const signedIn = !!user;
 
+  // Accounts with no name yet get a blocking prompt to add one (see RequireNameDialog).
+  let needsName = false;
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+    needsName = !profile?.full_name || profile.full_name.trim() === "";
+  }
+
   // Does the signed-in user hold an active official membership at this venue (venue-local today)?
   // RLS lets a member read their own membership rows, so the user's own session can check this.
   let isOfficialMember = false;
@@ -111,6 +119,7 @@ export default async function RootLayout({
           coachesEnabled={featureEnabled(tenant?.features, "coaches")}
         />
         <div className="flex-1">{children}</div>
+        {needsName && <RequireNameDialog />}
         <SiteFooter
           brandName={tenant?.name}
           about={tenant?.footer_about}
