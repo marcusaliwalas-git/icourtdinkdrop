@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { featureEnabled } from "@/lib/features";
 import { normalizeTheme, LIGHT_THEME } from "@/lib/themes";
 import { normalizeFont } from "@/lib/fonts";
+import { formatInTimezone } from "@/lib/time";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -62,6 +63,25 @@ export default async function RootLayout({
     supabase.auth.getUser(),
   ]);
   const signedIn = !!user;
+
+  // Does the signed-in user hold an active official membership at this venue (venue-local today)?
+  // RLS lets a member read their own membership rows, so the user's own session can check this.
+  let isOfficialMember = false;
+  if (user && tenant) {
+    const today = formatInTimezone(new Date(), "yyyy-MM-dd", tenant.timezone);
+    const { data: membership } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("profile_id", user.id)
+      .eq("venue_id", tenant.id)
+      .eq("status", "active")
+      .lte("starts_on", today)
+      .or(`ends_on.is.null,ends_on.gte.${today}`)
+      .limit(1)
+      .maybeSingle();
+    isOfficialMember = !!membership;
+  }
+
   const theme = normalizeTheme(tenant?.theme);
   const font = normalizeFont(tenant?.font);
   // The app is dark-first; the one light theme drops the `dark` class so every component renders its
@@ -87,6 +107,7 @@ export default async function RootLayout({
           brandName={tenant?.name}
           isAdmin={isAdmin}
           signedIn={signedIn}
+          isOfficialMember={isOfficialMember}
           coachesEnabled={featureEnabled(tenant?.features, "coaches")}
         />
         <div className="flex-1">{children}</div>

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function NavLink({
@@ -40,12 +41,14 @@ export function SiteHeader({
   brandName,
   isAdmin = false,
   signedIn = false,
+  isOfficialMember = false,
   coachesEnabled = true,
 }: {
   logoUrl?: string | null;
   brandName?: string | null;
   isAdmin?: boolean;
   signedIn?: boolean;
+  isOfficialMember?: boolean;
   coachesEnabled?: boolean;
 }) {
   const pathname = usePathname();
@@ -77,11 +80,16 @@ export function SiteHeader({
           </NavLink>
         )}
         {signedIn ? (
-          // Signed in: a filled status dot marks the active session, linking to the account page.
+          // Signed in: a filled status dot marks the active session — or, for an official member,
+          // a gold crown in its place, so their standing shows on every page.
           <NavLink href="/account" pathname={pathname} className="ml-auto flex items-center gap-1.5">
-            <span aria-hidden className="h-2 w-2 rounded-full bg-primary" />
+            {isOfficialMember ? (
+              <Crown className="size-4 text-amber-400" aria-hidden />
+            ) : (
+              <span aria-hidden className="h-2 w-2 rounded-full bg-primary" />
+            )}
             <span>Account</span>
-            <span className="sr-only">(signed in)</span>
+            <span className="sr-only">{isOfficialMember ? "(signed in — official member)" : "(signed in)"}</span>
           </NavLink>
         ) : (
           // Guest: no session — an outline dot plus a Sign in call to action.
