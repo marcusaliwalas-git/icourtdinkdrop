@@ -9,6 +9,17 @@ import { CalendarTimeline } from "./calendar-timeline";
 import { FindTime } from "./find-time";
 import { WalkInBatchSheet } from "./walk-in-batch-sheet";
 import { mergeSelection, slotKey, type SelectedSlot } from "./selection";
+import { rateForHour, type RatePeriod } from "@/lib/pricing";
+import { toZonedTime } from "date-fns-tz";
+
+export interface CourtPricing {
+  baseHourlyRateCents: number;
+  ratePeriods: RatePeriod[];
+}
+
+function pesos(cents: number) {
+  return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
+}
 
 interface Court {
   id: string;
@@ -35,12 +46,15 @@ export function CalendarViews({
   timezone,
   courts,
   rows,
+  pricing,
   dateLabel,
   defaultView,
 }: {
   timezone: string;
   courts: Court[];
   rows: AdminTimeRow[];
+  /** Per-court rates for the multi-select running total (keyed by court id). */
+  pricing: Record<string, CourtPricing>;
   dateLabel: string;
   /** The venue's admin-set default view; a viewer's own saved choice overrides it. */
   defaultView: string;
@@ -103,7 +117,38 @@ export function CalendarViews({
   }
 
   const selectedKeys = useMemo(() => new Set(selected.keys()), [selected]);
-  const segments = useMemo(() => mergeSelection([...selected.values()]), [selected]);
+
+  // Walk-in price for a single hour on a court (non-member rate), used for the running total.
+  const priceHour = useMemo(() => {
+    return (courtId: string, startMs: number): number => {
+      const p = pricing[courtId];
+      if (!p) return 0;
+      const local = toZonedTime(new Date(startMs), timezone);
+      return rateForHour({
+        localStartMinutes: local.getHours() * 60 + local.getMinutes(),
+        dayOfWeek: local.getDay(),
+        ratePeriods: p.ratePeriods,
+        baseHourlyRateCents: p.baseHourlyRateCents,
+        baseMemberRateCents: null,
+        isMember: false,
+      });
+    };
+  }, [pricing, timezone]);
+
+  // Merge contiguous hours into segments and price each by summing its hours.
+  const segments = useMemo(() => {
+    const merged = mergeSelection([...selected.values()]);
+    return merged.map((s) => {
+      const startMs = new Date(s.startsAt).getTime();
+      const hours = s.durationMinutes / 60;
+      let estimateCents = 0;
+      for (let i = 0; i < hours; i++) estimateCents += priceHour(s.courtId, startMs + i * 3_600_000);
+      return { ...s, estimateCents };
+    });
+  }, [selected, priceHour]);
+
+  const totalCents = useMemo(() => segments.reduce((sum, s) => sum + (s.estimateCents ?? 0), 0), [segments]);
+
   // The grid/timeline own selection; find-a-time has no cells to select.
   const canMultiSelect = view !== "find";
 
@@ -206,6 +251,7 @@ export function CalendarViews({
         <div className="sticky bottom-3 z-20 mx-auto flex w-fit items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 shadow-lg">
           <span className="text-sm font-medium">
             {selected.size} slot{selected.size === 1 ? "" : "s"} · {segments.length} booking{segments.length === 1 ? "" : "s"}
+            <span className="text-primary"> · {pesos(totalCents)}</span>
           </span>
           <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Map())}>
             Clear
@@ -220,6 +266,7 @@ export function CalendarViews({
         open={batchOpen}
         onOpenChange={setBatchOpen}
         segments={segments}
+        totalCents={totalCents}
         timezone={timezone}
         onBooked={() => {
           setBatchOpen(false);

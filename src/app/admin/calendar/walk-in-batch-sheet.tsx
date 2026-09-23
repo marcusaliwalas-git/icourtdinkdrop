@@ -28,16 +28,22 @@ import type { WalkInSegment } from "./selection";
 // Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
 const UNPAID = "unpaid";
 
+function pesos(cents: number) {
+  return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
+}
+
 export function WalkInBatchSheet({
   open,
   onOpenChange,
   segments,
+  totalCents,
   timezone,
   onBooked,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   segments: WalkInSegment[];
+  totalCents?: number;
   timezone: string;
   onBooked: () => void;
 }) {
@@ -105,13 +111,24 @@ export function WalkInBatchSheet({
           <ul className="flex flex-col divide-y divide-border/60 rounded-md border text-sm">
             {segments.map((s) => (
               <li key={`${s.courtId}-${s.startsAt}`} className="flex items-center justify-between gap-2 px-3 py-2">
-                <span className="font-medium">{s.courtName}</span>
-                <span className="text-muted-foreground">
-                  {formatInTimezone(new Date(s.startsAt), "EEE, MMM d · h:mm a", timezone)} –{" "}
-                  {formatInTimezone(new Date(s.endsAt), "h:mm a", timezone)}
+                <span className="min-w-0">
+                  <span className="font-medium">{s.courtName}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {formatInTimezone(new Date(s.startsAt), "EEE, MMM d · h:mm a", timezone)} –{" "}
+                    {formatInTimezone(new Date(s.endsAt), "h:mm a", timezone)}
+                  </span>
                 </span>
+                {s.estimateCents != null && (
+                  <span className="shrink-0 text-muted-foreground">{pesos(s.estimateCents)}</span>
+                )}
               </li>
             ))}
+            {totalCents != null && (
+              <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-medium">
+                <span>Total</span>
+                <span>{pesos(totalCents)}</span>
+              </li>
+            )}
           </ul>
 
           <div className="flex flex-col gap-1.5">
