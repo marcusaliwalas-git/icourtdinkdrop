@@ -14,6 +14,8 @@ export interface WalkInSegment {
   startsAt: string; // ISO
   endsAt: string; // ISO (exclusive)
   durationMinutes: number;
+  /** Estimated walk-in price for the segment, filled in by the caller (non-member rate). */
+  estimateCents?: number;
 }
 
 /** Stable key for a selected hour-cell. */

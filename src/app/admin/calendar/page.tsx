@@ -5,6 +5,7 @@ import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
+import type { RatePeriod as CourtRatePeriod } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function AdminCalendarPage({
   // early-morning slots (which render on this day's grid) still pull their bookings.
   const dayEnd = endOfLocalDayUtc(nextLocalDate(date), venue.timezone);
 
-  const [{ data: dayHours }, { data: bookings }, { data: closures }] = await Promise.all([
+  const [{ data: dayHours }, { data: bookings }, { data: closures }, { data: ratePeriods }] = await Promise.all([
     supabase
       .from("operating_hours")
       .select("open_time, close_time, closes_next_day")
@@ -60,7 +61,30 @@ export default async function AdminCalendarPage({
       .eq("venue_id", venue.id)
       .lt("starts_at", dayEnd.toISOString())
       .gt("ends_at", dayStart.toISOString()),
+    courtIds.length
+      ? supabase
+          .from("court_rate_periods")
+          .select("court_id, start_time, end_time, hourly_rate_cents, member_rate_cents, days_of_week")
+          .in("court_id", courtIds)
+      : Promise.resolve({ data: [] as never[] }),
   ]);
+
+  // Per-court pricing for the multi-select running total (walk-ins price at the non-member rate).
+  const pricing: Record<string, { baseHourlyRateCents: number; ratePeriods: CourtRatePeriod[] }> = {};
+  for (const c of courts ?? []) {
+    pricing[c.id] = {
+      baseHourlyRateCents: c.hourly_rate_cents,
+      ratePeriods: (ratePeriods ?? [])
+        .filter((p) => p.court_id === c.id)
+        .map((p) => ({
+          start_time: p.start_time,
+          end_time: p.end_time,
+          hourly_rate_cents: p.hourly_rate_cents,
+          member_rate_cents: p.member_rate_cents,
+          days_of_week: p.days_of_week,
+        })),
+    };
+  }
 
   const grid = buildAdminCalendarGrid({
     date,
@@ -114,6 +138,7 @@ export default async function AdminCalendarPage({
           timezone={venue.timezone}
           courts={courts ?? []}
           rows={grid.rows}
+          pricing={pricing}
           dateLabel={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
           defaultView={venue.calendar_default_view ?? "grid"}
         />
