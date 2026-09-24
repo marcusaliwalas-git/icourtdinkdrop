@@ -662,6 +662,54 @@ export type Database = {
           },
         ]
       }
+      membership_requests: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          duration_days: number
+          id: string
+          payment_reference: string | null
+          payment_slip_path: string | null
+          profile_id: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tier: string
+          venue_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          duration_days: number
+          id?: string
+          payment_reference?: string | null
+          payment_slip_path?: string | null
+          profile_id: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tier?: string
+          venue_id: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          duration_days?: number
+          id?: string
+          payment_reference?: string | null
+          payment_slip_path?: string | null
+          profile_id?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          tier?: string
+          venue_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           channel: string
@@ -1087,6 +1135,8 @@ export type Database = {
           logo_url: string | null
           max_advance_days: number
           member_advance_days: number | null
+          membership_duration_days: number | null
+          membership_price_cents: number | null
           min_lead_minutes: number
           name: string
           photos: string[]
@@ -1131,6 +1181,8 @@ export type Database = {
           logo_url?: string | null
           max_advance_days?: number
           member_advance_days?: number | null
+          membership_duration_days?: number | null
+          membership_price_cents?: number | null
           min_lead_minutes?: number
           name: string
           photos?: string[]
@@ -1175,6 +1227,8 @@ export type Database = {
           logo_url?: string | null
           max_advance_days?: number
           member_advance_days?: number | null
+          membership_duration_days?: number | null
+          membership_price_cents?: number | null
           min_lead_minutes?: number
           name?: string
           photos?: string[]
@@ -1250,6 +1304,42 @@ export type Database = {
     Functions: {
       admin_shares_venue_with: { Args: { p_profile: string }; Returns: boolean }
       admin_user_id_by_email: { Args: { p_email: string }; Returns: string }
+      submit_membership_request: {
+        Args: { p_venue: string; p_reference?: string; p_slip_path?: string }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          duration_days: number
+          id: string
+          payment_reference: string | null
+          payment_slip_path: string | null
+          profile_id: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tier: string
+          venue_id: string
+        }
+      }
+      review_membership_request: {
+        Args: { p_request: string; p_approve: boolean; p_notes?: string }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          duration_days: number
+          id: string
+          payment_reference: string | null
+          payment_slip_path: string | null
+          profile_id: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tier: string
+          venue_id: string
+        }
+      }
       booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
       booking_venue: { Args: { p_booking: string }; Returns: string }
       can_admin_venue: { Args: { p_venue: string }; Returns: boolean }

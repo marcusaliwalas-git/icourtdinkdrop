@@ -18,6 +18,9 @@ export const venueSchema = z.object({
   maxAdvanceDays: z.number().int().min(1).max(180).default(14),
   // How far ahead an active (official) member may book. Null = same window as everyone else.
   memberAdvanceDays: z.number().int().min(1).max(365).nullable().default(null),
+  // Self-serve official-membership plan. Null price = self-serve purchase disabled.
+  membershipPriceCents: z.number().int().min(0).max(100_000_000).nullable().default(null),
+  membershipDurationDays: z.number().int().min(1).max(3650).nullable().default(null),
   cancellationCutoffHours: z.number().int().min(0).max(168).default(3),
   // Court guidelines / etiquette shown on confirmed bookings (email + My bookings). One rule per
   // line; optional.

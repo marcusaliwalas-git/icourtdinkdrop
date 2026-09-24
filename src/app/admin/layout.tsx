@@ -19,9 +19,11 @@ export default async function AdminLayout({
   const coachesEnabled = featureEnabled(tenant?.features, "coaches");
   const analyticsEnabled = featureEnabled(tenant?.features, "analytics");
   const expensesEnabled = featureEnabled(tenant?.features, "expenses");
+  const officialMembersEnabled = featureEnabled(tenant?.features, "official_members");
 
   const peopleItems = [
     { href: "/admin/members", label: "Members" },
+    ...(officialMembersEnabled ? [{ href: "/admin/members/requests", label: "Subscription Requests" }] : []),
     ...(analyticsEnabled ? [{ href: "/admin/customers", label: "Top Customers" }] : []),
     ...(coachesEnabled ? [{ href: "/admin/coaches", label: "Coaches" }] : []),
   ];

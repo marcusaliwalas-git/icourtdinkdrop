@@ -117,6 +117,7 @@ export default async function RootLayout({
           signedIn={signedIn}
           isOfficialMember={isOfficialMember}
           coachesEnabled={featureEnabled(tenant?.features, "coaches")}
+          membershipEnabled={featureEnabled(tenant?.features, "official_members")}
         />
         <div className="flex-1">{children}</div>
         {needsName && <RequireNameDialog />}
