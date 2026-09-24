@@ -5,11 +5,19 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { submitMembershipRequest } from "./actions";
 
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
+
+export interface Plan {
+  id: string;
+  name: string;
+  priceCents: number;
+  durationDays: number;
+}
 
 export interface PaymentAccount {
   bank_name: string;
@@ -23,24 +31,30 @@ function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
 
-export function MembershipPurchase({
-  priceCents,
-  durationDays,
-  accounts,
-}: {
-  priceCents: number;
-  durationDays: number;
-  accounts: PaymentAccount[];
-}) {
+function termLabel(days: number) {
+  if (days === 365) return "year";
+  if (days === 30) return "month";
+  const months = Math.round(days / 30);
+  return months >= 1 ? `${months} month${months === 1 ? "" : "s"}` : `${days} days`;
+}
+
+export function MembershipPurchase({ plans, accounts }: { plans: Plan[]; accounts: PaymentAccount[] }) {
   const router = useRouter();
+  const [planId, setPlanId] = useState(plans[0]?.id ?? "");
   const [reference, setReference] = useState("");
   const [slip, setSlip] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  const selected = plans.find((p) => p.id === planId) ?? plans[0];
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!selected) {
+      setError("Pick a membership plan.");
+      return;
+    }
     if (!slip) {
       setError("Attach a screenshot or photo of your transfer receipt.");
       return;
@@ -66,7 +80,11 @@ export function MembershipPurchase({
         return;
       }
 
-      const result = await submitMembershipRequest({ paymentReference: reference, paymentSlipPath: path });
+      const result = await submitMembershipRequest({
+        planId: selected.id,
+        paymentReference: reference,
+        paymentSlipPath: path,
+      });
       if (!result.success) {
         setError(result.message);
         return;
@@ -75,26 +93,42 @@ export function MembershipPurchase({
     });
   }
 
-  const months = Math.round(durationDays / 30);
-
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <div className="rounded-xl border bg-card p-4">
-        <p className="text-sm text-muted-foreground">Official membership</p>
-        <p className="mt-1 text-2xl font-bold">
-          {pesos(priceCents)}
-          <span className="ml-1 text-sm font-normal text-muted-foreground">
-            / {durationDays === 365 ? "year" : `${months} month${months === 1 ? "" : "s"}`}
-          </span>
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Unlocks member rates and the members-only booking window at this venue.
+      {/* Tier selection */}
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium">Choose a plan</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {plans.map((p) => {
+            const active = p.id === planId;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPlanId(p.id)}
+                aria-pressed={active}
+                className={cn(
+                  "flex flex-col items-start rounded-xl border p-4 text-left transition-colors",
+                  active ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-foreground/30"
+                )}
+              >
+                <span className="font-medium">{p.name}</span>
+                <span className="mt-1 text-xl font-bold">
+                  {pesos(p.priceCents)}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">/ {termLabel(p.durationDays)}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Membership unlocks member rates and the members-only booking window at this venue.
         </p>
       </div>
 
-      {accounts.length > 0 && (
+      {accounts.length > 0 && selected && (
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-sm font-medium">Transfer {pesos(priceCents)} to</p>
+          <p className="text-sm font-medium">Transfer {pesos(selected.priceCents)} to</p>
           <div className="mt-2 flex flex-col gap-3">
             {accounts.map((a, i) => (
               <div key={i} className="text-sm">
@@ -134,7 +168,7 @@ export function MembershipPurchase({
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button type="submit" disabled={isPending}>
+      <Button type="submit" disabled={isPending || !selected}>
         {isPending ? "Submitting…" : "Submit membership request"}
       </Button>
     </form>

@@ -13,6 +13,8 @@ import {
   ratePeriodSchema,
   paymentAccountSchema,
   paymentAccountUpdateSchema,
+  membershipPlanSchema,
+  membershipPlanUpdateSchema,
 } from "@/lib/validation/venue";
 
 type ActionResult = { error?: string; success?: boolean };
@@ -48,8 +50,6 @@ export async function upsertVenue(
     minLeadMinutes: Number(formData.get("minLeadMinutes")),
     maxAdvanceDays: Number(formData.get("maxAdvanceDays")),
     memberAdvanceDays: formData.get("memberAdvanceDays") ? Number(formData.get("memberAdvanceDays")) : null,
-    membershipPriceCents: formData.get("membershipPrice") ? Math.round(Number(formData.get("membershipPrice")) * 100) : null,
-    membershipDurationDays: formData.get("membershipDurationDays") ? Number(formData.get("membershipDurationDays")) : null,
     cancellationCutoffHours: Number(formData.get("cancellationCutoffHours")),
     guidelines: formData.get("guidelines") || undefined,
     calendarDefaultView: formData.get("calendarDefaultView") || "grid",
@@ -73,8 +73,6 @@ export async function upsertVenue(
     min_lead_minutes: parsed.data.minLeadMinutes,
     max_advance_days: parsed.data.maxAdvanceDays,
     member_advance_days: parsed.data.memberAdvanceDays,
-    membership_price_cents: parsed.data.membershipPriceCents,
-    membership_duration_days: parsed.data.membershipDurationDays,
     cancellation_cutoff_hours: parsed.data.cancellationCutoffHours,
     guidelines: parsed.data.guidelines || null,
     calendar_default_view: parsed.data.calendarDefaultView,
@@ -334,6 +332,72 @@ export async function deletePaymentAccount(id: string): Promise<ActionResult> {
   const { error } = await supabase.from("payment_accounts").delete().eq("id", id);
   if (error) return { error: error.message };
   revalidatePaymentAccounts();
+  return { success: true };
+}
+
+function revalidateMembershipPlans() {
+  revalidatePath("/admin/venue");
+  revalidatePath("/membership");
+}
+
+export async function addMembershipPlan(formData: FormData): Promise<ActionResult> {
+  const parsed = membershipPlanSchema.safeParse({
+    venueId: formData.get("venueId"),
+    name: formData.get("name"),
+    priceCents: Math.round(Number(formData.get("price")) * 100),
+    durationDays: Number(formData.get("durationDays")),
+    sortOrder: Number(formData.get("sortOrder")) || 0,
+    isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("membership_plans").insert({
+    venue_id: parsed.data.venueId,
+    name: parsed.data.name,
+    price_cents: parsed.data.priceCents,
+    duration_days: parsed.data.durationDays,
+    sort_order: parsed.data.sortOrder,
+    is_active: parsed.data.isActive,
+  });
+  if (error) return { error: error.message };
+  revalidateMembershipPlans();
+  return { success: true };
+}
+
+export async function updateMembershipPlan(id: string, formData: FormData): Promise<ActionResult> {
+  const parsed = membershipPlanUpdateSchema.safeParse({
+    name: formData.get("name"),
+    priceCents: Math.round(Number(formData.get("price")) * 100),
+    durationDays: Number(formData.get("durationDays")),
+    sortOrder: Number(formData.get("sortOrder")) || 0,
+    isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("membership_plans")
+    .update({
+      name: parsed.data.name,
+      price_cents: parsed.data.priceCents,
+      duration_days: parsed.data.durationDays,
+      sort_order: parsed.data.sortOrder,
+      is_active: parsed.data.isActive,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That plan isn't for your venue." };
+  revalidateMembershipPlans();
+  return { success: true };
+}
+
+export async function deleteMembershipPlan(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("membership_plans").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidateMembershipPlans();
   return { success: true };
 }
 

@@ -54,18 +54,22 @@ export default async function MembersPage({
   }
   profiles.sort((a, b) => (a.full_name ?? "").localeCompare(b.full_name ?? ""));
 
-  // Who holds an active official membership *today* (venue-local) — drives the "Official" column.
+  // Each member's active membership tier *today* (venue-local) — drives the "Membership" column
+  // (no active membership shows as "Regular"). One active membership at a time; latest-ending wins.
   const today = venue ? formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone) : "";
-  const officialSet = new Set<string>();
+  const tierByProfile = new Map<string, string>();
   if (venue) {
     const { data: officials } = await supabase
       .from("memberships")
-      .select("profile_id, ends_on")
+      .select("profile_id, tier, ends_on")
       .eq("venue_id", venue.id)
       .eq("status", "active")
-      .lte("starts_on", today);
+      .lte("starts_on", today)
+      .order("ends_on", { ascending: false, nullsFirst: true });
     for (const row of officials ?? []) {
-      if (row.ends_on == null || row.ends_on >= today) officialSet.add(row.profile_id as string);
+      if ((row.ends_on == null || row.ends_on >= today) && !tierByProfile.has(row.profile_id)) {
+        tierByProfile.set(row.profile_id as string, row.tier as string);
+      }
     }
   }
 
@@ -75,7 +79,7 @@ export default async function MembersPage({
     email: m.email,
     phone: m.phone,
     role: m.role,
-    official: officialSet.has(m.id),
+    membershipType: tierByProfile.get(m.id) ?? null,
     noShowCount: m.no_show_count,
     restricted: !!m.booking_restricted_until && new Date(m.booking_restricted_until) > new Date(),
   }));

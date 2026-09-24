@@ -21,9 +21,19 @@ export default async function MembershipPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const priceCents = venue.membership_price_cents;
-  const durationDays = venue.membership_duration_days;
-  const configured = priceCents != null && durationDays != null;
+  const { data: planRows } = await supabase
+    .from("membership_plans")
+    .select("id, name, price_cents, duration_days")
+    .eq("venue_id", venue.id)
+    .eq("is_active", true)
+    .order("sort_order");
+  const plans = (planRows ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    priceCents: p.price_cents,
+    durationDays: p.duration_days,
+  }));
+  const configured = plans.length > 0;
 
   const today = formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone);
 
@@ -104,7 +114,7 @@ export default async function MembershipPage() {
               Renewing extends your membership from its current end date — you won&apos;t lose any days.
             </p>
           )}
-          <MembershipPurchase priceCents={priceCents!} durationDays={durationDays!} accounts={accounts ?? []} />
+          <MembershipPurchase plans={plans} accounts={accounts ?? []} />
         </>
       )}
     </div>

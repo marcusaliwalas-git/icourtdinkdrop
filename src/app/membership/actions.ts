@@ -9,12 +9,12 @@ export type SubmitResult = { success: true } | { success: false; message: string
 const ERR: Record<string, string> = {
   NOT_SIGNED_IN: "Please sign in first.",
   FEATURE_DISABLED: "Membership isn't available at this venue.",
-  PLAN_NOT_CONFIGURED: "Membership isn't set up yet — please check back later.",
+  PLAN_NOT_FOUND: "That plan is no longer available — pick another.",
   REQUEST_PENDING: "You already have a request awaiting review.",
-  VENUE_NOT_FOUND: "Venue not found.",
 };
 
 export async function submitMembershipRequest(input: {
+  planId: string;
   paymentReference?: string;
   paymentSlipPath?: string;
 }): Promise<SubmitResult> {
@@ -23,7 +23,7 @@ export async function submitMembershipRequest(input: {
   if (!venue) return { success: false, message: "Venue not found." };
 
   const { error } = await supabase.rpc("submit_membership_request", {
-    p_venue: venue.id,
+    p_plan: input.planId,
     p_reference: input.paymentReference || undefined,
     p_slip_path: input.paymentSlipPath || undefined,
   });

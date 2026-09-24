@@ -5,6 +5,7 @@ import { CourtsManager } from "./courts-manager";
 import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
+import { MembershipPlansManager } from "./membership-plans-manager";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
 import { requireAdmin } from "@/lib/auth";
@@ -95,6 +96,15 @@ export default async function AdminVenuePage() {
     (ratePeriodsByCourtId[period.court_id] ??= []).push(period);
   }
 
+  const officialMembersEnabled = featureEnabled(venue.features, "official_members");
+  const { data: membershipPlans } = officialMembersEnabled
+    ? await supabase
+        .from("membership_plans")
+        .select("id, name, price_cents, duration_days, sort_order, is_active")
+        .eq("venue_id", venue.id)
+        .order("sort_order")
+    : { data: [] as { id: string; name: string; price_cents: number; duration_days: number; sort_order: number; is_active: boolean }[] };
+
   return (
     <div>
       <p className="font-mono text-xs tracking-[0.2em] text-primary uppercase">Venue &amp; courts</p>
@@ -105,6 +115,7 @@ export default async function AdminVenuePage() {
           <TabsTrigger value="courts">Courts</TabsTrigger>
           <TabsTrigger value="hours">Hours</TabsTrigger>
           <TabsTrigger value="payment">Payment</TabsTrigger>
+          {officialMembersEnabled && <TabsTrigger value="membership">Membership</TabsTrigger>}
           <TabsTrigger value="closures">Closures</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="max-w-lg">
@@ -123,6 +134,19 @@ export default async function AdminVenuePage() {
         <TabsContent value="payment">
           <PaymentAccountsManager venueId={venue.id} accounts={paymentAccounts ?? []} />
         </TabsContent>
+        {officialMembersEnabled && (
+          <TabsContent value="membership">
+            <MembershipPlansManager
+              venueId={venue.id}
+              plans={membershipPlans ?? []}
+              paymentAccounts={(paymentAccounts ?? []).map((a) => ({
+                bank_name: a.bank_name,
+                account_name: a.account_name,
+                account_number: a.account_number,
+              }))}
+            />
+          </TabsContent>
+        )}
         <TabsContent value="closures">
           <ClosuresManager
             venueId={venue.id}
