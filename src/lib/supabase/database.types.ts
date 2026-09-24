@@ -662,6 +662,39 @@ export type Database = {
           },
         ]
       }
+      membership_plans: {
+        Row: {
+          created_at: string
+          duration_days: number
+          id: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          venue_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_days: number
+          id?: string
+          is_active?: boolean
+          name: string
+          price_cents: number
+          sort_order?: number
+          venue_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_days?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          venue_id?: string
+        }
+        Relationships: []
+      }
       membership_requests: {
         Row: {
           amount_cents: number
@@ -670,6 +703,7 @@ export type Database = {
           id: string
           payment_reference: string | null
           payment_slip_path: string | null
+          plan_id: string | null
           profile_id: string
           review_notes: string | null
           reviewed_at: string | null
@@ -685,6 +719,7 @@ export type Database = {
           id?: string
           payment_reference?: string | null
           payment_slip_path?: string | null
+          plan_id?: string | null
           profile_id: string
           review_notes?: string | null
           reviewed_at?: string | null
@@ -700,6 +735,7 @@ export type Database = {
           id?: string
           payment_reference?: string | null
           payment_slip_path?: string | null
+          plan_id?: string | null
           profile_id?: string
           review_notes?: string | null
           reviewed_at?: string | null
@@ -1305,7 +1341,7 @@ export type Database = {
       admin_shares_venue_with: { Args: { p_profile: string }; Returns: boolean }
       admin_user_id_by_email: { Args: { p_email: string }; Returns: string }
       submit_membership_request: {
-        Args: { p_venue: string; p_reference?: string; p_slip_path?: string }
+        Args: { p_plan: string; p_reference?: string; p_slip_path?: string }
         Returns: {
           amount_cents: number
           created_at: string

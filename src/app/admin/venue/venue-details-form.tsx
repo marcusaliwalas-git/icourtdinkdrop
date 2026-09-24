@@ -170,33 +170,9 @@ export function VenueDetailsForm({
           </div>
         )}
         {officialMembersEnabled && (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="membershipPrice">Membership price (₱)</Label>
-            <Input
-              id="membershipPrice"
-              name="membershipPrice"
-              type="number"
-              min={0}
-              step={1}
-              placeholder="e.g. 2000"
-              defaultValue={venue?.membership_price_cents != null ? venue.membership_price_cents / 100 : ""}
-            />
-            <p className="text-xs text-muted-foreground">What members pay to buy official membership. Blank = self-serve purchase off.</p>
-          </div>
-        )}
-        {officialMembersEnabled && (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="membershipDurationDays">Membership term (days)</Label>
-            <Input
-              id="membershipDurationDays"
-              name="membershipDurationDays"
-              type="number"
-              min={1}
-              placeholder="e.g. 365"
-              defaultValue={venue?.membership_duration_days ?? ""}
-            />
-            <p className="text-xs text-muted-foreground">How long a purchased membership lasts.</p>
-          </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Set up membership tiers (Basic, Pro…) and their prices in the <strong>Membership</strong> tab.
+          </p>
         )}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="cancellationCutoffHours">Free cancel until (hrs before)</Label>

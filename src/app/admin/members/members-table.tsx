@@ -21,12 +21,13 @@ export interface MemberRow {
   email: string | null;
   phone: string | null;
   role: string;
-  official: boolean;
+  /** Active membership tier name, or null for a non-member (shown as "Regular"). */
+  membershipType: string | null;
   noShowCount: number;
   restricted: boolean;
 }
 
-type SortKey = "name" | "email" | "phone" | "role" | "official" | "noShows" | "status";
+type SortKey = "name" | "email" | "phone" | "role" | "membership" | "noShows" | "status";
 
 export function MembersTable({ members }: { members: MemberRow[] }) {
   // Default to name A→Z (matches the server's initial order).
@@ -43,8 +44,8 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
           return m.phone ?? "";
         case "role":
           return m.role;
-        case "official":
-          return m.official ? 1 : 0;
+        case "membership":
+          return (m.membershipType ?? "Regular").toLowerCase();
         case "noShows":
           return m.noShowCount;
         case "status":
@@ -87,7 +88,7 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
           <SortHeader label="Email" k="email" />
           <SortHeader label="Phone" k="phone" />
           <SortHeader label="Role" k="role" />
-          <SortHeader label="Official" k="official" />
+          <SortHeader label="Membership" k="membership" />
           <SortHeader label="No-shows" k="noShows" />
           <SortHeader label="Status" k="status" />
           <TableHead>Front desk</TableHead>
@@ -105,13 +106,13 @@ export function MembersTable({ members }: { members: MemberRow[] }) {
             <TableCell>{m.phone ?? "-"}</TableCell>
             <TableCell className="capitalize">{m.role}</TableCell>
             <TableCell>
-              {m.official ? (
-                <Badge className="gap-1 bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
+              {m.membershipType ? (
+                <Badge className="gap-1 bg-amber-100 text-amber-800 capitalize dark:bg-amber-400/15 dark:text-amber-300">
                   <Crown className="size-3.5" aria-hidden />
-                  Official
+                  {m.membershipType}
                 </Badge>
               ) : (
-                <span className="text-muted-foreground">—</span>
+                <span className="text-muted-foreground">Regular</span>
               )}
             </TableCell>
             <TableCell>{m.noShowCount}</TableCell>

@@ -18,9 +18,6 @@ export const venueSchema = z.object({
   maxAdvanceDays: z.number().int().min(1).max(180).default(14),
   // How far ahead an active (official) member may book. Null = same window as everyone else.
   memberAdvanceDays: z.number().int().min(1).max(365).nullable().default(null),
-  // Self-serve official-membership plan. Null price = self-serve purchase disabled.
-  membershipPriceCents: z.number().int().min(0).max(100_000_000).nullable().default(null),
-  membershipDurationDays: z.number().int().min(1).max(3650).nullable().default(null),
   cancellationCutoffHours: z.number().int().min(0).max(168).default(3),
   // Court guidelines / etiquette shown on confirmed bookings (email + My bookings). One rule per
   // line; optional.
@@ -104,6 +101,22 @@ export type PaymentAccountInput = z.infer<typeof paymentAccountSchema>;
 export const paymentAccountUpdateSchema = paymentAccountSchema.omit({ venueId: true });
 
 export type PaymentAccountUpdateInput = z.infer<typeof paymentAccountUpdateSchema>;
+
+// A membership tier a venue offers for self-serve purchase (Basic, Pro…).
+export const membershipPlanSchema = z.object({
+  venueId: z.uuid(),
+  name: z.string().trim().min(1, "Enter a tier name.").max(60),
+  priceCents: z.number().int().min(0).max(100_000_000),
+  durationDays: z.number().int().min(1, "Enter a term in days.").max(3650),
+  sortOrder: z.number().int().default(0),
+  isActive: z.boolean().default(true),
+});
+
+export type MembershipPlanInput = z.infer<typeof membershipPlanSchema>;
+
+export const membershipPlanUpdateSchema = membershipPlanSchema.omit({ venueId: true });
+
+export type MembershipPlanUpdateInput = z.infer<typeof membershipPlanUpdateSchema>;
 
 export const closureSchema = z.object({
   venueId: z.uuid(),

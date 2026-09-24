@@ -20,6 +20,7 @@ export interface RequestRow {
   id: string;
   name: string;
   email: string | null;
+  tier: string;
   amountCents: number;
   durationDays: number;
   reference: string | null;
@@ -80,6 +81,7 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
               <TableHeader>
                 <TableRow>
                   <TableHead>Member</TableHead>
+                  <TableHead>Tier</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Term</TableHead>
                   <TableHead>Reference</TableHead>
@@ -94,6 +96,7 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
                       <div className="font-medium">{r.name}</div>
                       {r.email && <div className="text-xs text-muted-foreground">{r.email}</div>}
                     </TableCell>
+                    <TableCell>{r.tier}</TableCell>
                     <TableCell>{pesos(r.amountCents)}</TableCell>
                     <TableCell className="text-muted-foreground">{r.durationDays} days</TableCell>
                     <TableCell className="font-mono text-xs">{r.reference ?? "—"}</TableCell>
@@ -139,6 +142,7 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
               <TableHeader>
                 <TableRow>
                   <TableHead>Member</TableHead>
+                  <TableHead>Tier</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Note</TableHead>
@@ -152,6 +156,7 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
                       <div className="font-medium">{r.name}</div>
                       {r.email && <div className="text-xs text-muted-foreground">{r.email}</div>}
                     </TableCell>
+                    <TableCell>{r.tier}</TableCell>
                     <TableCell>{pesos(r.amountCents)}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANT[r.status] ?? "secondary"}>{r.status}</Badge>
