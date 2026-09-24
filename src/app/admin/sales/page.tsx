@@ -162,6 +162,21 @@ export default async function AdminSalesPage({
   const expenses = summarizeExpenses((expenseRows ?? []).map((e) => ({ amountCents: e.amount_cents, category: e.category })));
   const netCents = netProfitCents(s.realizedCents, expenses.totalCents);
 
+  // Membership revenue = subscriptions approved within the range (by review date). Separate from
+  // booking revenue; only when the official-members capability is on.
+  const { data: membershipRows } = officialMembersEnabled
+    ? await supabase
+        .from("membership_requests")
+        .select("amount_cents")
+        .eq("venue_id", venue.id)
+        .eq("status", "approved")
+        .gte("reviewed_at", startOfLocalDayUtc(from, venue.timezone).toISOString())
+        .lte("reviewed_at", endOfLocalDayUtc(to, venue.timezone).toISOString())
+        .limit(5000)
+    : { data: null };
+  const membershipRevenueCents = (membershipRows ?? []).reduce((sum, r) => sum + r.amount_cents, 0);
+  const membershipCount = (membershipRows ?? []).length;
+
   // Avg daily sales for the selected range, and vs the previous comparable window.
   const avgDaily = avgDailyCents(s.realizedCents, from, to, today);
   const avgDailyPrev = avgDailyCents(previous.summary.realizedCents, prev.from, prev.to, today);
@@ -294,6 +309,13 @@ export default async function AdminSalesPage({
             {s.awaitingCount} unpaid — not yet counted
           </span>
         </StatCard>
+        {officialMembersEnabled && (
+          <StatCard label="Membership revenue" value={pesos(membershipRevenueCents)}>
+            <span className="text-muted-foreground">
+              {membershipCount} subscription{membershipCount === 1 ? "" : "s"} approved this range
+            </span>
+          </StatCard>
+        )}
       </div>
 
       {expensesEnabled && (

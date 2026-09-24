@@ -43,6 +43,7 @@ export function SiteHeader({
   signedIn = false,
   isOfficialMember = false,
   coachesEnabled = true,
+  membershipEnabled = false,
 }: {
   logoUrl?: string | null;
   brandName?: string | null;
@@ -50,6 +51,7 @@ export function SiteHeader({
   signedIn?: boolean;
   isOfficialMember?: boolean;
   coachesEnabled?: boolean;
+  membershipEnabled?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -74,6 +76,7 @@ export function SiteHeader({
         <NavLink href="/book" pathname={pathname}>Book</NavLink>
         {coachesEnabled && <NavLink href="/coaches" pathname={pathname}>Coaches</NavLink>}
         <NavLink href="/bookings" pathname={pathname}>My bookings</NavLink>
+        {membershipEnabled && <NavLink href="/membership" pathname={pathname}>Membership</NavLink>}
         {isAdmin && (
           <NavLink href="/admin" pathname={pathname} className="text-primary hover:text-primary">
             Admin
