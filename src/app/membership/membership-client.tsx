@@ -38,15 +38,38 @@ function termLabel(days: number) {
   return months >= 1 ? `${months} month${months === 1 ? "" : "s"}` : `${days} days`;
 }
 
-export function MembershipPurchase({ plans, accounts }: { plans: Plan[]; accounts: PaymentAccount[] }) {
+export function MembershipPurchase({
+  plans,
+  accounts,
+  lockedTier = null,
+}: {
+  plans: Plan[];
+  accounts: PaymentAccount[];
+  /** When set, the member has this active tier and may only renew it (same-tier only). */
+  lockedTier?: string | null;
+}) {
   const router = useRouter();
-  const [planId, setPlanId] = useState(plans[0]?.id ?? "");
+  // While active, restrict the choice to the member's current tier (renewal only).
+  const selectablePlans = lockedTier
+    ? plans.filter((p) => p.name.toLowerCase() === lockedTier.toLowerCase())
+    : plans;
+  const [planId, setPlanId] = useState(selectablePlans[0]?.id ?? "");
   const [reference, setReference] = useState("");
   const [slip, setSlip] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const selected = plans.find((p) => p.id === planId) ?? plans[0];
+  const selected = selectablePlans.find((p) => p.id === planId) ?? selectablePlans[0];
+
+  // Active on a tier the venue no longer offers self-serve — renewal must be handled by the venue.
+  if (lockedTier && selectablePlans.length === 0) {
+    return (
+      <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+        Your <span className="font-medium text-foreground capitalize">{lockedTier}</span> plan isn&apos;t available for
+        self-serve renewal right now — please contact the venue to renew or change it.
+      </p>
+    );
+  }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,11 +118,11 @@ export function MembershipPurchase({ plans, accounts }: { plans: Plan[]; account
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      {/* Tier selection */}
+      {/* Tier selection (locked to the current tier while active — renewal only) */}
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Choose a plan</p>
+        <p className="text-sm font-medium">{lockedTier ? "Renew your plan" : "Choose a plan"}</p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {plans.map((p) => {
+          {selectablePlans.map((p) => {
             const active = p.id === planId;
             return (
               <button
@@ -169,7 +192,7 @@ export function MembershipPurchase({ plans, accounts }: { plans: Plan[]; account
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" disabled={isPending || !selected}>
-        {isPending ? "Submitting…" : "Submit membership request"}
+        {isPending ? "Submitting…" : lockedTier ? "Submit renewal request" : "Submit membership request"}
       </Button>
     </form>
   );
