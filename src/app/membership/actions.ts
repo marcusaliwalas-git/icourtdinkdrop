@@ -11,6 +11,7 @@ const ERR: Record<string, string> = {
   FEATURE_DISABLED: "Membership isn't available at this venue.",
   PLAN_NOT_FOUND: "That plan is no longer available — pick another.",
   REQUEST_PENDING: "You already have a request awaiting review.",
+  TIER_LOCKED: "You can only renew your current tier. To change tiers, contact the venue.",
 };
 
 export async function submitMembershipRequest(input: {

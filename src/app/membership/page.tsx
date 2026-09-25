@@ -37,19 +37,20 @@ export default async function MembershipPage() {
 
   const today = formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone);
 
-  // The signed-in member's current standing + any request awaiting review.
+  // The signed-in member's current standing (tier + expiry) + any request awaiting review.
+  let activeTier: string | null = null;
   let activeUntil: string | null = null;
   let pending = false;
   if (user) {
     const [{ data: membership }, { data: request }] = await Promise.all([
       supabase
         .from("memberships")
-        .select("ends_on")
+        .select("tier, ends_on")
         .eq("profile_id", user.id)
         .eq("venue_id", venue.id)
         .eq("status", "active")
         .or(`ends_on.is.null,ends_on.gte.${today}`)
-        .order("ends_on", { ascending: false, nullsFirst: false })
+        .order("ends_on", { ascending: false, nullsFirst: true })
         .limit(1)
         .maybeSingle(),
       supabase
@@ -60,6 +61,7 @@ export default async function MembershipPage() {
         .eq("status", "pending")
         .maybeSingle(),
     ]);
+    activeTier = membership ? membership.tier : null;
     activeUntil = membership ? membership.ends_on : null;
     pending = !!request;
   }
@@ -77,15 +79,18 @@ export default async function MembershipPage() {
         <p className="text-sm text-muted-foreground">Become an official member of {venue.name}.</p>
       </div>
 
-      {/* Current standing */}
-      {user && activeUntil && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
-          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
-            Official member
+      {/* Current standing — which tier they're on and until when */}
+      {user && activeTier && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+          <span className="text-muted-foreground">Current plan:</span>
+          <Badge className="capitalize bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+            {activeTier}
           </Badge>
-          <span className="text-muted-foreground">
-            Active until {formatInTimezone(new Date(`${activeUntil}T12:00:00Z`), "MMMM d, yyyy", venue.timezone)}
-          </span>
+          {activeUntil && (
+            <span className="text-muted-foreground">
+              Active until {formatInTimezone(new Date(`${activeUntil}T12:00:00Z`), "MMMM d, yyyy", venue.timezone)}
+            </span>
+          )}
         </div>
       )}
 
@@ -109,12 +114,13 @@ export default async function MembershipPage() {
         </div>
       ) : (
         <>
-          {activeUntil && (
+          {activeTier && (
             <p className="text-sm text-muted-foreground">
-              Renewing extends your membership from its current end date — you won&apos;t lose any days.
+              Renewing extends your membership from its current end date — you won&apos;t lose any days. To change tiers,
+              contact the venue.
             </p>
           )}
-          <MembershipPurchase plans={plans} accounts={accounts ?? []} />
+          <MembershipPurchase plans={plans} accounts={accounts ?? []} lockedTier={activeTier} />
         </>
       )}
     </div>
