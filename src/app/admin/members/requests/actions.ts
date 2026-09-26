@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getTenant } from "@/lib/tenant";
+import { tenantEmailBrand } from "@/lib/site-url";
+import { sendMembershipApprovedEmail } from "@/lib/email";
 
 export type ReviewResult = { success: true } | { success: false; message: string };
 
@@ -19,7 +22,7 @@ export async function reviewMembershipRequest(
   notes?: string
 ): Promise<ReviewResult> {
   const { supabase } = await requireAdmin();
-  const { error } = await supabase.rpc("review_membership_request", {
+  const { data: request, error } = await supabase.rpc("review_membership_request", {
     p_request: requestId,
     p_approve: approve,
     p_notes: notes || undefined,
@@ -28,6 +31,44 @@ export async function reviewMembershipRequest(
     const key = Object.keys(ERR).find((k) => error.message?.includes(k));
     return { success: false, message: key ? ERR[key] : "Couldn't update the request. Please try again." };
   }
+
+  // On approval, tell the member their membership is now active (best-effort).
+  if (approve && request) {
+    try {
+      const venue = await getTenant();
+      // Member email — profiles mirror it; fall back to auth.users via the service-role client.
+      let email: string | null = null;
+      const { data: profile } = await supabase.from("profiles").select("email").eq("id", request.profile_id).maybeSingle();
+      email = profile?.email ?? null;
+      const adminClient = createAdminClient();
+      if (!email) {
+        const { data: authUser } = await adminClient.auth.admin.getUserById(request.profile_id);
+        email = authUser?.user?.email ?? null;
+      }
+      // The now-active membership's end date, for "active until".
+      const { data: membership } = await adminClient
+        .from("memberships")
+        .select("ends_on")
+        .eq("profile_id", request.profile_id)
+        .eq("venue_id", request.venue_id)
+        .eq("status", "active")
+        .order("ends_on", { ascending: false, nullsFirst: true })
+        .limit(1)
+        .maybeSingle();
+      if (email && venue) {
+        await sendMembershipApprovedEmail({
+          to: email,
+          tier: request.tier,
+          endsOn: membership?.ends_on ?? null,
+          timezone: venue.timezone,
+          ...tenantEmailBrand(venue),
+        });
+      }
+    } catch (err) {
+      console.error("Failed to send membership approved email:", err);
+    }
+  }
+
   revalidatePath("/admin/members/requests");
   revalidatePath("/admin/members");
   return { success: true };

@@ -373,6 +373,87 @@ export async function sendAdminBookingRequestEmail(details: AdminBookingRequestD
   });
 }
 
+// Membership self-serve purchase / renewal notifications.
+const adminMembershipRequestsUrl = (base: string) => `${base}/admin/members/requests`;
+const membershipUrl = (base: string) => `${base}/membership`;
+
+export interface AdminMembershipRequestDetails {
+  to: string;
+  memberName: string;
+  memberContact: string;
+  tier: string;
+  amountCents: number;
+  paymentReference: string | null;
+  isRenewal: boolean;
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+  logoUrl: string | null;
+}
+
+/** Notifies an admin that a member submitted a membership purchase/renewal payment to review. */
+export async function sendAdminMembershipRequestEmail(details: AdminMembershipRequestDetails) {
+  const kind = details.isRenewal ? "renewal" : "membership";
+  await safeSend({
+    from: fromAddress(details.brandName, details.fromEmail),
+    to: details.to,
+    subject: `New ${kind} request to review: ${details.tier}`,
+    html: renderEmail({
+      heading: `A ${kind} payment is waiting for your review`,
+      intro: [
+        `${details.memberName} submitted a ${kind} payment for the ${details.tier} tier. Verify the transfer, then approve or reject it.`,
+      ],
+      detailRows: [
+        { label: "Member", value: details.memberName },
+        { label: "Contact", value: details.memberContact },
+        { label: "Tier", value: details.tier },
+        { label: "Amount", value: pesos(details.amountCents) },
+        { label: "Payment ref", value: details.paymentReference ?? "—" },
+      ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
+      button: { label: "Review requests", url: adminMembershipRequestsUrl(details.siteUrl) },
+      outro: ["Open Subscription Requests to view the receipt and take action."],
+    }),
+  });
+}
+
+export interface MembershipApprovedDetails {
+  to: string;
+  tier: string;
+  endsOn: string | null; // ISO date (venue-local), or null for no expiry
+  timezone: string;
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+  logoUrl: string | null;
+}
+
+/** Tells a member their membership purchase/renewal was approved and is now active. */
+export async function sendMembershipApprovedEmail(details: MembershipApprovedDetails) {
+  const until = details.endsOn
+    ? formatInTimezone(new Date(`${details.endsOn}T12:00:00Z`), "MMMM d, yyyy", details.timezone)
+    : null;
+  await safeSend({
+    from: fromAddress(details.brandName, details.fromEmail),
+    to: details.to,
+    subject: `Membership approved: ${details.tier}`,
+    html: renderEmail({
+      heading: "Your membership is active 🎉",
+      intro: [
+        `Your payment has been verified — you're now an official ${details.tier} member of ${details.brandName}.`,
+      ],
+      detailRows: [
+        { label: "Tier", value: details.tier },
+        ...(until ? [{ label: "Active until", value: until }] : []),
+      ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
+      button: { label: "View membership", url: membershipUrl(details.siteUrl) },
+    }),
+  });
+}
+
 /** wa.me deep-link fallback (spec 4.9) for guest bookings that have no email on file. */
 export function buildWhatsAppShareLink(details: {
   courtName: string;
