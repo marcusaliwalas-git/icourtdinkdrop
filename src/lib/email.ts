@@ -454,6 +454,37 @@ export async function sendMembershipApprovedEmail(details: MembershipApprovedDet
   });
 }
 
+export interface MembershipRejectedDetails {
+  to: string;
+  tier: string;
+  reason: string | null;
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+  logoUrl: string | null;
+}
+
+/** Tells a member their membership purchase/renewal wasn't approved (and why, if a reason was given). */
+export async function sendMembershipRejectedEmail(details: MembershipRejectedDetails) {
+  await safeSend({
+    from: fromAddress(details.brandName, details.fromEmail),
+    to: details.to,
+    subject: `Membership request not approved: ${details.tier}`,
+    html: renderEmail({
+      heading: "Your membership request wasn't approved",
+      intro: [
+        `We couldn't approve your ${details.tier} membership payment at ${details.brandName}.`,
+        ...(details.reason ? [`Reason: ${details.reason}`] : []),
+        "If you think this is a mistake or need help, please contact the venue. You can submit a new request once it's sorted.",
+      ],
+      detailRows: [{ label: "Tier", value: details.tier }],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
+      button: { label: "View membership", url: membershipUrl(details.siteUrl) },
+    }),
+  });
+}
+
 /** wa.me deep-link fallback (spec 4.9) for guest bookings that have no email on file. */
 export function buildWhatsAppShareLink(details: {
   courtName: string;
