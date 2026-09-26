@@ -39,6 +39,7 @@ type RatePeriod = {
   end_time: string;
   hourly_rate_cents: number;
   member_rate_cents: number | null;
+  days_of_week: number[] | null;
 };
 
 function centsToPesos(cents: number) {

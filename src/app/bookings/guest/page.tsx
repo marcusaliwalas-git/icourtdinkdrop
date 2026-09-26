@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { lookupBookingByReference, type GuestBookingLookup } from "../actions";
-import { cancelBooking } from "@/app/book/actions";
 import { formatInTimezone } from "@/lib/time";
 
 function pesos(cents: number) {
@@ -41,21 +40,6 @@ export default function GuestBookingLookupPage() {
       }
     });
   }
-
-  function onCancel() {
-    if (!booking) return;
-    startTransition(async () => {
-      const result = await cancelBooking({ bookingId: booking.id, referenceCode: code });
-      if (!result.success) {
-        setError(result.message);
-      } else {
-        setBooking({ ...booking, status: "cancelled" });
-      }
-    });
-  }
-
-  const canCancel =
-    !!booking && ["confirmed", "pending"].includes(booking.status) && new Date(booking.starts_at) > new Date();
 
   return (
     <div className="mx-auto max-w-sm p-6">
@@ -97,13 +81,11 @@ export default function GuestBookingLookupPage() {
               {formatInTimezone(new Date(booking.ends_at), "h:mm a")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {booking.party_size} players · {pesos(booking.total_cents)}
+              {pesos(booking.total_cents)}
             </p>
-            {canCancel && (
-              <Button size="sm" variant="outline" disabled={isPending} onClick={onCancel} className="mt-2 w-fit">
-                Cancel booking
-              </Button>
-            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Need to change or cancel this booking? Contact the venue.
+            </p>
           </CardContent>
         </Card>
       )}

@@ -1,8 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildAdminCalendarGrid } from "@/lib/availability";
-import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
-import { CalendarGrid } from "./calendar-grid";
+import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
+import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
+import { getTenant } from "@/lib/tenant";
+import { compareCourtName } from "@/lib/courts";
+import type { RatePeriod as CourtRatePeriod } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +17,7 @@ export default async function AdminCalendarPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;
@@ -35,15 +33,18 @@ export default async function AdminCalendarPage({
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
-  const dayEnd = endOfLocalDayUtc(date, venue.timezone);
+  // Extend the booking/closure window into the next calendar day so an overnight session's
+  // early-morning slots (which render on this day's grid) still pull their bookings.
+  const dayEnd = endOfLocalDayUtc(nextLocalDate(date), venue.timezone);
 
-  const [{ data: dayHours }, { data: bookings }, { data: closures }] = await Promise.all([
+  const [{ data: dayHours }, { data: bookings }, { data: closures }, { data: ratePeriods }] = await Promise.all([
     supabase
       .from("operating_hours")
-      .select("open_time, close_time")
+      .select("open_time, close_time, closes_next_day")
       .eq("venue_id", venue.id)
       .eq("day_of_week", dayOfWeek),
     courtIds.length
@@ -60,7 +61,30 @@ export default async function AdminCalendarPage({
       .eq("venue_id", venue.id)
       .lt("starts_at", dayEnd.toISOString())
       .gt("ends_at", dayStart.toISOString()),
+    courtIds.length
+      ? supabase
+          .from("court_rate_periods")
+          .select("court_id, start_time, end_time, hourly_rate_cents, member_rate_cents, days_of_week")
+          .in("court_id", courtIds)
+      : Promise.resolve({ data: [] as never[] }),
   ]);
+
+  // Per-court pricing for the multi-select running total (walk-ins price at the non-member rate).
+  const pricing: Record<string, { baseHourlyRateCents: number; ratePeriods: CourtRatePeriod[] }> = {};
+  for (const c of courts ?? []) {
+    pricing[c.id] = {
+      baseHourlyRateCents: c.hourly_rate_cents,
+      ratePeriods: (ratePeriods ?? [])
+        .filter((p) => p.court_id === c.id)
+        .map((p) => ({
+          start_time: p.start_time,
+          end_time: p.end_time,
+          hourly_rate_cents: p.hourly_rate_cents,
+          member_rate_cents: p.member_rate_cents,
+          days_of_week: p.days_of_week,
+        })),
+    };
+  }
 
   const grid = buildAdminCalendarGrid({
     date,
@@ -110,7 +134,14 @@ export default async function AdminCalendarPage({
       {grid.closedAllDay ? (
         <p className="text-muted-foreground">No operating hours set for this day.</p>
       ) : (
-        <CalendarGrid timezone={venue.timezone} courts={courts ?? []} rows={grid.rows} />
+        <CalendarViews
+          timezone={venue.timezone}
+          courts={courts ?? []}
+          rows={grid.rows}
+          pricing={pricing}
+          dateLabel={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
+          defaultView={venue.calendar_default_view ?? "grid"}
+        />
       )}
     </div>
   );

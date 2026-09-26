@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { buildAvailabilityGrid } from "@/lib/availability";
-import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
+import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
 import { AvailabilityGrid } from "./availability-grid";
 import { DatePickerPopover } from "./date-picker-popover";
+import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
+import { compareCourtName } from "@/lib/courts";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +27,13 @@ function nextSaturday(fromDateStr: string): string {
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; venue?: string }>;
+  searchParams: Promise<{ date?: string }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
 
-  const venueQuery = supabase.from("venues").select("*").order("created_at", { ascending: true }).limit(1);
-  const { data: venue } = params.venue
-    ? await supabase.from("venues").select("*").eq("id", params.venue).single()
-    : await venueQuery.maybeSingle();
+  // The tenant (venue) comes from the request hostname, not a query param.
+  const venue = await getTenant();
 
   if (!venue) {
     return (
@@ -50,24 +51,52 @@ export default async function BookPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Effective booking window for THIS viewer, matching create_booking's rule so the picker never
+  // offers a date the server will reject — which would strand a customer who already transferred
+  // payment. Active members get the venue's member window when set; everyone else the standard one.
+  let isMember = false;
+  if (user) {
+    const { data: activeMembership } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("profile_id", user.id)
+      .eq("venue_id", venue.id)
+      .eq("status", "active")
+      .lte("starts_on", today)
+      .or(`ends_on.is.null,ends_on.gte.${today}`)
+      .limit(1)
+      .maybeSingle();
+    isMember = !!activeMembership;
+  }
+  const advanceDays = isMember && venue.member_advance_days != null ? venue.member_advance_days : venue.max_advance_days;
+  const maxDate = addDays(today, advanceDays);
+  const beyondWindow = date > maxDate;
+
   const { data: courts } = await supabase
     .from("courts")
     .select("id, name, hourly_rate_cents, member_rate_cents")
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
-  const { data: coaches } = await supabase
-    .from("coaches")
-    .select("id, name, hourly_rate_cents")
-    .eq("venue_id", venue.id)
-    .eq("is_active", true)
-    .order("sort_order")
-    .order("name");
+  // Coaching is a per-venue capability; when it's off, offer no coaches so the booking sheet hides
+  // the add-on entirely.
+  const { data: coaches } = featureEnabled(venue?.features, "coaches")
+    ? await supabase
+        .from("coaches")
+        .select("id, name, hourly_rate_cents")
+        .eq("venue_id", venue.id)
+        .eq("is_active", true)
+        .order("sort_order")
+        .order("name")
+    : { data: [] as { id: string; name: string; hourly_rate_cents: number }[] };
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
-  const dayEnd = endOfLocalDayUtc(date, venue.timezone);
+  // Reach into the next calendar day so an overnight session's early-morning slots (rendered on
+  // this day's grid) still see their booked slots and closures.
+  const dayEnd = endOfLocalDayUtc(nextLocalDate(date), venue.timezone);
 
   const { data: ratePeriods } = courtIds.length
     ? await supabase.from("court_rate_periods").select("*").in("court_id", courtIds)
@@ -78,10 +107,10 @@ export default async function BookPage({
     (ratePeriodsByCourtId[period.court_id] ??= []).push(period);
   }
 
-  const [{ data: dayHours }, { data: bookedSlots }, { data: closures }] = await Promise.all([
+  const [{ data: dayHours }, { data: bookedSlots }, { data: closures }, { data: paymentAccounts }] = await Promise.all([
     supabase
       .from("operating_hours")
-      .select("open_time, close_time")
+      .select("open_time, close_time, closes_next_day")
       .eq("venue_id", venue.id)
       .eq("day_of_week", dayOfWeek),
     courtIds.length
@@ -97,6 +126,11 @@ export default async function BookPage({
       .eq("venue_id", venue.id)
       .lt("starts_at", dayEnd.toISOString())
       .gt("ends_at", dayStart.toISOString()),
+    supabase
+      .from("payment_accounts")
+      .select("bank_name, account_name, account_number, remarks, qr_url")
+      .eq("venue_id", venue.id)
+      .order("sort_order"),
   ]);
 
   const grid = buildAvailabilityGrid({
@@ -120,7 +154,6 @@ export default async function BookPage({
 
   function hrefFor(d: string) {
     const qs = new URLSearchParams({ date: d });
-    if (params.venue) qs.set("venue", params.venue);
     return `/book?${qs.toString()}`;
   }
 
@@ -135,16 +168,31 @@ export default async function BookPage({
         <QuickFilterLink href={hrefFor(quickDates.today)} active={date === quickDates.today}>
           Today
         </QuickFilterLink>
-        <QuickFilterLink href={hrefFor(quickDates.tomorrow)} active={date === quickDates.tomorrow}>
-          Tomorrow
-        </QuickFilterLink>
-        <QuickFilterLink href={hrefFor(quickDates.weekend)} active={date === quickDates.weekend}>
-          This weekend
-        </QuickFilterLink>
-        <DatePickerPopover date={date} venueId={params.venue} />
+        {quickDates.tomorrow <= maxDate && (
+          <QuickFilterLink href={hrefFor(quickDates.tomorrow)} active={date === quickDates.tomorrow}>
+            Tomorrow
+          </QuickFilterLink>
+        )}
+        {quickDates.weekend <= maxDate && (
+          <QuickFilterLink href={hrefFor(quickDates.weekend)} active={date === quickDates.weekend}>
+            This weekend
+          </QuickFilterLink>
+        )}
+        <DatePickerPopover date={date} venueId={undefined} maxDate={maxDate} />
       </div>
 
-      {grid.closedAllDay ? (
+      <p className="text-xs text-muted-foreground">
+        Book up to {advanceDays} {advanceDays === 1 ? "day" : "days"} in advance.
+      </p>
+
+      {beyondWindow ? (
+        <p className="rounded-md border p-4 text-sm text-muted-foreground">
+          Bookings for this date aren&rsquo;t open yet — you can book up to {advanceDays}{" "}
+          {advanceDays === 1 ? "day" : "days"} ahead (through{" "}
+          {formatInTimezone(new Date(`${maxDate}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}). Please pick an earlier
+          date before paying.
+        </p>
+      ) : grid.closedAllDay ? (
         <p className="rounded-md border p-4 text-sm text-muted-foreground">
           The venue has no operating hours set for this day.
         </p>
@@ -158,7 +206,9 @@ export default async function BookPage({
           courtIds={courtIds}
           ratePeriodsByCourtId={ratePeriodsByCourtId}
           coaches={coaches ?? []}
+          paymentAccounts={paymentAccounts ?? []}
           isLoggedIn={!!user}
+          defaultView={venue.calendar_default_view ?? "grid"}
         />
       )}
 

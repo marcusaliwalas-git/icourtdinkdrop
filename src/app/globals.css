@@ -121,6 +121,220 @@
   --radius: 0.75rem;
 }
 
+/* ── Per-venue themes ─────────────────────────────────────────────────────────
+   Super admin assigns one per venue (venues.theme → <html data-theme>). Each block
+   re-skins the same tokens as .dark; `data-theme="default"` matches nothing here and
+   keeps the iCourt lime look above. The `.dark[data-theme]` selector outranks `.dark`,
+   so these always win regardless of order. */
+.dark[data-theme="ocean"] {
+  --background: #060b16;
+  --foreground: #eef4ff;
+  --card: #0e1728;
+  --card-foreground: #eef4ff;
+  --popover: #0e1728;
+  --popover-foreground: #eef4ff;
+  --primary: #38bdf8;
+  --primary-foreground: #04121f;
+  --secondary: #16233a;
+  --secondary-foreground: #eef4ff;
+  --muted: #101a2c;
+  --muted-foreground: #9fb3cd;
+  --accent: #16233a;
+  --accent-foreground: #eef4ff;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #38bdf8;
+  --sidebar: #0e1728;
+  --sidebar-foreground: #eef4ff;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #04121f;
+  --sidebar-accent: #16233a;
+  --sidebar-accent-foreground: #eef4ff;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #7dd3fc;
+}
+
+.dark[data-theme="sunset"] {
+  --background: #0f0a07;
+  --foreground: #fdf3ec;
+  --card: #1d1510;
+  --card-foreground: #fdf3ec;
+  --popover: #1d1510;
+  --popover-foreground: #fdf3ec;
+  --primary: #fb923c;
+  --primary-foreground: #200f02;
+  --secondary: #271b13;
+  --secondary-foreground: #fdf3ec;
+  --muted: #1b130d;
+  --muted-foreground: #c3ab99;
+  --accent: #271b13;
+  --accent-foreground: #fdf3ec;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #fb923c;
+  --sidebar: #1d1510;
+  --sidebar-foreground: #fdf3ec;
+  --sidebar-primary: #fb923c;
+  --sidebar-primary-foreground: #200f02;
+  --sidebar-accent: #271b13;
+  --sidebar-accent-foreground: #fdf3ec;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #fdba74;
+}
+
+/* Grape — tuned to the Sta Maria PaddlePoint palette: a deep purple ground with the logo's gold
+   as the accent (buttons, links, "open now") and violet surfaces. */
+.dark[data-theme="grape"] {
+  --background: #1c0d31;
+  --foreground: #f5eefe;
+  --card: #271747;
+  --card-foreground: #f5eefe;
+  --popover: #271747;
+  --popover-foreground: #f5eefe;
+  --primary: #f5c51d;
+  --primary-foreground: #241a02;
+  --secondary: #33205a;
+  --secondary-foreground: #f5eefe;
+  --muted: #241541;
+  --muted-foreground: #bcaee0;
+  --accent: #33205a;
+  --accent-foreground: #f5eefe;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #f5c51d;
+  --sidebar: #271747;
+  --sidebar-foreground: #f5eefe;
+  --sidebar-primary: #f5c51d;
+  --sidebar-primary-foreground: #241a02;
+  --sidebar-accent: #33205a;
+  --sidebar-accent-foreground: #f5eefe;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #f7d451;
+}
+
+/* Midnight Gold — deep navy ground (#0b1a30) with #1D395E surfaces and #EBB82D gold accents. */
+.dark[data-theme="gold"] {
+  --background: #0b1a30;
+  --foreground: #eaf1fb;
+  --card: #12294a;
+  --card-foreground: #eaf1fb;
+  --popover: #12294a;
+  --popover-foreground: #eaf1fb;
+  --primary: #EBB82D;
+  --primary-foreground: #221800;
+  --secondary: #1D395E;
+  --secondary-foreground: #eaf1fb;
+  --muted: #10233f;
+  --muted-foreground: #9db2d4;
+  --accent: #1D395E;
+  --accent-foreground: #eaf1fb;
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: #EBB82D;
+  --sidebar: #12294a;
+  --sidebar-foreground: #eaf1fb;
+  --sidebar-primary: #EBB82D;
+  --sidebar-primary-foreground: #221800;
+  --sidebar-accent: #1D395E;
+  --sidebar-accent-foreground: #eaf1fb;
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: #f3cd5f;
+}
+
+/* Onyx Gold — a lounge look drawn from the SUPRA logo: a near-black onyx ground with refined
+   metallic gold as the primary (buttons, focus) and champagne text, framed by faint gold hairline
+   borders that echo the logo's thin gold linework. */
+.dark[data-theme="onyx"] {
+  --background: #0a0908;
+  --foreground: #f3ead6;
+  --card: #14110c;
+  --card-foreground: #f3ead6;
+  --popover: #14110c;
+  --popover-foreground: #f3ead6;
+  --primary: #c9a24b;
+  --primary-foreground: #1a1408;
+  --secondary: #241d10;
+  --secondary-foreground: #f3ead6;
+  --muted: #17130c;
+  --muted-foreground: #c2b088;
+  --accent: #241d10;
+  --accent-foreground: #f3ead6;
+  --border: rgb(201 162 75 / 20%);
+  --input: rgb(201 162 75 / 26%);
+  --ring: #d9b85f;
+  --sidebar: #14110c;
+  --sidebar-foreground: #f3ead6;
+  --sidebar-primary: #c9a24b;
+  --sidebar-primary-foreground: #1a1408;
+  --sidebar-accent: #241d10;
+  --sidebar-accent-foreground: #f3ead6;
+  --sidebar-border: rgb(201 162 75 / 20%);
+  --sidebar-ring: #d9b85f;
+}
+
+/* Hardcourt — taken from an outdoor hardcourt: an azure court-blue ground (the playing surface)
+   with slate-charcoal as the accent (buttons, "open now", framing the way the surround frames the
+   court) and the cream boundary line as the focus ring, the colour that sits between the two. */
+.dark[data-theme="hardcourt"] {
+  --background: #135d8c;
+  --foreground: #f1f7fb;
+  --card: #17689b;
+  --card-foreground: #f1f7fb;
+  --popover: #17689b;
+  --popover-foreground: #f1f7fb;
+  --primary: #2a3742;
+  --primary-foreground: #eef2f7;
+  --secondary: #1c74a8;
+  --secondary-foreground: #f1f7fb;
+  --muted: #155f8f;
+  --muted-foreground: #c2dcef;
+  --accent: #2a3742;
+  --accent-foreground: #eef2f7;
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 22%);
+  --ring: #e6ddb0;
+  --sidebar: #17689b;
+  --sidebar-foreground: #f1f7fb;
+  --sidebar-primary: #2a3742;
+  --sidebar-primary-foreground: #eef2f7;
+  --sidebar-accent: #1c74a8;
+  --sidebar-accent-foreground: #f1f7fb;
+  --sidebar-border: oklch(1 0 0 / 18%);
+  --sidebar-ring: #efe8c6;
+}
+
+/* Daylight — the one light theme. The layout drops the `.dark` class for this theme, so it skins
+   the base :root tokens (and every component falls back to its light-first base). */
+:root[data-theme="light"] {
+  --background: #f7f8f6;
+  --foreground: #14181c;
+  --card: #ffffff;
+  --card-foreground: #14181c;
+  --popover: #ffffff;
+  --popover-foreground: #14181c;
+  --primary: #059669;
+  --primary-foreground: #ffffff;
+  --secondary: #eceef0;
+  --secondary-foreground: #14181c;
+  --muted: #eef0f1;
+  --muted-foreground: #5b6470;
+  --accent: #e7efe9;
+  --accent-foreground: #14181c;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0 0 0 / 10%);
+  --input: oklch(0 0 0 / 14%);
+  --ring: #059669;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #14181c;
+  --sidebar-primary: #059669;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e7efe9;
+  --sidebar-accent-foreground: #14181c;
+  --sidebar-border: oklch(0 0 0 / 10%);
+  --sidebar-ring: #059669;
+  --radius: 0.75rem;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -136,6 +350,16 @@
     letter-spacing: -0.01em;
   }
 }
+
+/* Per-tenant font — the super admin picks it (stored on venues.font, applied as html[data-font]).
+   "Whole site" scope: re-point both the body face (--font-geist-sans) and the heading face
+   (--font-display) to the chosen family, so everything renders in it. "default" leaves the
+   two-face Geist + Space Grotesk look untouched. The optional families are loaded in layout.tsx. */
+html[data-font="poppins"]  { --font-geist-sans: var(--font-opt-poppins);  --font-display: var(--font-opt-poppins); }
+html[data-font="sora"]     { --font-geist-sans: var(--font-opt-sora);     --font-display: var(--font-opt-sora); }
+html[data-font="rubik"]    { --font-geist-sans: var(--font-opt-rubik);    --font-display: var(--font-opt-rubik); }
+html[data-font="fraunces"] { --font-geist-sans: var(--font-opt-fraunces); --font-display: var(--font-opt-fraunces); }
+html[data-font="montserrat"] { --font-geist-sans: var(--font-opt-montserrat); --font-display: var(--font-opt-montserrat); }
 
 /* Home page status board: rows settle in like a flip/departure board. Scoped to its own
    class rather than a global keyframe name collision risk. */
