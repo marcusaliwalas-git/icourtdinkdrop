@@ -211,7 +211,7 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
           </DialogHeader>
           <div className="flex flex-col gap-2">
             <Input
-              placeholder="Reason (optional) — shown to no one, for your records"
+              placeholder="Reason (optional) — included in the email to the member"
               value={rejectNotes}
               onChange={(e) => setRejectNotes(e.target.value)}
             />
