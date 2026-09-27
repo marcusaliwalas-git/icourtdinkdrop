@@ -12,15 +12,23 @@ export const VENUE_THEMES = [
   { key: "gold", label: "Midnight Gold", swatch: "#EBB82D" },
   { key: "onyx", label: "Onyx Gold", swatch: "#C9A24B" },
   { key: "hardcourt", label: "Hardcourt", swatch: "#2f90d0" },
+  { key: "teal", label: "Clean Teal", swatch: "#0d9488" },
 ] as const;
 
 export type VenueThemeKey = (typeof VENUE_THEMES)[number]["key"];
 
 export const THEME_KEYS = VENUE_THEMES.map((t) => t.key) as VenueThemeKey[];
 
-/** The one light theme — the app is dark-first (html.dark), so this theme instead drops the dark
- * class and renders every component's light base. */
+/** The light themes — the app is dark-first (html.dark), so these drop the dark class and render
+ * every component's light base, skinning the :root[data-theme] tokens instead. */
+export const LIGHT_THEMES: VenueThemeKey[] = ["light", "teal"];
+/** The default/primary light theme. */
 export const LIGHT_THEME: VenueThemeKey = "light";
+
+/** Whether a theme renders on the light base (no `dark` class). */
+export function isLightTheme(theme: VenueThemeKey): boolean {
+  return LIGHT_THEMES.includes(theme);
+}
 
 /** Coerce a stored value to a known theme, defaulting to the lime look. */
 export function normalizeTheme(value: unknown): VenueThemeKey {

@@ -335,6 +335,39 @@
   --radius: 0.75rem;
 }
 
+/* Clean Teal — a bright, mostly-white light theme with teal as the identity colour: teal primary,
+   accents and focus ring, teal-tinted hairline borders, and a deep teal-charcoal text so copy reads
+   teal without sacrificing contrast. A light theme, so the layout drops the `.dark` class. */
+:root[data-theme="teal"] {
+  --background: #ffffff;
+  --foreground: #0f2b28;
+  --card: #f3faf9;
+  --card-foreground: #0f2b28;
+  --popover: #ffffff;
+  --popover-foreground: #0f2b28;
+  --primary: #0d9488;
+  --primary-foreground: #ffffff;
+  --secondary: #e6f5f2;
+  --secondary-foreground: #0f2b28;
+  --muted: #eef6f5;
+  --muted-foreground: #4b6763;
+  --accent: #d9f0ec;
+  --accent-foreground: #0b3d38;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: rgb(13 148 136 / 18%);
+  --input: rgb(13 148 136 / 26%);
+  --ring: #0d9488;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f2b28;
+  --sidebar-primary: #0d9488;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d9f0ec;
+  --sidebar-accent-foreground: #0b3d38;
+  --sidebar-border: rgb(13 148 136 / 18%);
+  --sidebar-ring: #0d9488;
+  --radius: 0.75rem;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

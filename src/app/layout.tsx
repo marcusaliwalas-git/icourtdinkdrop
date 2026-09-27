@@ -10,7 +10,7 @@ import { getTenant } from "@/lib/tenant";
 import { isVenueStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { featureEnabled } from "@/lib/features";
-import { normalizeTheme, LIGHT_THEME } from "@/lib/themes";
+import { normalizeTheme, isLightTheme } from "@/lib/themes";
 import { normalizeFont } from "@/lib/fonts";
 import { formatInTimezone } from "@/lib/time";
 
@@ -94,7 +94,7 @@ export default async function RootLayout({
   const font = normalizeFont(tenant?.font);
   // The app is dark-first; the one light theme drops the `dark` class so every component renders its
   // light base (and `dark:` utility variants stay off), while `data-theme` re-skins the tokens.
-  const isLight = theme === LIGHT_THEME;
+  const isLight = isLightTheme(theme);
   return (
     <html
       lang="en"
