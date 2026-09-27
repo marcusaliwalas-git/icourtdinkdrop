@@ -100,10 +100,21 @@ export default async function AdminVenuePage() {
   const { data: membershipPlans } = officialMembersEnabled
     ? await supabase
         .from("membership_plans")
-        .select("id, name, price_cents, duration_days, sort_order, is_active")
+        .select("id, name, price_cents, sale_price_cents, duration_days, inclusions, sort_order, is_active")
         .eq("venue_id", venue.id)
         .order("sort_order")
-    : { data: [] as { id: string; name: string; price_cents: number; duration_days: number; sort_order: number; is_active: boolean }[] };
+    : {
+        data: [] as {
+          id: string;
+          name: string;
+          price_cents: number;
+          sale_price_cents: number | null;
+          duration_days: number;
+          inclusions: string[];
+          sort_order: number;
+          is_active: boolean;
+        }[],
+      };
 
   return (
     <div>

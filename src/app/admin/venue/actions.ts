@@ -340,12 +340,28 @@ function revalidateMembershipPlans() {
   revalidatePath("/membership");
 }
 
+/** One inclusion per non-empty line. */
+function parseInclusions(value: FormDataEntryValue | null): string[] {
+  return String(value ?? "")
+    .split("\n")
+    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .filter(Boolean);
+}
+
+/** Sale price in pesos → cents, or null when blank. */
+function parseSalePrice(value: FormDataEntryValue | null): number | null {
+  const raw = String(value ?? "").trim();
+  return raw === "" ? null : Math.round(Number(raw) * 100);
+}
+
 export async function addMembershipPlan(formData: FormData): Promise<ActionResult> {
   const parsed = membershipPlanSchema.safeParse({
     venueId: formData.get("venueId"),
     name: formData.get("name"),
     priceCents: Math.round(Number(formData.get("price")) * 100),
+    salePriceCents: parseSalePrice(formData.get("salePrice")),
     durationDays: Number(formData.get("durationDays")),
+    inclusions: parseInclusions(formData.get("inclusions")),
     sortOrder: Number(formData.get("sortOrder")) || 0,
     isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
   });
@@ -356,7 +372,9 @@ export async function addMembershipPlan(formData: FormData): Promise<ActionResul
     venue_id: parsed.data.venueId,
     name: parsed.data.name,
     price_cents: parsed.data.priceCents,
+    sale_price_cents: parsed.data.salePriceCents,
     duration_days: parsed.data.durationDays,
+    inclusions: parsed.data.inclusions,
     sort_order: parsed.data.sortOrder,
     is_active: parsed.data.isActive,
   });
@@ -369,7 +387,9 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
   const parsed = membershipPlanUpdateSchema.safeParse({
     name: formData.get("name"),
     priceCents: Math.round(Number(formData.get("price")) * 100),
+    salePriceCents: parseSalePrice(formData.get("salePrice")),
     durationDays: Number(formData.get("durationDays")),
+    inclusions: parseInclusions(formData.get("inclusions")),
     sortOrder: Number(formData.get("sortOrder")) || 0,
     isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
   });
@@ -381,7 +401,9 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
     .update({
       name: parsed.data.name,
       price_cents: parsed.data.priceCents,
+      sale_price_cents: parsed.data.salePriceCents,
       duration_days: parsed.data.durationDays,
+      inclusions: parsed.data.inclusions,
       sort_order: parsed.data.sortOrder,
       is_active: parsed.data.isActive,
     })

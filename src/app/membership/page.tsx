@@ -23,7 +23,7 @@ export default async function MembershipPage() {
 
   const { data: planRows } = await supabase
     .from("membership_plans")
-    .select("id, name, price_cents, duration_days")
+    .select("id, name, price_cents, sale_price_cents, duration_days, inclusions")
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("sort_order");
@@ -31,7 +31,9 @@ export default async function MembershipPage() {
     id: p.id,
     name: p.name,
     priceCents: p.price_cents,
+    salePriceCents: p.sale_price_cents,
     durationDays: p.duration_days,
+    inclusions: p.inclusions ?? [],
   }));
   const configured = plans.length > 0;
 

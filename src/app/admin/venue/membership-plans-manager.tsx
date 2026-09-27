@@ -10,10 +10,15 @@ export type MembershipPlan = {
   id: string;
   name: string;
   price_cents: number;
+  sale_price_cents: number | null;
   duration_days: number;
+  inclusions: string[];
   sort_order: number;
   is_active: boolean;
 };
+
+const textareaClass =
+  "rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export type PaymentAccountLite = { bank_name: string; account_name: string; account_number: string };
 
@@ -41,8 +46,29 @@ function PlanRow({ plan }: { plan: MembershipPlan }) {
         <Input name="price" type="number" min={0} step={1} defaultValue={plan.price_cents / 100} required />
       </div>
       <div className="flex flex-col gap-1.5">
+        <Label>Sale price (₱, optional)</Label>
+        <Input
+          name="salePrice"
+          type="number"
+          min={0}
+          step={1}
+          defaultValue={plan.sale_price_cents != null ? plan.sale_price_cents / 100 : ""}
+          placeholder="On sale"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
         <Label>Term (days)</Label>
         <Input name="durationDays" type="number" min={1} defaultValue={plan.duration_days} required />
+      </div>
+      <div className="flex flex-col gap-1.5 sm:col-span-4">
+        <Label>Inclusions (one per line)</Label>
+        <textarea
+          name="inclusions"
+          rows={3}
+          defaultValue={plan.inclusions.join("\n")}
+          placeholder={"Free paddle rental\nPriority court booking\n1 free coaching session"}
+          className={textareaClass}
+        />
       </div>
       <input type="hidden" name="sortOrder" value={plan.sort_order} />
       <label className="flex items-center gap-2 text-sm sm:col-span-4">
@@ -119,8 +145,22 @@ export function MembershipPlansManager({
           <Input id="planPrice" name="price" type="number" min={0} step={1} placeholder="e.g. 3000" required />
         </div>
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="planSalePrice">Sale price (₱, optional)</Label>
+          <Input id="planSalePrice" name="salePrice" type="number" min={0} step={1} placeholder="e.g. 2500" />
+        </div>
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="planDuration">Term (days)</Label>
           <Input id="planDuration" name="durationDays" type="number" min={1} placeholder="e.g. 365" required />
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-4">
+          <Label htmlFor="planInclusions">Inclusions (one per line)</Label>
+          <textarea
+            id="planInclusions"
+            name="inclusions"
+            rows={3}
+            placeholder={"Free paddle rental\nPriority court booking\n1 free coaching session"}
+            className={textareaClass}
+          />
         </div>
         <input type="hidden" name="isActive" value="on" />
         <div className="flex items-center gap-2 sm:col-span-4">
