@@ -16,7 +16,18 @@ export interface Plan {
   id: string;
   name: string;
   priceCents: number;
+  salePriceCents: number | null;
   durationDays: number;
+  inclusions: string[];
+}
+
+/** The price the member actually pays — the sale price when it's set and below the regular price. */
+function effectivePriceCents(p: Plan): number {
+  return p.salePriceCents != null && p.salePriceCents < p.priceCents ? p.salePriceCents : p.priceCents;
+}
+
+function onSale(p: Plan): boolean {
+  return p.salePriceCents != null && p.salePriceCents < p.priceCents;
 }
 
 export interface PaymentAccount {
@@ -135,11 +146,33 @@ export function MembershipPurchase({
                   active ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:border-foreground/30"
                 )}
               >
-                <span className="font-medium">{p.name}</span>
+                <span className="flex items-center gap-2">
+                  <span className="font-medium">{p.name}</span>
+                  {onSale(p) && (
+                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[0.65rem] font-semibold text-primary uppercase">
+                      Sale
+                    </span>
+                  )}
+                </span>
                 <span className="mt-1 text-xl font-bold">
-                  {pesos(p.priceCents)}
+                  {pesos(effectivePriceCents(p))}
+                  {onSale(p) && (
+                    <span className="ml-1.5 text-sm font-normal text-muted-foreground line-through">
+                      {pesos(p.priceCents)}
+                    </span>
+                  )}
                   <span className="ml-1 text-sm font-normal text-muted-foreground">/ {termLabel(p.durationDays)}</span>
                 </span>
+                {p.inclusions.length > 0 && (
+                  <ul className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground">
+                    {p.inclusions.map((inc, i) => (
+                      <li key={i} className="flex gap-1.5">
+                        <span aria-hidden className="text-primary">✓</span>
+                        <span>{inc}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </button>
             );
           })}
@@ -151,7 +184,7 @@ export function MembershipPurchase({
 
       {accounts.length > 0 && selected && (
         <div className="rounded-xl border bg-card p-4">
-          <p className="text-sm font-medium">Transfer {pesos(selected.priceCents)} to</p>
+          <p className="text-sm font-medium">Transfer {pesos(effectivePriceCents(selected))} to</p>
           <div className="mt-2 flex flex-col gap-3">
             {accounts.map((a, i) => (
               <div key={i} className="text-sm">

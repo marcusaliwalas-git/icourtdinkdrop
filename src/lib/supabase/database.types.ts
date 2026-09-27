@@ -667,9 +667,11 @@ export type Database = {
           created_at: string
           duration_days: number
           id: string
+          inclusions: string[]
           is_active: boolean
           name: string
           price_cents: number
+          sale_price_cents: number | null
           sort_order: number
           venue_id: string
         }
@@ -677,9 +679,11 @@ export type Database = {
           created_at?: string
           duration_days: number
           id?: string
+          inclusions?: string[]
           is_active?: boolean
           name: string
           price_cents: number
+          sale_price_cents?: number | null
           sort_order?: number
           venue_id: string
         }
@@ -687,9 +691,11 @@ export type Database = {
           created_at?: string
           duration_days?: number
           id?: string
+          inclusions?: string[]
           is_active?: boolean
           name?: string
           price_cents?: number
+          sale_price_cents?: number | null
           sort_order?: number
           venue_id?: string
         }

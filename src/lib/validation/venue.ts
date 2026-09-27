@@ -103,18 +103,29 @@ export const paymentAccountUpdateSchema = paymentAccountSchema.omit({ venueId: t
 export type PaymentAccountUpdateInput = z.infer<typeof paymentAccountUpdateSchema>;
 
 // A membership tier a venue offers for self-serve purchase (Basic, Pro…).
-export const membershipPlanSchema = z.object({
+const membershipPlanBase = z.object({
   venueId: z.uuid(),
   name: z.string().trim().min(1, "Enter a tier name.").max(60),
   priceCents: z.number().int().min(0).max(100_000_000),
+  // Optional promo price; must be below the regular price when set.
+  salePriceCents: z.number().int().min(0).max(100_000_000).nullable().default(null),
   durationDays: z.number().int().min(1, "Enter a term in days.").max(3650),
+  // What the tier includes — one perk per entry, shown to members.
+  inclusions: z.array(z.string().trim().min(1).max(200)).max(30).default([]),
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
 });
 
+// Sale price, when present, must undercut the regular price.
+const saleBelowRegular = (d: { priceCents: number; salePriceCents: number | null }) =>
+  d.salePriceCents == null || d.salePriceCents < d.priceCents;
+const saleError = { message: "Sale price must be lower than the regular price.", path: ["salePriceCents"] };
+
+export const membershipPlanSchema = membershipPlanBase.refine(saleBelowRegular, saleError);
+
 export type MembershipPlanInput = z.infer<typeof membershipPlanSchema>;
 
-export const membershipPlanUpdateSchema = membershipPlanSchema.omit({ venueId: true });
+export const membershipPlanUpdateSchema = membershipPlanBase.omit({ venueId: true }).refine(saleBelowRegular, saleError);
 
 export type MembershipPlanUpdateInput = z.infer<typeof membershipPlanUpdateSchema>;
 
