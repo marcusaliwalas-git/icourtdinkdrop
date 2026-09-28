@@ -6,7 +6,7 @@ import { getTenant } from "@/lib/tenant";
 import { tenantEmailBrand } from "@/lib/site-url";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
-import { sendBookingGroupConfirmationEmail } from "@/lib/email";
+import { sendBookingGroupConfirmationEmail, sendBookingGroupCancellationEmail } from "@/lib/email";
 import { guidelineLines } from "@/lib/validation/venue";
 
 type Result = { success: boolean; error?: string };
@@ -80,11 +80,50 @@ export async function getBookingGroupPending(bookingId: string): Promise<{ group
   return { groupId, pendingCount: count ?? 0 };
 }
 
-/** Reject (cancel) every not-yet-started booking in a cart. */
+/** Reject (cancel) every not-yet-started booking in a cart, and email the customer one cancellation
+ * notice listing all slots (best-effort — mirrors the group confirmation). */
 export async function adminRejectBookingGroup(groupId: string): Promise<Result> {
   const { supabase } = await requireStaff();
   const { error } = await supabase.rpc("cancel_booking_group", { p_group_id: groupId });
   if (error) return { success: false, error: mapBookingError(error).message };
+
+  try {
+    // Rows persist after cancellation, so we can still read the cart to build the email.
+    const { data: rows } = await supabase
+      .from("bookings")
+      .select("time_range, reference_code, guest_email, courts(name, venues(timezone)), profiles(email)")
+      .eq("booking_group_id", groupId)
+      .order("time_range");
+    const list = rows ?? [];
+    if (list.length) {
+      const first = list[0] as unknown as {
+        reference_code: string;
+        guest_email: string | null;
+        courts: { name: string; venues: { timezone: string } | null } | null;
+        profiles: { email: string | null } | null;
+      };
+      const to = first.profiles?.email ?? first.guest_email ?? null;
+      if (to) {
+        const timezone = first.courts?.venues?.timezone ?? "Asia/Manila";
+        const slots = list.map((b) => {
+          const row = b as unknown as { time_range: string; courts: { name: string } | null };
+          const { start, end } = parseTstzRange(row.time_range);
+          return { courtName: row.courts?.name ?? "Court", startsAt: start, endsAt: end };
+        });
+        const tenant = await getTenant();
+        await sendBookingGroupCancellationEmail({
+          to,
+          slots,
+          timezone,
+          referenceCode: first.reference_code,
+          ...tenantEmailBrand(tenant),
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Failed to send cart cancellation email:", err);
+  }
+
   revalidateAll();
   return { success: true };
 }

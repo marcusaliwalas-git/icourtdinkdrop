@@ -135,6 +135,43 @@ export async function sendBookingGroupConfirmationEmail(details: BookingGroupEma
   });
 }
 
+/** One cancellation email for a multi-slot cart — lists every slot and the shared reference. */
+export async function sendBookingGroupCancellationEmail(details: {
+  to: string;
+  slots: { courtName: string; startsAt: Date; endsAt: Date }[];
+  timezone: string;
+  referenceCode: string;
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+  logoUrl: string | null;
+}) {
+  const slotRows = details.slots.map((s) => ({
+    label: formatInTimezone(s.startsAt, "EEE, MMM d", details.timezone),
+    value: `${formatInTimezone(s.startsAt, "h:mm a", details.timezone)}–${formatInTimezone(
+      s.endsAt,
+      "h:mm a",
+      details.timezone
+    )} · ${s.courtName}`,
+  }));
+  const n = details.slots.length;
+  await safeSend({
+    from: fromAddress(details.brandName, details.fromEmail),
+    to: details.to,
+    subject: `Booking cancelled: ${n} slot${n === 1 ? "" : "s"}`,
+    html: renderEmail({
+      heading: "Your booking was cancelled",
+      intro: [
+        `Your booking at ${details.brandName} was cancelled and won't be charged. If you think this is a mistake, please contact the venue.`,
+      ],
+      detailRows: [...slotRows, { label: "Reference", value: details.referenceCode, mono: true }],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
+      button: { label: `Open ${details.brandName}`, url: homeUrl(details.siteUrl) },
+    }),
+  });
+}
+
 export async function sendBookingConfirmationEmail(details: BookingEmailDetails) {
   const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
