@@ -82,7 +82,7 @@ export async function getBookingGroupPending(bookingId: string): Promise<{ group
 
 /** Reject (cancel) every not-yet-started booking in a cart, and email the customer one cancellation
  * notice listing all slots (best-effort — mirrors the group confirmation). */
-export async function adminRejectBookingGroup(groupId: string): Promise<Result> {
+export async function adminRejectBookingGroup(groupId: string, reason?: string): Promise<Result> {
   const { supabase } = await requireStaff();
   const { error } = await supabase.rpc("cancel_booking_group", { p_group_id: groupId });
   if (error) return { success: false, error: mapBookingError(error).message };
@@ -116,6 +116,7 @@ export async function adminRejectBookingGroup(groupId: string): Promise<Result> 
           slots,
           timezone,
           referenceCode: first.reference_code,
+          reason: reason?.trim() || null,
           ...tenantEmailBrand(tenant),
         });
       }

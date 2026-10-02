@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { requestPasswordReset } from "./actions";
 
 type Mode = "signin" | "signup";
 
@@ -64,9 +65,8 @@ export function LoginForm({ tenantId, brandName }: { tenantId: string | null; br
     }
     setErrorMessage(null);
     setResetStatus("sending");
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/confirm?next=/reset-password`,
-    });
+    // Sends through the tenant's own branded sender (Resend), not Supabase's built-in email.
+    await requestPasswordReset(email);
     setResetStatus("sent");
   }
 

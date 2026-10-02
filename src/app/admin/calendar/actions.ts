@@ -115,7 +115,7 @@ export async function createWalkInBookings(input: unknown): Promise<WalkInBookin
   return { success: true, count: Array.isArray(data) ? data.length : segments.length };
 }
 
-export async function adminCancelBooking(bookingId: string): Promise<WalkInResult> {
+export async function adminCancelBooking(bookingId: string, reason?: string): Promise<WalkInResult> {
   const { supabase } = await requireStaff();
   const { data, error } = await supabase.rpc("cancel_booking", { p_booking_id: bookingId });
   if (error) {
@@ -140,6 +140,7 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
       endsAt: end,
       timezone,
       referenceCode: data.reference_code,
+      reason: reason?.trim() || null,
       ...tenantEmailBrand(await getTenant()),
     });
   }

@@ -41,7 +41,7 @@ export default function ResetPasswordPage() {
           <CardDescription>
             {status === "done"
               ? "Your password has been updated."
-              : "Choose a password for your iCourt Social account."}
+              : "Choose a new password for your account."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
