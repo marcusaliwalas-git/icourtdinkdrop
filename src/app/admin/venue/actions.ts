@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { auditCurrent } from "@/lib/audit";
 import { slugify } from "@/lib/validation/tenant";
 import {
   venueSchema,
@@ -222,6 +223,7 @@ export async function addOperatingHours(formData: FormData): Promise<ActionResul
   });
 
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "operating_hours_created", "operating_hours", null, parsed.data);
   revalidatePath("/admin/venue");
   return { success: true };
 }
@@ -252,6 +254,7 @@ export async function updateOperatingHours(id: string, formData: FormData): Prom
     .eq("id", id);
 
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "operating_hours_updated", "operating_hours", id, parsed.data);
   revalidatePath("/admin/venue");
   return { success: true };
 }
@@ -260,6 +263,7 @@ export async function deleteOperatingHours(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("operating_hours").delete().eq("id", id);
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "operating_hours_deleted", "operating_hours", id, null);
   revalidatePath("/admin/venue");
   return { success: true };
 }
@@ -293,6 +297,10 @@ export async function addPaymentAccount(formData: FormData): Promise<ActionResul
     sort_order: parsed.data.sortOrder,
   });
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "payment_account_created", "payment_account", null, {
+    bank_name: parsed.data.bankName,
+    account_name: parsed.data.accountName,
+  });
   revalidatePaymentAccounts();
   return { success: true };
 }
@@ -323,6 +331,10 @@ export async function updatePaymentAccount(id: string, formData: FormData): Prom
     .select("id");
   if (error) return { error: error.message };
   if (!data?.length) return { error: "That account isn't for your venue." };
+  await auditCurrent(supabase, "payment_account_updated", "payment_account", id, {
+    bank_name: parsed.data.bankName,
+    account_name: parsed.data.accountName,
+  });
   revalidatePaymentAccounts();
   return { success: true };
 }
@@ -331,6 +343,7 @@ export async function deletePaymentAccount(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("payment_accounts").delete().eq("id", id);
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "payment_account_deleted", "payment_account", id, null);
   revalidatePaymentAccounts();
   return { success: true };
 }
@@ -379,6 +392,13 @@ export async function addMembershipPlan(formData: FormData): Promise<ActionResul
     is_active: parsed.data.isActive,
   });
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "membership_plan_created", "membership_plan", null, {
+    name: parsed.data.name,
+    price_cents: parsed.data.priceCents,
+    sale_price_cents: parsed.data.salePriceCents,
+    duration_days: parsed.data.durationDays,
+    is_active: parsed.data.isActive,
+  });
   revalidateMembershipPlans();
   return { success: true };
 }
@@ -411,6 +431,13 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
     .select("id");
   if (error) return { error: error.message };
   if (!data?.length) return { error: "That plan isn't for your venue." };
+  await auditCurrent(supabase, "membership_plan_updated", "membership_plan", id, {
+    name: parsed.data.name,
+    price_cents: parsed.data.priceCents,
+    sale_price_cents: parsed.data.salePriceCents,
+    duration_days: parsed.data.durationDays,
+    is_active: parsed.data.isActive,
+  });
   revalidateMembershipPlans();
   return { success: true };
 }
@@ -419,6 +446,7 @@ export async function deleteMembershipPlan(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("membership_plans").delete().eq("id", id);
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "membership_plan_deleted", "membership_plan", id, null);
   revalidateMembershipPlans();
   return { success: true };
 }
@@ -462,6 +490,7 @@ export async function deleteClosure(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("closures").delete().eq("id", id);
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "closure_deleted", "closure", id, null);
   revalidatePath("/admin/venue");
   return { success: true };
 }
@@ -496,6 +525,7 @@ export async function addRatePeriod(formData: FormData): Promise<ActionResult> {
   });
 
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "rate_period_created", "rate_period", parsed.data.courtId, parsed.data);
   revalidatePath("/admin/venue");
   return { success: true };
 }
@@ -504,6 +534,7 @@ export async function deleteRatePeriod(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("court_rate_periods").delete().eq("id", id);
   if (error) return { error: error.message };
+  await auditCurrent(supabase, "rate_period_deleted", "rate_period", id, null);
   revalidatePath("/admin/venue");
   return { success: true };
 }

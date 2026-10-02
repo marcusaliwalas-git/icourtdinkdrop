@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getTenant } from "@/lib/tenant";
 import { tenantEmailBrand } from "@/lib/site-url";
 import { sendMembershipApprovedEmail, sendMembershipRejectedEmail } from "@/lib/email";
+import { auditCurrent } from "@/lib/audit";
 
 export type ReviewResult = { success: true } | { success: false; message: string };
 
@@ -30,6 +31,21 @@ export async function reviewMembershipRequest(
   if (error) {
     const key = Object.keys(ERR).find((k) => error.message?.includes(k));
     return { success: false, message: key ? ERR[key] : "Couldn't update the request. Please try again." };
+  }
+
+  if (request) {
+    await auditCurrent(
+      supabase,
+      approve ? "membership_request_approved" : "membership_request_rejected",
+      "membership_request",
+      request.id,
+      {
+        profile_id: request.profile_id,
+        tier: request.tier,
+        amount_cents: request.amount_cents,
+        ...(approve ? {} : { reason: notes?.trim() || null }),
+      }
+    );
   }
 
   // Notify the member of the outcome — approved (now active) or rejected (with reason). Best-effort.
