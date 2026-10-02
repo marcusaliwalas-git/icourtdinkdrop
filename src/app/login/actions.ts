@@ -10,9 +10,11 @@ import { sendPasswordResetEmail } from "@/lib/email";
  * other venue emails. We generate the recovery link server-side with the admin API (generateLink) —
  * which does NOT send Supabase's built-in email — and deliver our own branded message.
  *
- * The link uses the token_hash/OTP flow via /auth/confirm, so it works when opened in a different
- * browser or device (unlike the client PKCE `code` flow, whose verifier is tied to the originating
- * browser). Always returns { ok: true } and never reveals whether the account exists.
+ * The link carries the token_hash/OTP to /reset-password, which verifies it only when the user
+ * SUBMITS the new password (not on page load). That survives email link-scanners (e.g. Outlook
+ * SafeLinks) that pre-fetch the URL — a GET prefetch would otherwise consume the single-use token
+ * and break the real click. It also works cross-device (no PKCE verifier needed). Always returns
+ * { ok: true } and never reveals whether the account exists.
  */
 export async function requestPasswordReset(email: string): Promise<{ ok: true }> {
   const trimmed = (email || "").trim().toLowerCase();
@@ -27,7 +29,7 @@ export async function requestPasswordReset(email: string): Promise<{ ok: true }>
     const hashedToken = data?.properties?.hashed_token;
     if (error || !hashedToken) return { ok: true }; // unknown email / error — stay silent
 
-    const resetUrl = `${brand.siteUrl}/auth/confirm?token_hash=${hashedToken}&type=recovery&next=/reset-password`;
+    const resetUrl = `${brand.siteUrl}/reset-password?token_hash=${hashedToken}&type=recovery`;
     await sendPasswordResetEmail({ to: trimmed, resetUrl, ...brand });
   } catch (err) {
     console.error("Password reset email failed:", err);
