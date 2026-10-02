@@ -16,8 +16,19 @@ function toDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function DatePickerPopover({ date, venueId }: { date: string; venueId?: string }) {
+export function DatePickerPopover({
+  date,
+  venueId,
+  maxDate,
+}: {
+  date: string;
+  venueId?: string;
+  // Last bookable day (YYYY-MM-DD) for this viewer — dates past it are disabled so nobody can
+  // select (and pay for) a slot the server would reject as outside the booking window.
+  maxDate?: string;
+}) {
   const router = useRouter();
+  const after = maxDate ? new Date(`${maxDate}T12:00:00`) : undefined;
 
   return (
     <Popover>
@@ -38,7 +49,7 @@ export function DatePickerPopover({ date, venueId }: { date: string; venueId?: s
             if (venueId) qs.set("venue", venueId);
             router.push(`/book?${qs.toString()}`);
           }}
-          disabled={{ before: new Date() }}
+          disabled={after ? { before: new Date(), after } : { before: new Date() }}
         />
       </PopoverContent>
     </Popover>

@@ -39,6 +39,7 @@ export interface BookingRow {
   idempotency_key: string | null;
   payment_reference: string | null;
   payment_slip_path: string | null;
+  booked_as_member: boolean;
 }
 
 export async function callCreateBooking(

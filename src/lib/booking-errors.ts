@@ -18,8 +18,11 @@ const MESSAGES: Record<string, string> = {
   PAYMENT_PROOF_REQUIRED: "Enter your payment reference and attach proof of payment.",
   NO_SEGMENTS: "Pick at least one slot to book.",
   CANNOT_RESCHEDULE: "This booking can no longer be rescheduled.",
+  REASON_REQUIRED: "Enter a reason for voiding this booking.",
+  NOT_CONFIRMED: "Confirm this booking before checking the customer in.",
   SLOT_TAKEN: "Sorry, that slot was just taken. Pick another.",
   COACH_NOT_FOUND: "That coach isn't available. Pick another or continue without one.",
+  INVALID_PAYMENT_METHOD: "Choose a valid payment method.",
 };
 
 /** Maps a Postgres/PostgREST error (from an RPC call) to a stable code + friendly message. */

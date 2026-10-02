@@ -57,7 +57,7 @@ export async function createVenueWithCourt(
  */
 export async function createMemberProfile(
   client: PoolClient,
-  options: { active?: boolean } = {}
+  options: { active?: boolean; venueId?: string } = {}
 ): Promise<string> {
   const profileId = randomUUID();
   const email = `${profileId}@test.dinkdrop.local`;
@@ -74,18 +74,45 @@ export async function createMemberProfile(
   );
 
   await client.query(
-    `insert into memberships (profile_id, tier, starts_on, ends_on, status)
-     values ($1, 'standard', current_date - 30, current_date + 30, $2)`,
-    [profileId, options.active === false ? "expired" : "active"]
+    `insert into memberships (profile_id, venue_id, tier, starts_on, ends_on, status)
+     values ($1, $3, 'standard', current_date - 30, current_date + 30, $2)`,
+    [profileId, options.active === false ? "expired" : "active", options.venueId ?? null]
   );
+
+  // A member belongs to a venue; member pricing only applies at that venue.
+  if (options.venueId) {
+    await client.query(`update profiles set venue_id = $2 where id = $1`, [profileId, options.venueId]);
+    await client.query(
+      `insert into venue_memberships (profile_id, venue_id, role) values ($1, $2, 'player')
+       on conflict (profile_id, venue_id) do nothing`,
+      [profileId, options.venueId]
+    );
+  }
 
   return profileId;
 }
 
-/** Same as createMemberProfile, but promotes the resulting profile to admin. */
-export async function createAdminProfile(client: PoolClient): Promise<string> {
+/**
+ * Same as createMemberProfile, but promotes the resulting profile to admin and pins them to a
+ * venue (the given one, or the most recently created — these single-venue tests make the venue
+ * first). Admin operations are now tenant-scoped, so the admin must belong to the booking's venue.
+ */
+export async function createAdminProfile(client: PoolClient, venueId?: string): Promise<string> {
   const profileId = await createMemberProfile(client);
-  await client.query(`update profiles set role = 'admin' where id = $1`, [profileId]);
+  await client.query(
+    `update profiles
+       set role = 'admin',
+           venue_id = coalesce($2, (select id from venues order by created_at desc limit 1))
+     where id = $1`,
+    [profileId, venueId ?? null]
+  );
+  // Dual-write the admin membership row for the same venue.
+  await client.query(
+    `insert into venue_memberships (profile_id, venue_id, role)
+     select $1, coalesce($2, (select id from venues order by created_at desc limit 1)), 'admin'
+     on conflict (profile_id, venue_id) do update set role = 'admin'`,
+    [profileId, venueId ?? null]
+  );
   return profileId;
 }
 
