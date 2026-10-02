@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { adminConfirmBookingGroup, adminRejectBookingGroup } from "./actions";
 import { adminConfirmBooking, adminCancelBooking } from "@/app/admin/calendar/actions";
 
@@ -42,6 +43,8 @@ export function PaymentGroupCard({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
 
   function confirm() {
     setError(null);
@@ -55,7 +58,9 @@ export function PaymentGroupCard({
   function reject() {
     setError(null);
     startTransition(async () => {
-      const res = groupId ? await adminRejectBookingGroup(groupId) : await adminCancelBooking(firstBookingId);
+      const res = groupId
+        ? await adminRejectBookingGroup(groupId, reason)
+        : await adminCancelBooking(firstBookingId, reason);
       if (!res.success) return setError(errorOf(res));
       router.refresh();
     });
@@ -96,13 +101,43 @@ export function PaymentGroupCard({
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
-      <div className="flex shrink-0 gap-2">
-        <Button size="sm" onClick={confirm} disabled={isPending}>
-          {isPending ? "…" : `Confirm${slots.length > 1 ? " all" : ""}`}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={reject} disabled={isPending}>
-          Reject
-        </Button>
+      <div className="flex shrink-0 flex-col gap-2 sm:w-64 sm:items-stretch">
+        {rejecting ? (
+          <>
+            <Input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason (optional) — sent to the customer"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button size="sm" variant="destructive" onClick={reject} disabled={isPending}>
+                {isPending ? "…" : "Confirm reject"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setRejecting(false)} disabled={isPending}>
+                Back
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex gap-2 sm:justify-end">
+            <Button size="sm" onClick={confirm} disabled={isPending}>
+              {isPending ? "…" : `Confirm${slots.length > 1 ? " all" : ""}`}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setError(null);
+                setReason("");
+                setRejecting(true);
+              }}
+              disabled={isPending}
+            >
+              Reject
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

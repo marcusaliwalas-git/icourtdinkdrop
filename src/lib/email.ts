@@ -141,6 +141,7 @@ export async function sendBookingGroupCancellationEmail(details: {
   slots: { courtName: string; startsAt: Date; endsAt: Date }[];
   timezone: string;
   referenceCode: string;
+  reason?: string | null;
   siteUrl: string;
   brandName: string;
   fromEmail: string | null;
@@ -163,6 +164,7 @@ export async function sendBookingGroupCancellationEmail(details: {
       heading: "Your booking was cancelled",
       intro: [
         `Your booking at ${details.brandName} was cancelled and won't be charged. If you think this is a mistake, please contact the venue.`,
+        ...(details.reason ? [`Reason: ${details.reason}`] : []),
       ],
       detailRows: [...slotRows, { label: "Reference", value: details.referenceCode, mono: true }],
       logoUrl: details.logoUrl,
@@ -222,7 +224,9 @@ export async function sendBookingPendingEmail(details: BookingEmailDetails) {
   });
 }
 
-export async function sendBookingCancellationEmail(details: Omit<BookingEmailDetails, "totalCents">) {
+export async function sendBookingCancellationEmail(
+  details: Omit<BookingEmailDetails, "totalCents"> & { reason?: string | null }
+) {
   const when = formatInTimezone(details.startsAt, "EEEE, MMM d 'at' h:mm a", details.timezone);
   const until = formatInTimezone(details.endsAt, "h:mm a", details.timezone);
 
@@ -233,7 +237,10 @@ export async function sendBookingCancellationEmail(details: Omit<BookingEmailDet
     html: renderEmail({
       accent: "red",
       heading: "Your booking was cancelled",
-      intro: ["This booking has been cancelled. If this wasn't you, or you'd like to rebook, you can start a new booking any time."],
+      intro: [
+        "This booking has been cancelled. If this wasn't you, or you'd like to rebook, you can start a new booking any time.",
+        ...(details.reason ? [`Reason: ${details.reason}`] : []),
+      ],
       detailRows: [
         { label: "Court", value: details.courtName },
         { label: "When", value: `${when} – ${until}` },
@@ -518,6 +525,34 @@ export async function sendMembershipRejectedEmail(details: MembershipRejectedDet
       logoUrl: details.logoUrl,
       brandName: details.brandName,
       button: { label: "View membership", url: membershipUrl(details.siteUrl) },
+    }),
+  });
+}
+
+/** Password reset — sent through the tenant's own sender (Resend) with a link we generate server-side
+ * via the admin API, so it matches the venue's branding and works cross-device (token_hash flow). */
+export async function sendPasswordResetEmail(details: {
+  to: string;
+  resetUrl: string;
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+  logoUrl: string | null;
+}) {
+  await safeSend({
+    from: fromAddress(details.brandName, details.fromEmail),
+    to: details.to,
+    subject: `Reset your ${details.brandName} password`,
+    html: renderEmail({
+      heading: "Reset your password",
+      intro: [
+        `We got a request to reset the password for your ${details.brandName} account. Choose a new one with the button below — this link expires in about an hour.`,
+        "If you didn't request this, you can safely ignore this email; your password won't change.",
+      ],
+      detailRows: [],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
+      button: { label: "Reset password", url: details.resetUrl },
     }),
   });
 }
