@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { type EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,25 @@ export default function ResetPasswordPage() {
     }
 
     setStatus("loading");
+
+    // Verify the recovery token now — on submit, not on page load — so an email link-scanner
+    // (e.g. Outlook SafeLinks) that pre-fetches the link can't consume the single-use token first.
+    // Falls back to an existing session if the page was reached without a token.
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    const type = params.get("type");
+    if (tokenHash && type) {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        type: type as EmailOtpType,
+        token_hash: tokenHash,
+      });
+      if (verifyError) {
+        setStatus("idle");
+        setErrorMessage("This reset link is invalid or has expired. Please request a new one.");
+        return;
+      }
+    }
+
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
       setStatus("idle");
