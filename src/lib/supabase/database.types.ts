@@ -165,14 +165,16 @@ export type Database = {
       }
       bookings: {
         Row: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
-          booked_as_member: boolean
           checked_in_at: string | null
           coach_fee_cents: number
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -180,11 +182,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
-          payment_reference: string | null
           payment_method: string | null
+          payment_reference: string | null
           payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -193,14 +196,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          booked_as_member?: boolean
           booked_by?: string | null
           booking_group_id?: string | null
-          booked_as_member?: boolean
           checked_in_at?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
           court_id: string
           created_at?: string
+          discount_cents?: number
+          discount_label?: string | null
           guest_email?: string | null
           guest_name?: string | null
           guest_phone?: string | null
@@ -208,11 +213,12 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
-          payment_reference?: string | null
           payment_method?: string | null
+          payment_reference?: string | null
           payment_remarks?: string | null
           payment_slip_path?: string | null
           payment_status?: string
+          promotion_id?: string | null
           reference_code?: string
           source?: string
           status?: string
@@ -221,14 +227,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          booked_as_member?: boolean
           booked_by?: string | null
           booking_group_id?: string | null
-          booked_as_member?: boolean
           checked_in_at?: string | null
           coach_fee_cents?: number
           coach_id?: string | null
           court_id?: string
           created_at?: string
+          discount_cents?: number
+          discount_label?: string | null
           guest_email?: string | null
           guest_name?: string | null
           guest_phone?: string | null
@@ -236,11 +244,12 @@ export type Database = {
           idempotency_key?: string | null
           notes?: string | null
           party_size?: number
-          payment_reference?: string | null
           payment_method?: string | null
+          payment_reference?: string | null
           payment_remarks?: string | null
           payment_slip_path?: string | null
           payment_status?: string
+          promotion_id?: string | null
           reference_code?: string
           source?: string
           status?: string
@@ -268,6 +277,13 @@ export type Database = {
             columns: ["court_id"]
             isOneToOne: false
             referencedRelation: "courts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
             referencedColumns: ["id"]
           },
         ]
@@ -424,47 +440,6 @@ export type Database = {
           },
         ]
       }
-      expenses: {
-        Row: {
-          amount_cents: number
-          category: string
-          created_at: string
-          created_by: string | null
-          id: string
-          incurred_on: string
-          note: string | null
-          venue_id: string
-        }
-        Insert: {
-          amount_cents: number
-          category: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          incurred_on: string
-          note?: string | null
-          venue_id: string
-        }
-        Update: {
-          amount_cents?: number
-          category?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          incurred_on?: string
-          note?: string | null
-          venue_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "expenses_venue_id_fkey"
-            columns: ["venue_id"]
-            isOneToOne: false
-            referencedRelation: "venues"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       court_rate_periods: {
         Row: {
           court_id: string
@@ -614,47 +589,47 @@ export type Database = {
           },
         ]
       }
-      memberships: {
+      expenses: {
         Row: {
+          amount_cents: number
+          category: string
           created_at: string
-          ends_on: string | null
+          created_by: string | null
           id: string
-          profile_id: string
-          starts_on: string
-          status: string
-          tier: string
-          venue_id: string | null
+          incurred_on: string
+          note: string | null
+          venue_id: string
         }
         Insert: {
+          amount_cents: number
+          category: string
           created_at?: string
-          ends_on?: string | null
+          created_by?: string | null
           id?: string
-          profile_id: string
-          starts_on: string
-          status?: string
-          tier: string
-          venue_id?: string | null
+          incurred_on: string
+          note?: string | null
+          venue_id: string
         }
         Update: {
+          amount_cents?: number
+          category?: string
           created_at?: string
-          ends_on?: string | null
+          created_by?: string | null
           id?: string
-          profile_id?: string
-          starts_on?: string
-          status?: string
-          tier?: string
-          venue_id?: string | null
+          incurred_on?: string
+          note?: string | null
+          venue_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "memberships_profile_id_fkey"
-            columns: ["profile_id"]
+            foreignKeyName: "expenses_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "memberships_venue_id_fkey"
+            foreignKeyName: "expenses_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
@@ -699,7 +674,15 @@ export type Database = {
           sort_order?: number
           venue_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "membership_plans_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       membership_requests: {
         Row: {
@@ -750,7 +733,84 @@ export type Database = {
           tier?: string
           venue_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "membership_requests_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "membership_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_requests_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_requests_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      memberships: {
+        Row: {
+          created_at: string
+          ends_on: string | null
+          id: string
+          profile_id: string
+          starts_on: string
+          status: string
+          tier: string
+          venue_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          ends_on?: string | null
+          id?: string
+          profile_id: string
+          starts_on: string
+          status?: string
+          tier: string
+          venue_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          ends_on?: string | null
+          id?: string
+          profile_id?: string
+          starts_on?: string
+          status?: string
+          tier?: string
+          venue_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memberships_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memberships_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -921,6 +981,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "profiles_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotions: {
+        Row: {
+          active: boolean
+          config: Json
+          created_at: string
+          eligibility: string
+          ends_on: string | null
+          id: string
+          name: string
+          priority: number
+          stackable: boolean
+          starts_on: string | null
+          type: string
+          venue_id: string
+        }
+        Insert: {
+          active?: boolean
+          config?: Json
+          created_at?: string
+          eligibility?: string
+          ends_on?: string | null
+          id?: string
+          name: string
+          priority?: number
+          stackable?: boolean
+          starts_on?: string | null
+          type: string
+          venue_id: string
+        }
+        Update: {
+          active?: boolean
+          config?: Json
+          created_at?: string
+          eligibility?: string
+          ends_on?: string | null
+          id?: string
+          name?: string
+          priority?: number
+          stackable?: boolean
+          starts_on?: string | null
+          type?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotions_venue_id_fkey"
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
@@ -1176,6 +1289,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           max_advance_days: number
+          max_discount_pct: number | null
           member_advance_days: number | null
           membership_duration_days: number | null
           membership_price_cents: number | null
@@ -1222,6 +1336,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           max_advance_days?: number
+          max_discount_pct?: number | null
           member_advance_days?: number | null
           membership_duration_days?: number | null
           membership_price_cents?: number | null
@@ -1268,6 +1383,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           max_advance_days?: number
+          max_discount_pct?: number | null
           member_advance_days?: number | null
           membership_duration_days?: number | null
           membership_price_cents?: number | null
@@ -1346,48 +1462,18 @@ export type Database = {
     Functions: {
       admin_shares_venue_with: { Args: { p_profile: string }; Returns: boolean }
       admin_user_id_by_email: { Args: { p_email: string }; Returns: string }
-      submit_membership_request: {
-        Args: { p_plan: string; p_reference?: string; p_slip_path?: string }
-        Returns: {
-          amount_cents: number
-          created_at: string
-          duration_days: number
-          id: string
-          payment_reference: string | null
-          payment_slip_path: string | null
-          profile_id: string
-          review_notes: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-          tier: string
-          venue_id: string
-        }
-      }
-      review_membership_request: {
-        Args: { p_request: string; p_approve: boolean; p_notes?: string }
-        Returns: {
-          amount_cents: number
-          created_at: string
-          duration_days: number
-          id: string
-          payment_reference: string | null
-          payment_slip_path: string | null
-          profile_id: string
-          review_notes: string | null
-          reviewed_at: string | null
-          reviewed_by: string | null
-          status: string
-          tier: string
-          venue_id: string
-        }
+      apply_group_promotions: {
+        Args: { p_discounts: Json; p_group_id: string }
+        Returns: undefined
       }
       booking_has_player: { Args: { p_booking_id: string }; Returns: boolean }
       booking_venue: { Args: { p_booking: string }; Returns: string }
       can_admin_venue: { Args: { p_venue: string }; Returns: boolean }
+      can_staff_venue: { Args: { p_venue: string }; Returns: boolean }
       cancel_booking: {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1395,6 +1481,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1402,9 +1490,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1422,6 +1513,7 @@ export type Database = {
       cancel_booking_group: {
         Args: { p_group_id: string }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1429,6 +1521,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1436,9 +1530,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1457,6 +1554,7 @@ export type Database = {
       confirm_booking: {
         Args: { p_booking_id: string }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1464,6 +1562,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1471,9 +1571,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1491,6 +1594,7 @@ export type Database = {
       confirm_booking_group: {
         Args: { p_group_id: string }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1498,6 +1602,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1505,9 +1611,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1534,13 +1643,16 @@ export type Database = {
           p_idempotency_key?: string
           p_notes?: string
           p_party_size?: number
+          p_payment_method?: string
           p_payment_reference?: string
+          p_payment_remarks?: string
           p_payment_slip_path?: string
           p_player_names?: string[]
           p_source?: string
           p_starts_at: string
         }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1548,6 +1660,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1555,9 +1669,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1591,6 +1708,7 @@ export type Database = {
           p_source?: string
         }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1598,6 +1716,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1605,9 +1725,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1650,9 +1773,12 @@ export type Database = {
       is_booking_owner: { Args: { p_booking_id: string }; Returns: boolean }
       is_member_of: { Args: { p_venue: string }; Returns: boolean }
       is_organizer_or_admin: { Args: never; Returns: boolean }
+      is_staff_anywhere: { Args: never; Returns: boolean }
+      is_staff_of: { Args: { p_venue: string }; Returns: boolean }
       mark_no_show: {
         Args: { p_booking_id: string }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1660,6 +1786,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1667,9 +1795,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1692,6 +1823,7 @@ export type Database = {
           p_new_starts_at: string
         }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1699,6 +1831,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1706,9 +1840,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1723,10 +1860,36 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      review_membership_request: {
+        Args: { p_approve: boolean; p_notes?: string; p_request: string }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          duration_days: number
+          id: string
+          payment_reference: string | null
+          payment_slip_path: string | null
+          plan_id: string | null
+          profile_id: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tier: string
+          venue_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "membership_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       session_venue: { Args: { p_session: string }; Returns: string }
       set_booking_checked_in: {
         Args: { p_booking_id: string; p_checked_in: boolean }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1734,6 +1897,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1741,9 +1906,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string
@@ -1774,9 +1942,35 @@ export type Database = {
         Args: { p_theme: string; p_venue: string }
         Returns: string
       }
+      submit_membership_request: {
+        Args: { p_plan: string; p_reference?: string; p_slip_path?: string }
+        Returns: {
+          amount_cents: number
+          created_at: string
+          duration_days: number
+          id: string
+          payment_reference: string | null
+          payment_slip_path: string | null
+          plan_id: string | null
+          profile_id: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          tier: string
+          venue_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "membership_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       void_booking: {
         Args: { p_booking_id: string; p_reason: string }
         Returns: {
+          booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
           checked_in_at: string | null
@@ -1784,6 +1978,8 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          discount_cents: number
+          discount_label: string | null
           guest_email: string | null
           guest_name: string | null
           guest_phone: string | null
@@ -1791,9 +1987,12 @@ export type Database = {
           idempotency_key: string | null
           notes: string | null
           party_size: number
+          payment_method: string | null
           payment_reference: string | null
+          payment_remarks: string | null
           payment_slip_path: string | null
           payment_status: string
+          promotion_id: string | null
           reference_code: string
           source: string
           status: string

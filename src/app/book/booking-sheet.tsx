@@ -86,6 +86,7 @@ export function BookingSheet({
   onBookingConfirmed,
   segments,
   totalCents,
+  discountCents = 0,
   coaches,
   paymentAccounts,
   isLoggedIn,
@@ -96,6 +97,8 @@ export function BookingSheet({
   onBookingConfirmed?: () => void;
   segments: CartSegment[];
   totalCents: number;
+  /** Promo discount on the court subtotal (coaching is never discounted). */
+  discountCents?: number;
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
@@ -126,7 +129,9 @@ export function BookingSheet({
   const totalMinutes = segments.reduce((sum, s) => sum + s.durationMinutes, 0);
   const selectedCoach = coaches.find((c) => c.id === coachId) ?? null;
   const coachFeeCents = selectedCoach ? Math.round((selectedCoach.hourly_rate_cents * totalMinutes) / 60) : 0;
-  const grandTotalCents = totalCents + coachFeeCents;
+  // The promo discount applies to the court subtotal only (never the coach fee), capped at the subtotal.
+  const appliedDiscountCents = Math.min(discountCents, totalCents);
+  const grandTotalCents = totalCents + coachFeeCents - appliedDiscountCents;
 
   function handleClose(next: boolean) {
     if (!next) {
@@ -333,7 +338,11 @@ export function BookingSheet({
 
             <p className="text-sm text-muted-foreground">
               Total: <span className="font-medium text-foreground">{pesos(grandTotalCents)}</span>
-              {selectedCoach ? ` (courts ${pesos(totalCents)} + coach ${pesos(coachFeeCents)})` : ""}.{" "}
+              {appliedDiscountCents > 0 || selectedCoach
+                ? ` (courts ${pesos(totalCents)}${selectedCoach ? ` + coach ${pesos(coachFeeCents)}` : ""}${appliedDiscountCents > 0 ? ` − discount ${pesos(appliedDiscountCents)}` : ""})`
+                : ""}
+              .{" "}
+              {appliedDiscountCents > 0 && "Promo applied. "}
               {isLoggedIn && "Member rates applied if you're an active member. "}
               Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
             </p>

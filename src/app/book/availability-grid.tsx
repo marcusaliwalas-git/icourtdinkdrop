@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatInTimezone } from "@/lib/time";
 import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
+import { evaluatePromotions, toPromoRow, totalDiscountCents } from "@/lib/promos/engine";
 import { BookingSheet, type CartSegment, type CoachOption, type PaymentAccount } from "./booking-sheet";
 import type { TimeRow } from "@/lib/availability";
 
@@ -15,6 +16,19 @@ interface Court {
   name: string;
   hourly_rate_cents: number;
   member_rate_cents: number | null;
+}
+
+// A promotions row as loaded on the booking page (snake_case from the DB).
+interface PromotionRow {
+  id: string;
+  name: string;
+  type: string;
+  config: unknown;
+  eligibility: string;
+  stackable: boolean;
+  priority: number;
+  starts_on: string | null;
+  ends_on: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -79,7 +93,10 @@ export function AvailabilityGrid({
   coaches,
   paymentAccounts,
   isLoggedIn,
+  isMember,
   defaultView,
+  venueId,
+  promotions,
 }: {
   timezone: string;
   courts: Court[];
@@ -89,8 +106,13 @@ export function AvailabilityGrid({
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
+  /** Whether the viewer actually has an active membership at this venue (price estimate uses the
+   * member rate). Distinct from isLoggedIn, which only gates guest vs. account fields. */
+  isMember: boolean;
   /** The venue's default calendar view; a booker's own saved choice overrides it. */
   defaultView: string;
+  venueId: string;
+  promotions: PromotionRow[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -198,7 +220,7 @@ export function AvailabilityGrid({
           ratePeriods: ratePeriodsByCourtId[court.id] ?? [],
           baseHourlyRateCents: court.hourly_rate_cents,
           baseMemberRateCents: court.member_rate_cents,
-          isMember: isLoggedIn,
+          isMember,
         });
         result.push({
           courtId: court.id,
@@ -222,11 +244,34 @@ export function AvailabilityGrid({
     }
     // Chronological within the day, then by court, so the cart reads naturally.
     return result.sort((a, b) => a.startsAtIso.localeCompare(b.startsAtIso) || a.courtName.localeCompare(b.courtName));
-  }, [selected, courts, rows, timezone, ratePeriodsByCourtId, isLoggedIn]);
+  }, [selected, courts, rows, timezone, ratePeriodsByCourtId, isMember]);
 
   const totalCents = segments.reduce((sum, s) => sum + s.estimateCents, 0);
   const courtCount = new Set(segments.map((s) => s.courtId)).size;
   const slotCount = segments.reduce((sum, s) => sum + s.durationMinutes / 60, 0);
+
+  // Live promo estimate — mirrors the server's authoritative discount so the cart shows the real
+  // price before paying. Uses the same real membership status as the base estimate.
+  const discountCents = useMemo(() => {
+    if (promotions.length === 0 || segments.length === 0) return 0;
+    const onDateIso = formatInTimezone(new Date(segments[0].startsAtIso), "yyyy-MM-dd", timezone);
+    const lines = evaluatePromotions(
+      {
+        venueId,
+        timezone,
+        isMember,
+        onDateIso,
+        segments: segments.map((s) => ({
+          courtId: s.courtId,
+          startsAtIso: s.startsAtIso,
+          durationMinutes: s.durationMinutes,
+          baseTotalCents: s.estimateCents,
+        })),
+      },
+      promotions.map(toPromoRow)
+    );
+    return totalDiscountCents(lines);
+  }, [promotions, segments, venueId, timezone, isMember]);
 
   // Per-hour price for every open cell — the court's rate for that hour, honouring time-of-day
   // rate periods and the member rate. Same computation as the cart total and the server, so the
@@ -243,13 +288,13 @@ export function AvailabilityGrid({
           ratePeriods: ratePeriodsByCourtId[court.id] ?? [],
           baseHourlyRateCents: court.hourly_rate_cents,
           baseMemberRateCents: court.member_rate_cents,
-          isMember: isLoggedIn,
+          isMember,
         });
         map.set(cellKey(court.id, rowIdx), cents);
       }
     });
     return map;
-  }, [rows, courts, timezone, ratePeriodsByCourtId, isLoggedIn]);
+  }, [rows, courts, timezone, ratePeriodsByCourtId, isMember]);
 
   // Distinct rates present today, low→high, and the min/max used to place each on the tier scale.
   const distinctRates = useMemo(
@@ -348,7 +393,7 @@ export function AvailabilityGrid({
       <p className="text-xs text-muted-foreground">
         {view === "find"
           ? "Pick a start time and how long you want to play — we'll show the open courts and their price."
-          : `Each open slot shows its price per hour${isLoggedIn ? " (your member rate where it applies)" : ""}. Tap any slots — across courts and times — then review and book them together.`}
+          : `Each open slot shows its price per hour${isMember ? " (your member rate where it applies)" : ""}. Tap any slots — across courts and times — then review and book them together.`}
       </p>
 
       {distinctRates.length > 1 && (
@@ -557,6 +602,7 @@ export function AvailabilityGrid({
         onBookingConfirmed={() => setBookingConfirmed(true)}
         segments={segments}
         totalCents={totalCents}
+        discountCents={discountCents}
         coaches={coaches}
         paymentAccounts={paymentAccounts}
         isLoggedIn={isLoggedIn}
