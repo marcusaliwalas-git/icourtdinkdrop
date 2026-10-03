@@ -143,3 +143,29 @@ export function evaluatePromotions(ctx: PromoContext, promos: PromoRow[]): Disco
 export function totalDiscountCents(lines: DiscountLine[]): number {
   return lines.reduce((t, l) => t + l.cents, 0);
 }
+
+/** Map a `promotions` table row (snake_case) to a PromoRow. Pure, so both the client estimate and the
+ * server write use the same shape. */
+export function toPromoRow(r: {
+  id: string;
+  name: string;
+  type: string;
+  config: unknown;
+  eligibility: string;
+  stackable: boolean;
+  priority: number;
+  starts_on: string | null;
+  ends_on: string | null;
+}): PromoRow {
+  return {
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    config: r.config,
+    eligibility: r.eligibility as PromoEligibility,
+    stackable: r.stackable,
+    priority: r.priority,
+    startsOn: r.starts_on,
+    endsOn: r.ends_on,
+  };
+}

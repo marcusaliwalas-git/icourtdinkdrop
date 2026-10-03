@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatInTimezone } from "@/lib/time";
 import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
+import { evaluatePromotions, toPromoRow, totalDiscountCents } from "@/lib/promos/engine";
 import { BookingSheet, type CartSegment, type CoachOption, type PaymentAccount } from "./booking-sheet";
 import type { TimeRow } from "@/lib/availability";
 
@@ -15,6 +16,19 @@ interface Court {
   name: string;
   hourly_rate_cents: number;
   member_rate_cents: number | null;
+}
+
+// A promotions row as loaded on the booking page (snake_case from the DB).
+interface PromotionRow {
+  id: string;
+  name: string;
+  type: string;
+  config: unknown;
+  eligibility: string;
+  stackable: boolean;
+  priority: number;
+  starts_on: string | null;
+  ends_on: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -80,6 +94,8 @@ export function AvailabilityGrid({
   paymentAccounts,
   isLoggedIn,
   defaultView,
+  venueId,
+  promotions,
 }: {
   timezone: string;
   courts: Court[];
@@ -91,6 +107,8 @@ export function AvailabilityGrid({
   isLoggedIn: boolean;
   /** The venue's default calendar view; a booker's own saved choice overrides it. */
   defaultView: string;
+  venueId: string;
+  promotions: PromotionRow[];
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -227,6 +245,29 @@ export function AvailabilityGrid({
   const totalCents = segments.reduce((sum, s) => sum + s.estimateCents, 0);
   const courtCount = new Set(segments.map((s) => s.courtId)).size;
   const slotCount = segments.reduce((sum, s) => sum + s.durationMinutes / 60, 0);
+
+  // Live promo estimate — mirrors the server's authoritative discount so the cart shows the real
+  // price before paying. (isLoggedIn is the same member proxy the base estimate uses.)
+  const discountCents = useMemo(() => {
+    if (promotions.length === 0 || segments.length === 0) return 0;
+    const onDateIso = formatInTimezone(new Date(segments[0].startsAtIso), "yyyy-MM-dd", timezone);
+    const lines = evaluatePromotions(
+      {
+        venueId,
+        timezone,
+        isMember: isLoggedIn,
+        onDateIso,
+        segments: segments.map((s) => ({
+          courtId: s.courtId,
+          startsAtIso: s.startsAtIso,
+          durationMinutes: s.durationMinutes,
+          baseTotalCents: s.estimateCents,
+        })),
+      },
+      promotions.map(toPromoRow)
+    );
+    return totalDiscountCents(lines);
+  }, [promotions, segments, venueId, timezone, isLoggedIn]);
 
   // Per-hour price for every open cell — the court's rate for that hour, honouring time-of-day
   // rate periods and the member rate. Same computation as the cart total and the server, so the
@@ -557,6 +598,7 @@ export function AvailabilityGrid({
         onBookingConfirmed={() => setBookingConfirmed(true)}
         segments={segments}
         totalCents={totalCents}
+        discountCents={discountCents}
         coaches={coaches}
         paymentAccounts={paymentAccounts}
         isLoggedIn={isLoggedIn}
