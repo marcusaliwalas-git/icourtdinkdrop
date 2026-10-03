@@ -216,6 +216,9 @@ export default async function BookPage({
           coaches={coaches ?? []}
           paymentAccounts={paymentAccounts ?? []}
           isLoggedIn={!!user}
+          // Real membership drives the price estimate, but only where the venue runs memberships;
+          // otherwise there's no member rate to show. Matches create_booking's authoritative check.
+          isMember={featureEnabled(venue.features, "official_members") && isMember}
           defaultView={venue.calendar_default_view ?? "grid"}
           venueId={venue.id}
           promotions={promotions ?? []}
