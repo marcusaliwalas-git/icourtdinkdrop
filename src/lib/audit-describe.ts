@@ -87,6 +87,13 @@ export function describeAuditEntry(entry: AuditLike, ctx: AuditContext = {}): st
     case "membership_plan_deleted":
       return "Deleted a membership plan";
 
+    case "promotion_created":
+      return `Created promotion${str(after.name) ? ` "${str(after.name)}"` : ""}`;
+    case "promotion_updated":
+      return `Updated promotion${str(after.name) ? ` "${str(after.name)}"` : ""}`;
+    case "promotion_deleted":
+      return "Deleted a promotion";
+
     case "closure_created":
       return `Scheduled a closure${str(after.reason) ? ` · ${str(after.reason)}` : ""}`;
     case "closure_deleted":

@@ -6,6 +6,7 @@ import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { MembershipPlansManager } from "./membership-plans-manager";
+import { PromotionsManager, type Promotion } from "./promotions-manager";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
 import { requireAdmin } from "@/lib/auth";
@@ -116,6 +117,13 @@ export default async function AdminVenuePage() {
         }[],
       };
 
+  const { data: promotions } = await supabase
+    .from("promotions")
+    .select("id, name, type, config, eligibility, stackable, priority, active, starts_on, ends_on")
+    .eq("venue_id", venue.id)
+    .order("priority", { ascending: false })
+    .order("name");
+
   return (
     <div>
       <p className="font-mono text-xs tracking-[0.2em] text-primary uppercase">Venue &amp; courts</p>
@@ -127,6 +135,7 @@ export default async function AdminVenuePage() {
           <TabsTrigger value="hours">Hours</TabsTrigger>
           <TabsTrigger value="payment">Payment</TabsTrigger>
           {officialMembersEnabled && <TabsTrigger value="membership">Membership</TabsTrigger>}
+          <TabsTrigger value="promotions">Promotions</TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="max-w-lg">
@@ -158,6 +167,9 @@ export default async function AdminVenuePage() {
             />
           </TabsContent>
         )}
+        <TabsContent value="promotions">
+          <PromotionsManager venueId={venue.id} promotions={(promotions ?? []) as Promotion[]} />
+        </TabsContent>
         <TabsContent value="closures">
           <ClosuresManager
             venueId={venue.id}
