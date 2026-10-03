@@ -10,6 +10,7 @@ import {
   type PromoSegment,
 } from "@/lib/promos/engine";
 import { volumeDiscount } from "@/lib/promos/types/volume-discount";
+import { freeHours } from "@/lib/promos/types/free-hours";
 
 const TZ = "Asia/Manila";
 
@@ -66,6 +67,37 @@ describe("volumeDiscount.apply", () => {
     c.segments[0].durationMinutes = 90;
     const lines = volumeDiscount.apply(c, { minCourts: 3, centsOffPerHour: 5000 }, promo());
     expect(lines[0].cents).toBe(7500);
+  });
+});
+
+describe("freeHours.apply", () => {
+  // Default test segment starts 01:00Z = 09:00 Asia/Manila (UTC+8), so a 4h booking runs 09:00–13:00.
+  const cfg = { windowStart: "08:00", windowEnd: "16:00", minHours: 4, freeHours: 1 };
+  const fhPromo = promo({ type: "free_hours", name: "Daytime deal" });
+
+  it("takes one hour's average rate off a qualifying daytime booking", () => {
+    // 4h, base ₱1,800 → 1 free hour = ₱450
+    const lines = freeHours.apply(ctx([segment("a", 4, 180000)]), cfg, fhPromo);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].cents).toBe(45000);
+    expect(lines[0].label).toBe("Daytime deal");
+  });
+
+  it("skips a booking below the hours threshold", () => {
+    expect(freeHours.apply(ctx([segment("a", 3, 135000)]), cfg, fhPromo)).toEqual([]);
+  });
+
+  it("skips a booking that runs past the window", () => {
+    // 06:00Z = 14:00 Manila, 4h → ends 18:00, past the 16:00 window end.
+    const late = ctx([
+      { courtId: "a", startsAtIso: "2026-10-05T06:00:00.000Z", durationMinutes: 240, baseTotalCents: 180000 },
+    ]);
+    expect(freeHours.apply(late, cfg, fhPromo)).toEqual([]);
+  });
+
+  it("applies per court-slot (each qualifying booking gets its free hour)", () => {
+    const lines = freeHours.apply(ctx([segment("a", 4, 180000), segment("b", 4, 200000)]), cfg, fhPromo);
+    expect(lines.map((l) => l.cents)).toEqual([45000, 50000]);
   });
 });
 
