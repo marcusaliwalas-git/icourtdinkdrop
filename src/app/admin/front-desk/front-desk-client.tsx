@@ -33,6 +33,7 @@ export type DeskBooking = {
   paymentStatus: string;
   referenceCode: string;
   isOnline: boolean;
+  equipment: { name: string; quantity: number }[];
 };
 
 function pesos(cents: number) {
@@ -203,6 +204,16 @@ export function FrontDesk({
                     <span className="font-mono">{b.referenceCode}</span>
                     {b.phone ? ` · ${b.phone}` : ""} · {pesos(b.totalCents)}
                   </p>
+                  {b.equipment.length > 0 && (
+                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">
+                        🏓 Equipment
+                      </span>
+                      <span className="text-muted-foreground">
+                        {b.equipment.map((e) => `${e.quantity}× ${e.name}`).join(", ")}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {/* Unpaid walk-in/admin slots can be settled at the desk before check-in; online

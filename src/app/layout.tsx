@@ -4,6 +4,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteAnnouncement } from "@/components/site-announcement";
+import { CookieConsent } from "@/components/cookie-consent";
 import { RequireNameDialog } from "@/components/require-name-dialog";
 import { Toaster } from "@/components/ui/sonner";
 import { getTenant } from "@/lib/tenant";
@@ -131,6 +132,7 @@ export default async function RootLayout({
           links={tenant?.footer_links}
         />
         <Toaster />
+        <CookieConsent />
       </body>
     </html>
   );
