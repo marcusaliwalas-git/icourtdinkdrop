@@ -47,6 +47,8 @@ export function CalendarViews({
   courts,
   rows,
   pricing,
+  venueId,
+  equipmentEnabled,
   dateLabel,
   defaultView,
 }: {
@@ -55,6 +57,8 @@ export function CalendarViews({
   rows: AdminTimeRow[];
   /** Per-court rates for the multi-select running total (keyed by court id). */
   pricing: Record<string, CourtPricing>;
+  venueId: string;
+  equipmentEnabled: boolean;
   dateLabel: string;
   /** The venue's admin-set default view; a viewer's own saved choice overrides it. */
   defaultView: string;
@@ -268,6 +272,8 @@ export function CalendarViews({
         segments={segments}
         totalCents={totalCents}
         timezone={timezone}
+        venueId={venueId}
+        equipmentEnabled={equipmentEnabled}
         onBooked={() => {
           setBatchOpen(false);
           setSelected(new Map());

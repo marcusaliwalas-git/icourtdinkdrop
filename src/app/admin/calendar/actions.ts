@@ -86,7 +86,7 @@ export async function createWalkInBookings(input: unknown): Promise<WalkInBookin
   }
 
   const { supabase } = await requireStaff();
-  const { segments, guestName, guestPhone, paymentMethod, paymentRemarks } = parsed.data;
+  const { segments, equipment, guestName, guestPhone, paymentMethod, paymentRemarks } = parsed.data;
 
   const { data, error } = await supabase.rpc("create_bookings", {
     p_segments: segments.map((s) => ({
@@ -102,6 +102,7 @@ export async function createWalkInBookings(input: unknown): Promise<WalkInBookin
     p_payment_method: paymentMethod ?? undefined,
     // Remarks only make sense for an online payment; drop them otherwise.
     p_payment_remarks: paymentMethod === "online" ? paymentRemarks || undefined : undefined,
+    p_equipment: (equipment ?? []).map((e) => ({ equipment_id: e.equipmentId, quantity: e.quantity })),
   });
 
   if (error) {

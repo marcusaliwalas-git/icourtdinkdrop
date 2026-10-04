@@ -50,6 +50,9 @@ function avgDailyCents(realizedCents: number, from: string, to: string, today: s
 interface SummaryResult {
   summary: ReturnType<typeof summarizeSales>;
   totalBookings: number;
+  /** Equipment-rental revenue (already part of realized revenue), broken down by item. */
+  equipmentBreakdown: SalesBreakdown[];
+  equipmentCents: number;
 }
 
 async function summarizeRange(
@@ -87,7 +90,33 @@ async function summarizeRange(
     };
   });
 
-  return { summary: summarizeSales(rows), totalBookings: rows.length };
+  // Equipment-rental revenue over the same realized window (locked-in status + actually paid, which
+  // excludes complimentary). The fee is already inside each booking's total_cents; this just shows how
+  // much of the revenue came from equipment, per item.
+  const { data: equipRows } = await supabase
+    .from("booking_equipment")
+    .select("fee_cents, quantity, equipment!inner(name), bookings!inner(status, payment_status, courts!inner(venue_id))")
+    .eq("bookings.courts.venue_id", venueId)
+    .in("bookings.status", ["confirmed", "completed", "no_show"])
+    .in("bookings.payment_status", ["paid_at_venue", "paid_online"])
+    .filter("bookings.time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
+    .limit(10000);
+
+  const equipMap = new Map<string, SalesBreakdown>();
+  for (const r of equipRows ?? []) {
+    const name = (r.equipment as unknown as { name: string } | null)?.name ?? "—";
+    const existing = equipMap.get(name);
+    if (existing) {
+      existing.cents += r.fee_cents;
+      existing.count += r.quantity;
+    } else {
+      equipMap.set(name, { key: name, label: name, cents: r.fee_cents, count: r.quantity });
+    }
+  }
+  const equipmentBreakdown = [...equipMap.values()].sort((a, b) => b.cents - a.cents);
+  const equipmentCents = equipmentBreakdown.reduce((sum, e) => sum + e.cents, 0);
+
+  return { summary: summarizeSales(rows), totalBookings: rows.length, equipmentBreakdown, equipmentCents };
 }
 
 export default async function AdminSalesPage({
@@ -358,6 +387,13 @@ export default async function AdminSalesPage({
           <BreakdownCard title="By membership" rows={s.byMembership} total={s.realizedCents} />
         )}
         <BreakdownCard title="By day of week" rows={s.byWeekday} total={s.realizedCents} />
+        {current.equipmentBreakdown.length > 0 && (
+          <BreakdownCard
+            title={`Equipment rental — ${pesos(current.equipmentCents)}`}
+            rows={current.equipmentBreakdown}
+            total={current.equipmentCents}
+          />
+        )}
         {expensesEnabled && expenses.count > 0 && (
           <BreakdownCard title="Expenses by category" rows={expenses.byCategory} total={expenses.totalCents} />
         )}

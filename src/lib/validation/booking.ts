@@ -102,6 +102,10 @@ export type CreateBookingsInput = z.infer<typeof createBookingsSchema>;
 // list as a customer cart, but with one payment recorded for the whole batch and no online slip.
 export const walkInBookingsSchema = z.object({
   segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(48),
+  equipment: z
+    .array(z.object({ equipmentId: z.uuid(), quantity: z.coerce.number().int().min(1).max(99) }))
+    .max(20)
+    .optional(),
   guestName: z.string().trim().min(1, "Enter a name for the booking.").max(120),
   guestPhone: phSchema.optional().or(z.literal("")),
   // null = booked now, settled at the venue later (pay_at_venue).

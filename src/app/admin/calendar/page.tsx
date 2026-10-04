@@ -4,6 +4,7 @@ import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate }
 import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
 import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
 import { compareCourtName } from "@/lib/courts";
 import type { RatePeriod as CourtRatePeriod } from "@/lib/pricing";
 
@@ -139,6 +140,8 @@ export default async function AdminCalendarPage({
           courts={courts ?? []}
           rows={grid.rows}
           pricing={pricing}
+          venueId={venue.id}
+          equipmentEnabled={featureEnabled(venue.features, "equipment")}
           dateLabel={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
           defaultView={venue.calendar_default_view ?? "grid"}
         />

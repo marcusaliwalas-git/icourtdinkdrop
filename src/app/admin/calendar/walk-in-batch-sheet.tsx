@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -21,12 +21,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createWalkInBookings } from "./actions";
+import { createClient } from "@/lib/supabase/client";
 import { formatInTimezone } from "@/lib/time";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import type { WalkInSegment } from "./selection";
 
 // Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
 const UNPAID = "unpaid";
+
+// One rentable item + units free for the chosen time (from equipment_availability). Walk-ins are
+// non-member, so the standard rate always applies.
+interface EquipItem {
+  id: string;
+  name: string;
+  hourly_rate_cents: number;
+  max_per_booking: number | null;
+  available: number;
+}
 
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
@@ -38,6 +49,8 @@ export function WalkInBatchSheet({
   segments,
   totalCents,
   timezone,
+  venueId,
+  equipmentEnabled,
   onBooked,
 }: {
   open: boolean;
@@ -45,6 +58,8 @@ export function WalkInBatchSheet({
   segments: WalkInSegment[];
   totalCents?: number;
   timezone: string;
+  venueId: string;
+  equipmentEnabled: boolean;
   onBooked: () => void;
 }) {
   const router = useRouter();
@@ -54,6 +69,8 @@ export function WalkInBatchSheet({
   const [remarks, setRemarks] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [equipItems, setEquipItems] = useState<EquipItem[]>([]);
+  const [equipQty, setEquipQty] = useState<Record<string, number>>({});
 
   function reset() {
     setName("");
@@ -61,6 +78,44 @@ export function WalkInBatchSheet({
     setPayment("cash");
     setRemarks("");
     setError(null);
+    setEquipQty({});
+  }
+
+  // The session's overall span — equipment is reserved and charged over this (matches the RPC).
+  const span = useMemo(() => {
+    if (segments.length === 0) return null;
+    const starts = segments.map((s) => new Date(s.startsAt).getTime());
+    const ends = segments.map((s) => new Date(s.startsAt).getTime() + s.durationMinutes * 60_000);
+    const start = Math.min(...starts);
+    const end = Math.max(...ends);
+    return { startIso: new Date(start).toISOString(), endIso: new Date(end).toISOString(), minutes: (end - start) / 60_000 };
+  }, [segments]);
+
+  useEffect(() => {
+    if (!open || !equipmentEnabled || !span) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const range = `["${span.startIso}","${span.endIso}")`;
+      const { data } = await supabase.rpc("equipment_availability", { p_venue: venueId, p_range: range });
+      if (!cancelled) setEquipItems((data ?? []) as EquipItem[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, equipmentEnabled, venueId, span]);
+
+  const spanMinutes = span?.minutes ?? 0;
+  const equipLines = equipItems
+    .map((item) => ({ item, qty: equipQty[item.id] ?? 0 }))
+    .filter((l) => l.qty > 0)
+    .map((l) => ({ ...l, feeCents: Math.round((l.item.hourly_rate_cents * l.qty * spanMinutes) / 60) }));
+  const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
+  const grandTotalCents = (totalCents ?? 0) + equipmentFeeCents;
+
+  function setQty(item: EquipItem, next: number) {
+    const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+    setEquipQty((prev) => ({ ...prev, [item.id]: Math.max(0, Math.min(next, cap)) }));
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -77,6 +132,7 @@ export function WalkInBatchSheet({
         guestPhone: phone,
         paymentMethod: payment === UNPAID ? null : payment,
         paymentRemarks: payment === "online" ? remarks : undefined,
+        equipment: equipLines.map((l) => ({ equipmentId: l.item.id, quantity: l.qty })),
       });
       if (!result.success) {
         setError(result.message);
@@ -123,13 +179,57 @@ export function WalkInBatchSheet({
                 )}
               </li>
             ))}
+            {equipLines.map((l) => (
+              <li key={l.item.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                <span className="min-w-0">
+                  <span className="font-medium">
+                    {l.qty}× {l.item.name}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">{spanMinutes / 60} hr</span>
+                </span>
+                <span className="shrink-0 text-muted-foreground">{pesos(l.feeCents)}</span>
+              </li>
+            ))}
             {totalCents != null && (
               <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-medium">
                 <span>Total</span>
-                <span>{pesos(totalCents)}</span>
+                <span>{pesos(grandTotalCents)}</span>
               </li>
             )}
           </ul>
+
+          {equipmentEnabled && equipItems.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label>Add equipment (optional)</Label>
+              <ul className="flex flex-col divide-y divide-border/60 rounded-md border text-sm">
+                {equipItems.map((item) => {
+                  const qty = equipQty[item.id] ?? 0;
+                  const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+                  const soldOut = item.available <= 0;
+                  return (
+                    <li key={item.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <span className="min-w-0">
+                        <span className="font-medium">{item.name}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {pesos(item.hourly_rate_cents)}/hr ·{" "}
+                          {soldOut ? "none free for this time" : `${item.available} available`}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <Button type="button" variant="outline" size="icon" className="size-7" disabled={qty <= 0} onClick={() => setQty(item, qty - 1)} aria-label={`Fewer ${item.name}`}>
+                          −
+                        </Button>
+                        <span className="w-5 text-center tabular-nums">{qty}</span>
+                        <Button type="button" variant="outline" size="icon" className="size-7" disabled={qty >= cap} onClick={() => setQty(item, qty + 1)} aria-label={`More ${item.name}`}>
+                          +
+                        </Button>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="wibName">Name</Label>
