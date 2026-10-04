@@ -17,6 +17,7 @@ const ENTITIES: { value: string; label: string }[] = [
   { value: "rate_period", label: "Rate period" },
   { value: "closure", label: "Closure" },
   { value: "membership_plan", label: "Membership plan" },
+  { value: "promotion", label: "Promotion" },
   { value: "membership_request", label: "Subscription" },
   { value: "profile", label: "Member" },
 ];

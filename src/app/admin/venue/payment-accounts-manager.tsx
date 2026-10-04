@@ -4,6 +4,16 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { uploadVenueMedia } from "@/app/admin/homepage/media-upload";
 import { addPaymentAccount, updatePaymentAccount, deletePaymentAccount } from "./actions";
 
@@ -58,114 +68,154 @@ function QrUploadField({ initial }: { initial: string | null }) {
   );
 }
 
-function AccountRow({ account }: { account: PaymentAccount }) {
+/** Add or edit one receiving account in a popup. `account` undefined = add mode. */
+function PaymentDialog({
+  venueId,
+  account,
+  nextSortOrder,
+  trigger,
+}: {
+  venueId: string;
+  account?: PaymentAccount;
+  nextSortOrder?: number;
+  trigger: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  function onSave(formData: FormData) {
+  function onSubmit(formData: FormData) {
+    if (account) {
+      formData.set("sortOrder", String(account.sort_order));
+    } else {
+      formData.set("venueId", venueId);
+      formData.set("sortOrder", String(nextSortOrder ?? 0));
+    }
     setError(null);
     startTransition(async () => {
-      const result = await updatePaymentAccount(account.id, formData);
+      const result = account ? await updatePaymentAccount(account.id, formData) : await addPaymentAccount(formData);
       if (result.error) setError(result.error);
+      else setOpen(false);
     });
   }
 
   function onDelete() {
+    if (!account) return;
+    setError(null);
     startDeleteTransition(async () => {
-      await deletePaymentAccount(account.id);
+      const result = await deletePaymentAccount(account.id);
+      if (result.error) setError(result.error);
+      else setOpen(false);
     });
   }
 
   return (
-    <form action={onSave} className="grid grid-cols-1 gap-3 rounded-lg border border-border/60 p-3 sm:grid-cols-2">
-      <div className="flex flex-col gap-1.5">
-        <Label>Bank / e-wallet</Label>
-        <Input name="bankName" defaultValue={account.bank_name} required />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label>Account name</Label>
-        <Input name="accountName" defaultValue={account.account_name} required />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label>Account number</Label>
-        <Input name="accountNumber" defaultValue={account.account_number} required />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label>Remarks (optional)</Label>
-        <Input name="remarks" defaultValue={account.remarks ?? ""} placeholder="e.g. GCash preferred" />
-      </div>
-      <QrUploadField initial={account.qr_url} />
-      <input type="hidden" name="sortOrder" value={account.sort_order} />
-      <div className="flex items-center gap-2 sm:col-span-2">
-        <Button type="submit" size="sm" disabled={isPending}>
-          {isPending ? "Saving…" : "Save"}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" disabled={isDeleting} onClick={onDelete}>
-          Remove
-        </Button>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    </form>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setError(null);
+      }}
+    >
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{account ? `Edit ${account.bank_name}` : "Add an account"}</DialogTitle>
+        </DialogHeader>
+        <form action={onSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="bankName">Bank / e-wallet</Label>
+            <Input id="bankName" name="bankName" defaultValue={account?.bank_name} placeholder="e.g. BPI or GCash" required />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="accountName">Account name</Label>
+            <Input id="accountName" name="accountName" defaultValue={account?.account_name} placeholder="e.g. Darren Pickleball Inc." required />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="accountNumber">Account number</Label>
+            <Input id="accountNumber" name="accountNumber" defaultValue={account?.account_number} placeholder="e.g. 1234-5678-90" required />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="remarks">Remarks (optional)</Label>
+            <Input id="remarks" name="remarks" defaultValue={account?.remarks ?? ""} placeholder="e.g. GCash preferred" />
+          </div>
+          <QrUploadField initial={account?.qr_url ?? null} />
+
+          {error && <p className="text-sm text-destructive sm:col-span-2">{error}</p>}
+
+          <DialogFooter className="sm:col-span-2">
+            {account && (
+              <Button type="button" variant="ghost" className="mr-auto text-destructive" disabled={isDeleting} onClick={onDelete}>
+                {isDeleting ? "Removing…" : "Remove"}
+              </Button>
+            )}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving…" : account ? "Save changes" : "Add account"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function PaymentAccountsManager({ venueId, accounts }: { venueId: string; accounts: PaymentAccount[] }) {
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function onAdd(formData: FormData) {
-    formData.set("venueId", venueId);
-    formData.set("sortOrder", String(accounts.length));
-    setError(null);
-    startTransition(async () => {
-      const result = await addPaymentAccount(formData);
-      if (result.error) setError(result.error);
-    });
-  }
-
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
-      <p className="text-sm text-muted-foreground">
-        These accounts appear in the customer&rsquo;s <strong>Review your booking</strong> step so they know where to
-        send the transfer. Add one or more.
-      </p>
-
-      <div className="flex flex-col gap-3">
-        {accounts.map((a) => (
-          <AccountRow key={a.id} account={a} />
-        ))}
-        {accounts.length === 0 && (
-          <p className="text-sm text-muted-foreground">No accounts yet. Add one below.</p>
-        )}
+    <div className="flex max-w-3xl flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-prose text-sm text-muted-foreground">
+          These accounts appear in the customer&rsquo;s <strong>Review your booking</strong> step so they know where
+          to send the transfer. Add one or more.
+        </p>
+        <PaymentDialog venueId={venueId} nextSortOrder={accounts.length} trigger={<Button size="sm">Add account</Button>} />
       </div>
 
-      <form action={onAdd} className="grid grid-cols-1 gap-3 rounded-lg border border-dashed border-border/60 p-3 sm:grid-cols-2">
-        <p className="text-sm font-medium sm:col-span-2">Add an account</p>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bankName">Bank / e-wallet</Label>
-          <Input id="bankName" name="bankName" placeholder="e.g. BPI or GCash" required />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="accountName">Account name</Label>
-          <Input id="accountName" name="accountName" placeholder="e.g. Darren Pickleball Inc." required />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="accountNumber">Account number</Label>
-          <Input id="accountNumber" name="accountNumber" placeholder="e.g. 1234-5678-90" required />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="remarks">Remarks (optional)</Label>
-          <Input id="remarks" name="remarks" placeholder="e.g. GCash preferred" />
-        </div>
-        <QrUploadField initial="" />
-        <div className="flex items-center gap-2 sm:col-span-2">
-          <Button type="submit" disabled={isPending}>
-            {isPending ? "Adding…" : "Add account"}
-          </Button>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
-      </form>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Bank / e-wallet</TableHead>
+            <TableHead>Account name</TableHead>
+            <TableHead>Account number</TableHead>
+            <TableHead>QR</TableHead>
+            <TableHead className="w-0"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {accounts.map((a) => (
+            <TableRow key={a.id}>
+              <TableCell className="font-medium">{a.bank_name}</TableCell>
+              <TableCell className="text-muted-foreground">{a.account_name}</TableCell>
+              <TableCell className="font-mono text-xs">{a.account_number}</TableCell>
+              <TableCell>
+                {a.qr_url ? (
+                  <Badge variant="secondary">Yes</Badge>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">
+                <PaymentDialog
+                  venueId={venueId}
+                  account={a}
+                  trigger={
+                    <Button size="sm" variant="outline">
+                      Edit
+                    </Button>
+                  }
+                />
+              </TableCell>
+            </TableRow>
+          ))}
+          {accounts.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
+                No accounts yet. Add one so customers know where to pay.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

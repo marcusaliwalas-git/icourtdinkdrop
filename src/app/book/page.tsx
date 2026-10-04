@@ -107,6 +107,14 @@ export default async function BookPage({
     (ratePeriodsByCourtId[period.court_id] ??= []).push(period);
   }
 
+  // Active promotions for the live cart estimate (the discount line). The authoritative discount is
+  // applied server-side on submit; this mirrors it so the booker sees the price before paying.
+  const { data: promotions } = await supabase
+    .from("promotions")
+    .select("id, name, type, config, eligibility, stackable, priority, starts_on, ends_on")
+    .eq("venue_id", venue.id)
+    .eq("active", true);
+
   const [{ data: dayHours }, { data: bookedSlots }, { data: closures }, { data: paymentAccounts }] = await Promise.all([
     supabase
       .from("operating_hours")
@@ -208,10 +216,13 @@ export default async function BookPage({
           coaches={coaches ?? []}
           paymentAccounts={paymentAccounts ?? []}
           isLoggedIn={!!user}
-          venueId={venue.id}
-          isMember={isMember}
+          // Real membership drives the price estimate, but only where the venue runs memberships;
+          // otherwise there's no member rate to show. Matches create_booking's authoritative check.
+          isMember={featureEnabled(venue.features, "official_members") && isMember}
           equipmentEnabled={featureEnabled(venue.features, "equipment")}
           defaultView={venue.calendar_default_view ?? "grid"}
+          venueId={venue.id}
+          promotions={promotions ?? []}
         />
       )}
 

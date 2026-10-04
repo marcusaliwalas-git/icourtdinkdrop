@@ -48,6 +48,7 @@ export function WalkInBatchSheet({
   onOpenChange,
   segments,
   totalCents,
+  discountCents = 0,
   timezone,
   venueId,
   equipmentEnabled,
@@ -57,6 +58,8 @@ export function WalkInBatchSheet({
   onOpenChange: (open: boolean) => void;
   segments: WalkInSegment[];
   totalCents?: number;
+  /** Promo discount on the batch (shown so staff collect the right amount). */
+  discountCents?: number;
   timezone: string;
   venueId: string;
   equipmentEnabled: boolean;
@@ -111,7 +114,7 @@ export function WalkInBatchSheet({
     .filter((l) => l.qty > 0)
     .map((l) => ({ ...l, feeCents: Math.round((l.item.hourly_rate_cents * l.qty * spanMinutes) / 60) }));
   const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
-  const grandTotalCents = (totalCents ?? 0) + equipmentFeeCents;
+  const grandTotalCents = (totalCents ?? 0) + equipmentFeeCents - discountCents;
 
   function setQty(item: EquipItem, next: number) {
     const cap = Math.min(item.available, item.max_per_booking ?? item.available);
@@ -190,6 +193,12 @@ export function WalkInBatchSheet({
                 <span className="shrink-0 text-muted-foreground">{pesos(l.feeCents)}</span>
               </li>
             ))}
+            {totalCents != null && discountCents > 0 && (
+              <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+                <span>Promo discount</span>
+                <span>−{pesos(discountCents)}</span>
+              </li>
+            )}
             {totalCents != null && (
               <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-medium">
                 <span>Total</span>

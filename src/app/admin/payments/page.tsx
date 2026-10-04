@@ -12,6 +12,8 @@ type Row = {
   booking_group_id: string | null;
   time_range: string;
   total_cents: number;
+  discount_cents: number;
+  discount_label: string | null;
   reference_code: string;
   guest_name: string | null;
   guest_phone: string | null;
@@ -29,7 +31,7 @@ export default async function AdminPaymentsPage() {
   const { data } = await supabase
     .from("bookings")
     .select(
-      "id, booking_group_id, time_range, total_cents, reference_code, guest_name, guest_phone, guest_email, courts!inner(name, venue_id), profiles(full_name, email)"
+      "id, booking_group_id, time_range, total_cents, discount_cents, discount_label, reference_code, guest_name, guest_phone, guest_email, courts!inner(name, venue_id), profiles(full_name, email)"
     )
     .eq("courts.venue_id", venue.id)
     .eq("status", "pending")
@@ -60,10 +62,17 @@ export default async function AdminPaymentsPage() {
               "h:mm a",
               venue.timezone
             )}`,
+            // Per-slot price BEFORE any promo, so the card reads base → discount → total (like a receipt).
+            baseCents: r.total_cents + r.discount_cents,
             startMs: start.getTime(),
           };
         })
         .sort((a, b) => a.startMs - b.startMs);
+      const discountCents = rows.reduce((sum, r) => sum + r.discount_cents, 0);
+      // One promo label when the whole cart used the same one; otherwise a generic line.
+      const labels = Array.from(
+        new Set(rows.filter((r) => r.discount_cents > 0).map((r) => r.discount_label).filter(Boolean))
+      );
       return {
         key,
         groupId: first.booking_group_id,
@@ -71,6 +80,8 @@ export default async function AdminPaymentsPage() {
         customer,
         contact: first.guest_phone ?? first.guest_email ?? first.profiles?.email ?? null,
         slots,
+        discountCents,
+        discountLabel: labels.length === 1 ? (labels[0] as string) : null,
         totalCents: rows.reduce((sum, r) => sum + r.total_cents, 0),
         referenceCode: first.reference_code,
         paymentReference: proof.paymentReference,

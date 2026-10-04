@@ -96,6 +96,7 @@ export function BookingSheet({
   onBookingConfirmed,
   segments,
   totalCents,
+  discountCents = 0,
   coaches,
   paymentAccounts,
   isLoggedIn,
@@ -109,6 +110,8 @@ export function BookingSheet({
   onBookingConfirmed?: () => void;
   segments: CartSegment[];
   totalCents: number;
+  /** Promo discount on the court subtotal (coaching is never discounted). */
+  discountCents?: number;
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
@@ -184,7 +187,10 @@ export function BookingSheet({
     .map((l) => ({ ...l, feeCents: Math.round((equipRate(l.item) * l.qty * spanMinutes) / 60) }));
   const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
 
-  const grandTotalCents = totalCents + coachFeeCents + equipmentFeeCents;
+  // The promo discount applies to the court subtotal only (never the coach or equipment fees), capped
+  // at the subtotal.
+  const appliedDiscountCents = Math.min(discountCents, totalCents);
+  const grandTotalCents = totalCents + coachFeeCents + equipmentFeeCents - appliedDiscountCents;
 
   function setQty(item: EquipItem, next: number) {
     const cap = Math.min(item.available, item.max_per_booking ?? item.available);
@@ -360,6 +366,16 @@ export function BookingSheet({
                   <span className="text-muted-foreground">{pesos(l.feeCents)}</span>
                 </li>
               ))}
+              {appliedDiscountCents > 0 && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+                  <span>Promo discount</span>
+                  <span>−{pesos(appliedDiscountCents)}</span>
+                </li>
+              )}
+              <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-semibold">
+                <span>Total</span>
+                <span>{pesos(grandTotalCents)}</span>
+              </li>
             </ul>
 
             {coaches.length > 0 && (
@@ -458,9 +474,8 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(grandTotalCents)}</span>.{" "}
               {isLoggedIn && "Member rates applied if you're an active member. "}
-              Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
+              Transfer the total above via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
 
             {paymentAccounts.length > 0 && (

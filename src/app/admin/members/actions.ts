@@ -92,11 +92,16 @@ export async function setMemberFrontDesk(profileId: string, makeFrontDesk: boole
 }
 
 /**
- * Tag a member as an official (annual) member of the current venue: grant an active membership row
- * ending on `endsOn`. One active membership at a time — any existing active one is cancelled first.
+ * Tag a member as an official member of the current venue on one of its membership tiers: grant an
+ * active membership row for that tier, ending on `endsOn`. The tier must be one of the venue's active
+ * membership plans. One active membership at a time — any existing active one is cancelled first.
  * RLS (memberships_admin_write = is_admin_of) restricts this to a venue admin.
  */
-export async function grantOfficialMembership(profileId: string, endsOn: string): Promise<ActionResult> {
+export async function grantOfficialMembership(
+  profileId: string,
+  tier: string,
+  endsOn: string
+): Promise<ActionResult> {
   const { supabase, user } = await requireAdmin();
   const venue = await getTenant();
   if (!venue) return { error: "No venue in context." };
@@ -104,6 +109,16 @@ export async function grantOfficialMembership(profileId: string, endsOn: string)
 
   const today = formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone);
   if (endsOn < today) return { error: "End date can't be in the past." };
+
+  // The tier must be one of the venue's active membership plans (what members can subscribe to).
+  const { data: plan } = await supabase
+    .from("membership_plans")
+    .select("name")
+    .eq("venue_id", venue.id)
+    .eq("name", tier)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!plan) return { error: "Pick a membership tier." };
 
   // Keep a single active membership per member+venue.
   await supabase
@@ -116,14 +131,17 @@ export async function grantOfficialMembership(profileId: string, endsOn: string)
   const { error } = await supabase.from("memberships").insert({
     profile_id: profileId,
     venue_id: venue.id,
-    tier: "official",
+    tier: plan.name,
     starts_on: today,
     ends_on: endsOn,
     status: "active",
   });
   if (error) return { error: error.message };
 
-  await logAudit(supabase, user.id, "official_membership_granted", profileId, null, { ends_on: endsOn });
+  await logAudit(supabase, user.id, "official_membership_granted", profileId, null, {
+    tier: plan.name,
+    ends_on: endsOn,
+  });
   revalidatePath(`/admin/members/${profileId}`);
   revalidatePath("/admin/members");
   return { success: true };

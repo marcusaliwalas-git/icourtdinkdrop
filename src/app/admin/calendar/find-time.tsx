@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { AdminTimeRow } from "@/lib/availability";
 import { WalkInSheet } from "./walk-in-sheet";
+import { type CourtPricing } from "./calendar-views";
+import { type PromoRowInput } from "@/lib/promos/engine";
 
 interface Court {
   id: string;
@@ -24,6 +26,8 @@ export function FindTime({
   dateLabel,
   venueId,
   equipmentEnabled,
+  promotions,
+  pricing,
 }: {
   timezone: string;
   courts: Court[];
@@ -31,6 +35,8 @@ export function FindTime({
   dateLabel: string;
   venueId: string;
   equipmentEnabled: boolean;
+  promotions: PromoRowInput[];
+  pricing: Record<string, CourtPricing>;
 }) {
   // Default the start to the first slot that hasn't passed (else the first slot of the day).
   const defaultStart = useMemo(() => {
@@ -149,6 +155,8 @@ export function FindTime({
         timezone={timezone}
         venueId={venueId}
         equipmentEnabled={equipmentEnabled}
+        promotions={promotions}
+        pricing={pricing}
       />
     </div>
   );

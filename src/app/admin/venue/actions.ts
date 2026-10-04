@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditCurrent } from "@/lib/audit";
+import { PROMO_TYPES } from "@/lib/promos/registry";
 import { slugify } from "@/lib/validation/tenant";
 import {
   venueSchema,
@@ -545,6 +546,12 @@ function revalidateEquipment() {
   revalidatePath("/book");
 }
 
+// ── Promotions ─────────────────────────────────────────────────────────────────
+function revalidatePromotions() {
+  revalidatePath("/admin/venue");
+  revalidatePath("/book");
+}
+
 type EquipmentFields = {
   name: string;
   hourlyRateCents: number;
@@ -638,5 +645,108 @@ export async function deleteEquipment(id: string): Promise<ActionResult> {
   }
   await auditCurrent(supabase, "equipment_deleted", "equipment", id, null);
   revalidateEquipment();
+  return { success: true };
+}
+
+const ELIGIBILITY = ["all", "members_only", "guests_only"] as const;
+
+/** Assemble and validate a promo's type-specific config from the form, driven by the type's own
+ * formFields — so a new promo type needs no change here. Money fields are entered in pesos and stored
+ * as cents. Returns the parsed config or an error message. */
+function buildPromoConfig(
+  type: (typeof PROMO_TYPES)[string],
+  formData: FormData
+): { config: unknown } | { error: string } {
+  const raw: Record<string, unknown> = {};
+  for (const f of type.formFields) {
+    if (f.kind === "money") raw[f.name] = Math.round(Number(formData.get(f.name)) * 100);
+    else if (f.kind === "number") raw[f.name] = Number(formData.get(f.name));
+    else if (f.kind === "weekdays") raw[f.name] = formData.getAll(f.name).map(Number);
+    else raw[f.name] = String(formData.get(f.name) ?? "");
+  }
+  const parsed = type.configSchema.safeParse(raw);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid promotion settings" };
+  return { config: parsed.data };
+}
+
+/** Common (type-independent) promo fields from the form. */
+function readPromoCommon(formData: FormData) {
+  const eligibility = String(formData.get("eligibility") ?? "all");
+  const startsOn = String(formData.get("startsOn") ?? "").trim() || null;
+  const endsOn = String(formData.get("endsOn") ?? "").trim() || null;
+  return {
+    name: String(formData.get("name") ?? "").trim(),
+    eligibility: (ELIGIBILITY as readonly string[]).includes(eligibility) ? eligibility : "all",
+    stackable: formData.get("stackable") === "on" || formData.get("stackable") === "true",
+    priority: Number(formData.get("priority")) || 0,
+    active: formData.get("active") === "on" || formData.get("active") === "true",
+    starts_on: startsOn,
+    ends_on: endsOn,
+  };
+}
+
+export async function addPromotion(formData: FormData): Promise<ActionResult> {
+  const typeKey = String(formData.get("type") ?? "");
+  const type = PROMO_TYPES[typeKey];
+  if (!type) return { error: "Unknown promotion type." };
+
+  const common = readPromoCommon(formData);
+  if (!common.name) return { error: "Give the promotion a name." };
+  const built = buildPromoConfig(type, formData);
+  if ("error" in built) return built;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("promotions")
+    .insert({ venue_id: String(formData.get("venueId")), type: typeKey, config: built.config, ...common })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "promotion_created", "promotion", data.id, {
+    name: common.name,
+    type: typeKey,
+    eligibility: common.eligibility,
+    stackable: common.stackable,
+    active: common.active,
+  });
+  revalidatePromotions();
+  return { success: true };
+}
+
+export async function updatePromotion(id: string, formData: FormData): Promise<ActionResult> {
+  const typeKey = String(formData.get("type") ?? "");
+  const type = PROMO_TYPES[typeKey];
+  if (!type) return { error: "Unknown promotion type." };
+
+  const common = readPromoCommon(formData);
+  if (!common.name) return { error: "Give the promotion a name." };
+  const built = buildPromoConfig(type, formData);
+  if ("error" in built) return built;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("promotions")
+    .update({ type: typeKey, config: built.config, ...common })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That promotion isn't for your venue." };
+  await auditCurrent(supabase, "promotion_updated", "promotion", id, {
+    name: common.name,
+    type: typeKey,
+    eligibility: common.eligibility,
+    stackable: common.stackable,
+    active: common.active,
+  });
+  revalidatePromotions();
+  return { success: true };
+}
+
+export async function deletePromotion(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("promotions").delete().eq("id", id);
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "promotion_deleted", "promotion", id, null);
+  revalidatePromotions();
   return { success: true };
 }

@@ -7,6 +7,8 @@ import type { AdminTimeRow } from "@/lib/availability";
 import { WalkInSheet } from "./walk-in-sheet";
 import { BookingActionSheet } from "./booking-action-sheet";
 import { slotKey, type SelectedSlot } from "./selection";
+import { type CourtPricing } from "./calendar-views";
+import { type PromoRowInput } from "@/lib/promos/engine";
 
 interface Court {
   id: string;
@@ -22,6 +24,8 @@ export function CalendarGrid({
   onToggleSelect,
   venueId,
   equipmentEnabled,
+  promotions,
+  pricing,
 }: {
   timezone: string;
   courts: Court[];
@@ -31,6 +35,8 @@ export function CalendarGrid({
   onToggleSelect?: (slot: SelectedSlot) => void;
   venueId: string;
   equipmentEnabled: boolean;
+  promotions: PromoRowInput[];
+  pricing: Record<string, CourtPricing>;
 }) {
   const [selectedSlot, setSelectedSlot] = useState<{ courtId: string; courtName: string; startsAtIso: string } | null>(
     null
@@ -174,6 +180,8 @@ export function CalendarGrid({
         timezone={timezone}
         venueId={venueId}
         equipmentEnabled={equipmentEnabled}
+        promotions={promotions}
+        pricing={pricing}
       />
 
       <BookingActionSheet

@@ -18,6 +18,7 @@ import {
 import { getAdminEmails } from "@/lib/admin-recipients";
 import { getTenant } from "@/lib/tenant";
 import { tenantEmailBrand } from "@/lib/site-url";
+import { applyCartPromotions } from "@/lib/promos/apply";
 import type { Database } from "@/lib/supabase/database.types";
 
 type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
@@ -248,6 +249,25 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
   const brand = tenantEmailBrand(tenant);
   const venueId = tenant?.id ?? (courtRows ?? [])[0]?.venue_id ?? null;
 
+  // Apply any venue promotions to the cart (e.g. a multi-court discount). Records the discount on the
+  // bookings and reduces the total the booker is asked to pay. Best-effort: never blocks the booking.
+  let discountCents = 0;
+  if (venueId) {
+    const { totalDiscountCents } = await applyCartPromotions(supabase, {
+      venueId,
+      timezone,
+      isMember: created[0].booked_as_member,
+      bookings: created.map((b) => ({
+        id: b.id,
+        court_id: b.court_id,
+        time_range: b.time_range as string,
+        total_cents: b.total_cents,
+        booking_group_id: b.booking_group_id,
+      })),
+    });
+    discountCents = totalDiscountCents;
+  }
+
   const lineItems: BookingLineItem[] = created.map((b) => {
     const { start, end } = parseTstzRange(b.time_range as string);
     return {
@@ -257,7 +277,9 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
       referenceCode: b.reference_code,
     };
   });
-  const totalCents = created.reduce((sum, b) => sum + b.total_cents, 0);
+  // created[] still holds the pre-discount base totals (returned before the discount was recorded),
+  // so subtract the discount to get what the booker actually pays.
+  const totalCents = created.reduce((sum, b) => sum + b.total_cents, 0) - discountCents;
   const status = created[0].status;
 
   // One combined email to the booker (members always have an email; guests only if they gave one).
