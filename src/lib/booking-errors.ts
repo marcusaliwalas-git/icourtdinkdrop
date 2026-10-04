@@ -23,6 +23,9 @@ const MESSAGES: Record<string, string> = {
   SLOT_TAKEN: "Sorry, that slot was just taken. Pick another.",
   COACH_NOT_FOUND: "That coach isn't available. Pick another or continue without one.",
   INVALID_PAYMENT_METHOD: "Choose a valid payment method.",
+  EQUIPMENT_NOT_FOUND: "That equipment isn't available anymore. Refresh and try again.",
+  EQUIPMENT_UNAVAILABLE: "Not enough of that equipment is free for this time — lower the quantity and try again.",
+  EQUIPMENT_LIMIT: "That's more of that item than this booking allows.",
 };
 
 /** Maps a Postgres/PostgREST error (from an RPC call) to a stable code + friendly message. */

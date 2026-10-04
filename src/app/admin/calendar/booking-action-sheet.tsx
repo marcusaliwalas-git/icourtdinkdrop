@@ -24,7 +24,9 @@ import {
   adminMarkNoShow,
   adminVoidBooking,
   getBookingPaymentProof,
+  getBookingCharges,
   setBookingPayment,
+  type BookingCharges,
 } from "./actions";
 import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
@@ -37,6 +39,10 @@ import {
 } from "@/lib/payment-methods";
 
 const UNPAID = "unpaid";
+
+function pesos(cents: number) {
+  return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
+}
 
 const SOURCE_LABELS: Record<string, string> = {
   walkin: "Walk-in",
@@ -75,6 +81,7 @@ export function BookingActionSheet({
     referenceCode: string | null;
     isAdmin: boolean;
   } | null>(null);
+  const [charges, setCharges] = useState<BookingCharges | null>(null);
   const [paymentDraft, setPaymentDraft] = useState<string>(UNPAID);
   const [remarksDraft, setRemarksDraft] = useState<string>("");
   const [group, setGroup] = useState<{ groupId: string | null; pendingCount: number }>({ groupId: null, pendingCount: 0 });
@@ -88,6 +95,7 @@ export function BookingActionSheet({
   useEffect(() => {
     if (!open || !bookingId) {
       setProof(null);
+      setCharges(null);
       setGroup({ groupId: null, pendingCount: 0 });
       setMode("actions");
       setReason("");
@@ -99,6 +107,7 @@ export function BookingActionSheet({
       setPaymentDraft(p.paymentMethod ?? UNPAID);
       setRemarksDraft(p.paymentRemarks ?? "");
     });
+    getBookingCharges(bookingId).then(setCharges);
     getBookingGroupPending(bookingId).then(setGroup);
   }, [open, bookingId]);
 
@@ -280,6 +289,42 @@ export function BookingActionSheet({
               <dd className="capitalize">{status.replace(/_/g, " ")}</dd>
             </dl>
           </div>
+
+          {charges && (
+            <ul className="flex flex-col divide-y divide-border/60 rounded-md border text-sm">
+              <li className="flex items-center justify-between gap-2 px-3 py-2">
+                <span className="text-muted-foreground">Court</span>
+                <span>{pesos(charges.courtCents)}</span>
+              </li>
+              {charges.coachFeeCents > 0 && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="min-w-0 text-muted-foreground">
+                    Coaching{charges.coachName ? ` — ${charges.coachName}` : ""}
+                  </span>
+                  <span className="shrink-0">{pesos(charges.coachFeeCents)}</span>
+                </li>
+              )}
+              {charges.equipment.map((e, i) => (
+                <li key={i} className="flex items-center justify-between gap-2 px-3 py-2">
+                  <span className="min-w-0">
+                    <span className="font-medium">{e.quantity}× {e.name}</span>
+                    <span className="block text-xs text-muted-foreground">Equipment rental</span>
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">{pesos(e.feeCents)}</span>
+                </li>
+              ))}
+              {charges.discountCents > 0 && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+                  <span>{charges.discountLabel ?? "Promo discount"}</span>
+                  <span>−{pesos(charges.discountCents)}</span>
+                </li>
+              )}
+              <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-semibold">
+                <span>Total</span>
+                <span>{pesos(charges.totalCents)}</span>
+              </li>
+            </ul>
+          )}
 
           {proof && (proof.paymentReference || proof.slipUrl) && (
             <div className="rounded-md border p-3 text-sm">

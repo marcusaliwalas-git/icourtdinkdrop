@@ -12,7 +12,7 @@ export default async function AdminLayout({
 }) {
   // Both admins and front-desk staff enter here; front desk sees a reduced nav (the four
   // operational tabs) and admin-only pages guard themselves with requireAdmin().
-  const { role } = await requireStaff();
+  const { role, supabase } = await requireStaff();
   const isAdmin = role === "admin";
   const tenant = await getTenant();
   const superAdmin = await isSuperAdmin();
@@ -21,9 +21,33 @@ export default async function AdminLayout({
   const expensesEnabled = featureEnabled(tenant?.features, "expenses");
   const officialMembersEnabled = featureEnabled(tenant?.features, "official_members");
 
+  // Counts for the "needs review" badges on the nav. Bookings have no venue_id column, so scope via
+  // the court's venue. Subscription requests are admin-only and venue-scoped.
+  let pendingPayments = 0;
+  let pendingRequests = 0;
+  if (tenant) {
+    const { count: payCount } = await supabase
+      .from("bookings")
+      .select("id, courts!inner(venue_id)", { count: "exact", head: true })
+      .eq("status", "pending")
+      .eq("courts.venue_id", tenant.id);
+    pendingPayments = payCount ?? 0;
+
+    if (isAdmin && officialMembersEnabled) {
+      const { count: reqCount } = await supabase
+        .from("membership_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("venue_id", tenant.id)
+        .eq("status", "pending");
+      pendingRequests = reqCount ?? 0;
+    }
+  }
+
   const peopleItems = [
     { href: "/admin/members", label: "Members" },
-    ...(officialMembersEnabled ? [{ href: "/admin/members/requests", label: "Subscription Requests" }] : []),
+    ...(officialMembersEnabled
+      ? [{ href: "/admin/members/requests", label: "Subscription Requests", badge: pendingRequests }]
+      : []),
     ...(analyticsEnabled ? [{ href: "/admin/customers", label: "Top Customers" }] : []),
     ...(coachesEnabled ? [{ href: "/admin/coaches", label: "Coaches" }] : []),
   ];
@@ -51,7 +75,7 @@ export default async function AdminLayout({
           <AdminNavLink href="/admin/front-desk">Front desk</AdminNavLink>
           <AdminNavLink href="/admin/calendar">Calendar</AdminNavLink>
           <AdminNavLink href="/admin/bookings">Bookings</AdminNavLink>
-          <AdminNavLink href="/admin/payments">Payments</AdminNavLink>
+          <AdminNavLink href="/admin/payments" badge={pendingPayments}>Payments</AdminNavLink>
           {isAdmin && <AdminNavDropdown label="People" items={peopleItems} />}
           {isAdmin && (
             <AdminNavDropdown

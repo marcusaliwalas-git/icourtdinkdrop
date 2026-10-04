@@ -6,6 +6,8 @@ import { formatInTimezone } from "@/lib/time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MembershipPurchase } from "./membership-client";
+import { MembershipDetailsForm } from "./membership-details-form";
+import { parseFieldSpecs, parseCapturedDetails, type CapturedDetail } from "@/lib/memberships/fields";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,7 @@ export default async function MembershipPage() {
 
   const { data: planRows } = await supabase
     .from("membership_plans")
-    .select("id, name, price_cents, sale_price_cents, duration_days, inclusions")
+    .select("id, name, price_cents, sale_price_cents, duration_days, inclusions, fields")
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("sort_order");
@@ -34,6 +36,7 @@ export default async function MembershipPage() {
     salePriceCents: p.sale_price_cents,
     durationDays: p.duration_days,
     inclusions: p.inclusions ?? [],
+    fields: parseFieldSpecs(p.fields),
   }));
   const configured = plans.length > 0;
 
@@ -42,12 +45,13 @@ export default async function MembershipPage() {
   // The signed-in member's current standing (tier + expiry) + any request awaiting review.
   let activeTier: string | null = null;
   let activeUntil: string | null = null;
+  let activeDetails: CapturedDetail[] = [];
   let pending = false;
   if (user) {
     const [{ data: membership }, { data: request }] = await Promise.all([
       supabase
         .from("memberships")
-        .select("tier, ends_on")
+        .select("tier, ends_on, details")
         .eq("profile_id", user.id)
         .eq("venue_id", venue.id)
         .eq("status", "active")
@@ -65,8 +69,16 @@ export default async function MembershipPage() {
     ]);
     activeTier = membership ? membership.tier : null;
     activeUntil = membership ? membership.ends_on : null;
+    activeDetails = membership ? parseCapturedDetails(membership.details) : [];
     pending = !!request;
   }
+
+  // Fields defined by the member's active tier, and the values already on file — drives the self-serve
+  // "your details" form (the backfill path for members who joined before the tier defined fields).
+  const activeTierFields = activeTier
+    ? (plans.find((p) => p.name.toLowerCase() === activeTier!.toLowerCase())?.fields ?? [])
+    : [];
+  const activeDetailValues: Record<string, string> = Object.fromEntries(activeDetails.map((d) => [d.key, d.value]));
 
   const { data: accounts } = await supabase
     .from("payment_accounts")
@@ -94,6 +106,11 @@ export default async function MembershipPage() {
             </span>
           )}
         </div>
+      )}
+
+      {/* Self-serve details — shown to an active member whose tier collects extra details. */}
+      {user && activeTier && activeTierFields.length > 0 && (
+        <MembershipDetailsForm fields={activeTierFields} initial={activeDetailValues} />
       )}
 
       {!user ? (

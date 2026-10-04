@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { membershipFieldsSchema } from "@/lib/memberships/fields";
 
 const mediaType = z.enum(["image", "video"]).optional().or(z.literal(""));
 
@@ -112,6 +113,8 @@ const membershipPlanBase = z.object({
   durationDays: z.number().int().min(1, "Enter a term in days.").max(3650),
   // What the tier includes — one perk per entry, shown to members.
   inclusions: z.array(z.string().trim().min(1).max(200)).max(30).default([]),
+  // Extra details this tier collects at signup (emergency contact, address, spouse…). Empty = none.
+  fields: membershipFieldsSchema,
   sortOrder: z.number().int().default(0),
   isActive: z.boolean().default(true),
 });

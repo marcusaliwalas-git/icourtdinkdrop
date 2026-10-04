@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { reviewMembershipRequest, getMembershipReceipt } from "./actions";
+import type { CapturedDetail } from "@/lib/memberships/fields";
 
 export interface RequestRow {
   id: string;
@@ -27,6 +28,7 @@ export interface RequestRow {
   status: string;
   submitted: string;
   reviewNotes: string | null;
+  details: CapturedDetail[];
 }
 
 function pesos(cents: number) {
@@ -104,7 +106,7 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
                     <TableCell>
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" size="sm" disabled={isPending} onClick={() => openProof(r)}>
-                          Receipt
+                          View
                         </Button>
                         <Button
                           variant="ghost"
@@ -147,6 +149,7 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
                   <TableHead>Status</TableHead>
                   <TableHead>Note</TableHead>
                   <TableHead>Submitted</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -163,6 +166,11 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{r.reviewNotes ?? "—"}</TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{r.submitted}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="outline" size="sm" disabled={isPending} onClick={() => openProof(r)}>
+                        View
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -171,31 +179,50 @@ export function SubscriptionRequests({ pending, reviewed }: { pending: RequestRo
         </section>
       )}
 
-      {/* Receipt viewer */}
+      {/* Request viewer — captured details + payment receipt */}
       <Dialog open={proofFor !== null} onOpenChange={(open) => !open && setProofFor(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-h-[85vh] max-w-sm overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Receipt — {proofFor?.name}</DialogTitle>
+            <DialogTitle>{proofFor?.name}</DialogTitle>
           </DialogHeader>
-          {proof === null ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : !proof.paymentReference && !proof.slipUrl ? (
-            <p className="text-sm text-muted-foreground">No receipt was submitted.</p>
-          ) : (
-            <div className="flex flex-col gap-2 text-sm">
-              {proof.paymentReference && (
-                <p>
-                  Reference: <span className="font-mono">{proof.paymentReference}</span>
-                </p>
-              )}
-              {proof.slipUrl && (
-                <a href={proof.slipUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
-                  View receipt
-                </a>
-              )}
+
+          {proofFor && proofFor.details.length > 0 && (
+            <div className="flex flex-col gap-1.5 rounded-md border p-3 text-sm">
+              <p className="font-medium">Membership details</p>
+              <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1">
+                {proofFor.details.map((d) => (
+                  <div key={d.key} className="contents">
+                    <dt className="text-muted-foreground">{d.label}</dt>
+                    <dd className="break-words whitespace-pre-wrap">{d.value}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           )}
-          {proofFor && (
+
+          <div className="rounded-md border p-3">
+            <p className="text-sm font-medium">Payment receipt</p>
+            {proof === null ? (
+              <p className="mt-1 text-sm text-muted-foreground">Loading…</p>
+            ) : !proof.paymentReference && !proof.slipUrl ? (
+              <p className="mt-1 text-sm text-muted-foreground">No receipt was submitted.</p>
+            ) : (
+              <div className="mt-1 flex flex-col gap-2 text-sm">
+                {proof.paymentReference && (
+                  <p>
+                    Reference: <span className="font-mono">{proof.paymentReference}</span>
+                  </p>
+                )}
+                {proof.slipUrl && (
+                  <a href={proof.slipUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                    View receipt
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+
+          {proofFor?.status === "pending" && (
             <Button disabled={isPending} onClick={() => run(() => reviewMembershipRequest(proofFor.id, true))}>
               Approve membership
             </Button>

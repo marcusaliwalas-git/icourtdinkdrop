@@ -6,6 +6,9 @@ import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { MembershipPlansManager } from "./membership-plans-manager";
+import { parseFieldSpecs } from "@/lib/memberships/fields";
+import { EquipmentManager, type Equipment } from "./equipment-manager";
+import { PromotionsManager, type Promotion } from "./promotions-manager";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
 import { requireAdmin } from "@/lib/auth";
@@ -100,7 +103,7 @@ export default async function AdminVenuePage() {
   const { data: membershipPlans } = officialMembersEnabled
     ? await supabase
         .from("membership_plans")
-        .select("id, name, price_cents, sale_price_cents, duration_days, inclusions, sort_order, is_active")
+        .select("id, name, price_cents, sale_price_cents, duration_days, inclusions, fields, sort_order, is_active")
         .eq("venue_id", venue.id)
         .order("sort_order")
     : {
@@ -111,10 +114,28 @@ export default async function AdminVenuePage() {
           sale_price_cents: number | null;
           duration_days: number;
           inclusions: string[];
+          fields: unknown;
           sort_order: number;
           is_active: boolean;
         }[],
       };
+
+  const equipmentEnabled = featureEnabled(venue.features, "equipment");
+  const { data: equipment } = equipmentEnabled
+    ? await supabase
+        .from("equipment")
+        .select("id, name, hourly_rate_cents, member_hourly_rate_cents, stock, max_per_booking, is_active")
+        .eq("venue_id", venue.id)
+        .order("sort_order")
+        .order("name")
+    : { data: [] as Equipment[] };
+
+  const { data: promotions } = await supabase
+    .from("promotions")
+    .select("id, name, type, config, eligibility, stackable, priority, active, starts_on, ends_on")
+    .eq("venue_id", venue.id)
+    .order("priority", { ascending: false })
+    .order("name");
 
   return (
     <div>
@@ -127,6 +148,8 @@ export default async function AdminVenuePage() {
           <TabsTrigger value="hours">Hours</TabsTrigger>
           <TabsTrigger value="payment">Payment</TabsTrigger>
           {officialMembersEnabled && <TabsTrigger value="membership">Membership</TabsTrigger>}
+          {equipmentEnabled && <TabsTrigger value="equipment">Equipment</TabsTrigger>}
+          <TabsTrigger value="promotions">Promotions</TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="max-w-lg">
@@ -149,7 +172,7 @@ export default async function AdminVenuePage() {
           <TabsContent value="membership">
             <MembershipPlansManager
               venueId={venue.id}
-              plans={membershipPlans ?? []}
+              plans={(membershipPlans ?? []).map((p) => ({ ...p, fields: parseFieldSpecs(p.fields) }))}
               paymentAccounts={(paymentAccounts ?? []).map((a) => ({
                 bank_name: a.bank_name,
                 account_name: a.account_name,
@@ -158,6 +181,14 @@ export default async function AdminVenuePage() {
             />
           </TabsContent>
         )}
+        {equipmentEnabled && (
+          <TabsContent value="equipment">
+            <EquipmentManager venueId={venue.id} equipment={(equipment ?? []) as Equipment[]} />
+          </TabsContent>
+        )}
+        <TabsContent value="promotions">
+          <PromotionsManager venueId={venue.id} promotions={(promotions ?? []) as Promotion[]} />
+        </TabsContent>
         <TabsContent value="closures">
           <ClosuresManager
             venueId={venue.id}

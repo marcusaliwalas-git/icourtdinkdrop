@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { auditCurrent } from "@/lib/audit";
+import { PROMO_TYPES } from "@/lib/promos/registry";
 import { slugify } from "@/lib/validation/tenant";
 import {
   venueSchema,
@@ -367,6 +368,17 @@ function parseSalePrice(value: FormDataEntryValue | null): number | null {
   return raw === "" ? null : Math.round(Number(raw) * 100);
 }
 
+/** The tier's custom-field spec arrives as a JSON string from the admin editor. Parse leniently; the
+ * zod schema validates the shape. */
+function parseFieldsJson(value: FormDataEntryValue | null): unknown {
+  try {
+    const parsed = JSON.parse(String(value ?? "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function addMembershipPlan(formData: FormData): Promise<ActionResult> {
   const parsed = membershipPlanSchema.safeParse({
     venueId: formData.get("venueId"),
@@ -375,6 +387,7 @@ export async function addMembershipPlan(formData: FormData): Promise<ActionResul
     salePriceCents: parseSalePrice(formData.get("salePrice")),
     durationDays: Number(formData.get("durationDays")),
     inclusions: parseInclusions(formData.get("inclusions")),
+    fields: parseFieldsJson(formData.get("fieldsJson")),
     sortOrder: Number(formData.get("sortOrder")) || 0,
     isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
   });
@@ -388,6 +401,7 @@ export async function addMembershipPlan(formData: FormData): Promise<ActionResul
     sale_price_cents: parsed.data.salePriceCents,
     duration_days: parsed.data.durationDays,
     inclusions: parsed.data.inclusions,
+    fields: parsed.data.fields,
     sort_order: parsed.data.sortOrder,
     is_active: parsed.data.isActive,
   });
@@ -410,6 +424,7 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
     salePriceCents: parseSalePrice(formData.get("salePrice")),
     durationDays: Number(formData.get("durationDays")),
     inclusions: parseInclusions(formData.get("inclusions")),
+    fields: parseFieldsJson(formData.get("fieldsJson")),
     sortOrder: Number(formData.get("sortOrder")) || 0,
     isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
   });
@@ -424,6 +439,7 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
       sale_price_cents: parsed.data.salePriceCents,
       duration_days: parsed.data.durationDays,
       inclusions: parsed.data.inclusions,
+      fields: parsed.data.fields,
       sort_order: parsed.data.sortOrder,
       is_active: parsed.data.isActive,
     })
@@ -444,8 +460,35 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
 
 export async function deleteMembershipPlan(id: string): Promise<ActionResult> {
   const supabase = await createClient();
+
+  // Members hold a tier by name (a snapshot, not an FK), so deleting the plan wouldn't remove them — but
+  // it would strip the tier's field spec, so their details could no longer be viewed or collected. Guide
+  // the admin to deactivate instead, which keeps the spec, details, and history intact.
+  const { data: plan } = await supabase.from("membership_plans").select("venue_id, name").eq("id", id).maybeSingle();
+  if (plan) {
+    const { count } = await supabase
+      .from("memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("venue_id", plan.venue_id)
+      .eq("tier", plan.name)
+      .eq("status", "active");
+    if ((count ?? 0) > 0) {
+      return {
+        error: "Members are on this tier — deactivate it instead of deleting, so their details and history stay intact.",
+      };
+    }
+  }
+
   const { error } = await supabase.from("membership_plans").delete().eq("id", id);
-  if (error) return { error: error.message };
+  // A plan referenced by past subscription requests can't be hard-deleted (FK) — deactivate it instead.
+  if (error) {
+    return {
+      error:
+        error.code === "23503"
+          ? "This tier has subscription history — deactivate it instead of deleting."
+          : error.message,
+    };
+  }
   await auditCurrent(supabase, "membership_plan_deleted", "membership_plan", id, null);
   revalidateMembershipPlans();
   return { success: true };
@@ -536,5 +579,216 @@ export async function deleteRatePeriod(id: string): Promise<ActionResult> {
   if (error) return { error: error.message };
   await auditCurrent(supabase, "rate_period_deleted", "rate_period", id, null);
   revalidatePath("/admin/venue");
+  return { success: true };
+}
+
+// ── Equipment (hourly rentals: paddles, ball machines, …) ────────────────────────
+function revalidateEquipment() {
+  revalidatePath("/admin/venue");
+  revalidatePath("/book");
+}
+
+// ── Promotions ─────────────────────────────────────────────────────────────────
+function revalidatePromotions() {
+  revalidatePath("/admin/venue");
+  revalidatePath("/book");
+}
+
+type EquipmentFields = {
+  name: string;
+  hourlyRateCents: number;
+  memberHourlyRateCents: number | null;
+  stock: number;
+  maxPerBooking: number | null;
+  isActive: boolean;
+};
+
+function readEquipment(formData: FormData): EquipmentFields | { error: string } {
+  const name = String(formData.get("name") ?? "").trim();
+  const hourlyRateCents = Math.round(Number(formData.get("hourlyRate")) * 100);
+  const memberRaw = String(formData.get("memberRate") ?? "").trim();
+  const memberHourlyRateCents = memberRaw === "" ? null : Math.round(Number(memberRaw) * 100);
+  const stock = Number(formData.get("stock"));
+  const maxRaw = String(formData.get("maxPerBooking") ?? "").trim();
+  const maxPerBooking = maxRaw === "" ? null : Number(maxRaw);
+  const isActive = formData.get("isActive") === "on" || formData.get("isActive") === "true";
+  if (!name) return { error: "Give the equipment a name." };
+  if (!Number.isFinite(hourlyRateCents) || hourlyRateCents < 0) return { error: "Enter a valid hourly rate." };
+  if (memberHourlyRateCents !== null && (!Number.isFinite(memberHourlyRateCents) || memberHourlyRateCents < 0))
+    return { error: "Enter a valid member rate, or leave it blank." };
+  if (!Number.isInteger(stock) || stock < 0) return { error: "Enter how many units you have." };
+  if (maxPerBooking !== null && (!Number.isInteger(maxPerBooking) || maxPerBooking <= 0))
+    return { error: "Max per booking must be a positive whole number, or blank." };
+  return { name, hourlyRateCents, memberHourlyRateCents, stock, maxPerBooking, isActive };
+}
+
+export async function addEquipment(formData: FormData): Promise<ActionResult> {
+  const parsed = readEquipment(formData);
+  if ("error" in parsed) return parsed;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("equipment")
+    .insert({
+      venue_id: String(formData.get("venueId")),
+      name: parsed.name,
+      hourly_rate_cents: parsed.hourlyRateCents,
+      member_hourly_rate_cents: parsed.memberHourlyRateCents,
+      stock: parsed.stock,
+      max_per_booking: parsed.maxPerBooking,
+      is_active: parsed.isActive,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "equipment_created", "equipment", data.id, {
+    name: parsed.name,
+    hourly_rate_cents: parsed.hourlyRateCents,
+    stock: parsed.stock,
+  });
+  revalidateEquipment();
+  return { success: true };
+}
+
+export async function updateEquipment(id: string, formData: FormData): Promise<ActionResult> {
+  const parsed = readEquipment(formData);
+  if ("error" in parsed) return parsed;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("equipment")
+    .update({
+      name: parsed.name,
+      hourly_rate_cents: parsed.hourlyRateCents,
+      member_hourly_rate_cents: parsed.memberHourlyRateCents,
+      stock: parsed.stock,
+      max_per_booking: parsed.maxPerBooking,
+      is_active: parsed.isActive,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That item isn't for your venue." };
+  await auditCurrent(supabase, "equipment_updated", "equipment", id, {
+    name: parsed.name,
+    hourly_rate_cents: parsed.hourlyRateCents,
+    stock: parsed.stock,
+  });
+  revalidateEquipment();
+  return { success: true };
+}
+
+export async function deleteEquipment(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("equipment").delete().eq("id", id);
+  // A referenced item (already rented on a booking) can't be deleted — tell the admin to deactivate it.
+  if (error) {
+    return {
+      error: error.code === "23503" ? "This item has been rented — set it inactive instead of deleting." : error.message,
+    };
+  }
+  await auditCurrent(supabase, "equipment_deleted", "equipment", id, null);
+  revalidateEquipment();
+  return { success: true };
+}
+
+const ELIGIBILITY = ["all", "members_only", "guests_only"] as const;
+
+/** Assemble and validate a promo's type-specific config from the form, driven by the type's own
+ * formFields — so a new promo type needs no change here. Money fields are entered in pesos and stored
+ * as cents. Returns the parsed config or an error message. */
+function buildPromoConfig(
+  type: (typeof PROMO_TYPES)[string],
+  formData: FormData
+): { config: unknown } | { error: string } {
+  const raw: Record<string, unknown> = {};
+  for (const f of type.formFields) {
+    if (f.kind === "money") raw[f.name] = Math.round(Number(formData.get(f.name)) * 100);
+    else if (f.kind === "number") raw[f.name] = Number(formData.get(f.name));
+    else if (f.kind === "weekdays") raw[f.name] = formData.getAll(f.name).map(Number);
+    else raw[f.name] = String(formData.get(f.name) ?? "");
+  }
+  const parsed = type.configSchema.safeParse(raw);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid promotion settings" };
+  return { config: parsed.data };
+}
+
+/** Common (type-independent) promo fields from the form. */
+function readPromoCommon(formData: FormData) {
+  const eligibility = String(formData.get("eligibility") ?? "all");
+  const startsOn = String(formData.get("startsOn") ?? "").trim() || null;
+  const endsOn = String(formData.get("endsOn") ?? "").trim() || null;
+  return {
+    name: String(formData.get("name") ?? "").trim(),
+    eligibility: (ELIGIBILITY as readonly string[]).includes(eligibility) ? eligibility : "all",
+    stackable: formData.get("stackable") === "on" || formData.get("stackable") === "true",
+    priority: Number(formData.get("priority")) || 0,
+    active: formData.get("active") === "on" || formData.get("active") === "true",
+    starts_on: startsOn,
+    ends_on: endsOn,
+  };
+}
+
+export async function addPromotion(formData: FormData): Promise<ActionResult> {
+  const typeKey = String(formData.get("type") ?? "");
+  const type = PROMO_TYPES[typeKey];
+  if (!type) return { error: "Unknown promotion type." };
+
+  const common = readPromoCommon(formData);
+  if (!common.name) return { error: "Give the promotion a name." };
+  const built = buildPromoConfig(type, formData);
+  if ("error" in built) return built;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("promotions")
+    .insert({ venue_id: String(formData.get("venueId")), type: typeKey, config: built.config, ...common })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "promotion_created", "promotion", data.id, {
+    name: common.name,
+    type: typeKey,
+    eligibility: common.eligibility,
+    stackable: common.stackable,
+    active: common.active,
+  });
+  revalidatePromotions();
+  return { success: true };
+}
+
+export async function updatePromotion(id: string, formData: FormData): Promise<ActionResult> {
+  const typeKey = String(formData.get("type") ?? "");
+  const type = PROMO_TYPES[typeKey];
+  if (!type) return { error: "Unknown promotion type." };
+
+  const common = readPromoCommon(formData);
+  if (!common.name) return { error: "Give the promotion a name." };
+  const built = buildPromoConfig(type, formData);
+  if ("error" in built) return built;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("promotions")
+    .update({ type: typeKey, config: built.config, ...common })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That promotion isn't for your venue." };
+  await auditCurrent(supabase, "promotion_updated", "promotion", id, {
+    name: common.name,
+    type: typeKey,
+    eligibility: common.eligibility,
+    stackable: common.stackable,
+    active: common.active,
+  });
+  revalidatePromotions();
+  return { success: true };
+}
+
+export async function deletePromotion(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("promotions").delete().eq("id", id);
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "promotion_deleted", "promotion", id, null);
+  revalidatePromotions();
   return { success: true };
 }

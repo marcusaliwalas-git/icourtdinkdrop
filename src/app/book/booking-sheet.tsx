@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -36,6 +36,16 @@ export interface CoachOption {
   id: string;
   name: string;
   hourly_rate_cents: number;
+}
+
+// One rentable item + how many are free for the chosen time (from equipment_availability).
+interface EquipItem {
+  id: string;
+  name: string;
+  hourly_rate_cents: number;
+  member_hourly_rate_cents: number | null;
+  max_per_booking: number | null;
+  available: number;
 }
 
 // A venue receiving account, shown so the customer knows where to transfer the fee.
@@ -86,20 +96,30 @@ export function BookingSheet({
   onBookingConfirmed,
   segments,
   totalCents,
+  discountCents = 0,
   coaches,
   paymentAccounts,
   isLoggedIn,
   timezone,
+  venueId,
+  isMember,
+  equipmentEnabled,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBookingConfirmed?: () => void;
   segments: CartSegment[];
   totalCents: number;
+  /** Promo discount on the court subtotal (coaching is never discounted). */
+  discountCents?: number;
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
   timezone: string;
+  venueId: string;
+  /** Active membership here — equipment is shown/charged at the member rate when true. */
+  isMember: boolean;
+  equipmentEnabled: boolean;
 }) {
   const router = useRouter();
   const [coachId, setCoachId] = useState("");
@@ -115,10 +135,38 @@ export function BookingSheet({
     whatsAppShareLink: string;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [equipItems, setEquipItems] = useState<EquipItem[]>([]);
+  const [equipQty, setEquipQty] = useState<Record<string, number>>({});
   // One bounded key per sheet session: stable across retries of this attempt (so a double-tap
   // de-dupes to the same booking), and a fixed length regardless of cart size — the old
   // court@time-per-slot key blew past the 200-char limit at 3+ slots and failed validation.
   const idempotencyKey = useMemo(() => `cart-${crypto.randomUUID()}`, []);
+
+  // The cart's overall time span — equipment is reserved and charged over this, matching the RPC.
+  const span = useMemo(() => {
+    if (segments.length === 0) return null;
+    const starts = segments.map((s) => new Date(s.startsAtIso).getTime());
+    const ends = segments.map((s) => new Date(s.startsAtIso).getTime() + s.durationMinutes * 60_000);
+    const start = Math.min(...starts);
+    const end = Math.max(...ends);
+    return { startIso: new Date(start).toISOString(), endIso: new Date(end).toISOString(), minutes: (end - start) / 60_000 };
+  }, [segments]);
+
+  // Live availability for the chosen span (only live rentals count against stock). Re-fetched when the
+  // sheet opens or the span changes.
+  useEffect(() => {
+    if (!open || !equipmentEnabled || !span) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const range = `["${span.startIso}","${span.endIso}")`;
+      const { data } = await supabase.rpc("equipment_availability", { p_venue: venueId, p_range: range });
+      if (!cancelled) setEquipItems((data ?? []) as EquipItem[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, equipmentEnabled, venueId, span]);
 
   if (segments.length === 0 && !confirmation) return null;
 
@@ -126,7 +174,29 @@ export function BookingSheet({
   const totalMinutes = segments.reduce((sum, s) => sum + s.durationMinutes, 0);
   const selectedCoach = coaches.find((c) => c.id === coachId) ?? null;
   const coachFeeCents = selectedCoach ? Math.round((selectedCoach.hourly_rate_cents * totalMinutes) / 60) : 0;
-  const grandTotalCents = totalCents + coachFeeCents;
+
+  // Equipment pricing — member rate when the booker is a member and the item has one; charged over the
+  // cart span (matches create_bookings). Each selected item is a receipt line.
+  const spanMinutes = span?.minutes ?? 0;
+  function equipRate(item: EquipItem): number {
+    return isMember && item.member_hourly_rate_cents != null ? item.member_hourly_rate_cents : item.hourly_rate_cents;
+  }
+  const equipLines = equipItems
+    .map((item) => ({ item, qty: equipQty[item.id] ?? 0 }))
+    .filter((l) => l.qty > 0)
+    .map((l) => ({ ...l, feeCents: Math.round((equipRate(l.item) * l.qty * spanMinutes) / 60) }));
+  const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
+
+  // The promo discount applies to the court subtotal only (never the coach or equipment fees), capped
+  // at the subtotal.
+  const appliedDiscountCents = Math.min(discountCents, totalCents);
+  const grandTotalCents = totalCents + coachFeeCents + equipmentFeeCents - appliedDiscountCents;
+
+  function setQty(item: EquipItem, next: number) {
+    const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+    const clamped = Math.max(0, Math.min(next, cap));
+    setEquipQty((prev) => ({ ...prev, [item.id]: clamped }));
+  }
 
   function handleClose(next: boolean) {
     if (!next) {
@@ -138,6 +208,7 @@ export function BookingSheet({
       setGuestEmail("");
       setPaymentReference("");
       setPaymentSlipFile(null);
+      setEquipQty({});
     }
     onOpenChange(next);
   }
@@ -174,6 +245,7 @@ export function BookingSheet({
         guestPhone: isLoggedIn ? undefined : guestPhone || undefined,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
         coachId: coachId || null,
+        equipment: equipLines.map((l) => ({ equipmentId: l.item.id, quantity: l.qty })),
         paymentReference: paymentReference.trim() || undefined,
         paymentSlipPath: path,
         idempotencyKey,
@@ -283,6 +355,27 @@ export function BookingSheet({
                   <span className="text-muted-foreground">{pesos(coachFeeCents)}</span>
                 </li>
               )}
+              {equipLines.map((l) => (
+                <li key={l.item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">
+                      {l.qty}× {l.item.name}
+                    </span>
+                    <span className="text-muted-foreground"> · {spanMinutes / 60} hr</span>
+                  </span>
+                  <span className="text-muted-foreground">{pesos(l.feeCents)}</span>
+                </li>
+              ))}
+              {appliedDiscountCents > 0 && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+                  <span>Promo discount</span>
+                  <span>−{pesos(appliedDiscountCents)}</span>
+                </li>
+              )}
+              <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-semibold">
+                <span>Total</span>
+                <span>{pesos(grandTotalCents)}</span>
+              </li>
             </ul>
 
             {coaches.length > 0 && (
@@ -296,6 +389,55 @@ export function BookingSheet({
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {equipmentEnabled && equipItems.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Label>Add equipment (optional)</Label>
+                <ul className="flex flex-col divide-y divide-border/60 rounded-md border">
+                  {equipItems.map((item) => {
+                    const qty = equipQty[item.id] ?? 0;
+                    const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+                    const soldOut = item.available <= 0;
+                    return (
+                      <li key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <span className="min-w-0">
+                          <span className="font-medium">{item.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {pesos(equipRate(item))}/hr ·{" "}
+                            {soldOut ? "none free for this time" : `${item.available} available`}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-7"
+                            disabled={qty <= 0}
+                            onClick={() => setQty(item, qty - 1)}
+                            aria-label={`Fewer ${item.name}`}
+                          >
+                            −
+                          </Button>
+                          <span className="w-5 text-center tabular-nums">{qty}</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-7"
+                            disabled={qty >= cap}
+                            onClick={() => setQty(item, qty + 1)}
+                            aria-label={`More ${item.name}`}
+                          >
+                            +
+                          </Button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             )}
 
@@ -332,10 +474,8 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(grandTotalCents)}</span>
-              {selectedCoach ? ` (courts ${pesos(totalCents)} + coach ${pesos(coachFeeCents)})` : ""}.{" "}
               {isLoggedIn && "Member rates applied if you're an active member. "}
-              Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
+              Transfer the total above via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
 
             {paymentAccounts.length > 0 && (

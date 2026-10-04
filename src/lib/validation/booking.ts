@@ -40,6 +40,11 @@ export const createBookingSchema = z
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     // Free-text note for a "Paid online" walk-in — which bank and the reference number.
     paymentRemarks: z.string().trim().max(300).optional(),
+    // Equipment rentals on this booking (admin/walk-in only). Routed through create_bookings.
+    equipment: z
+      .array(z.object({ equipmentId: z.uuid(), quantity: z.coerce.number().int().min(1).max(99) }))
+      .max(20)
+      .optional(),
   })
   // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
   // name is the only invalid combination.
@@ -76,6 +81,10 @@ export const createBookingsSchema = z
   .object({
     segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(24),
     coachId: z.uuid().nullable().optional(),
+    equipment: z
+      .array(z.object({ equipmentId: z.uuid(), quantity: z.coerce.number().int().min(1).max(99) }))
+      .max(20)
+      .optional(),
     partySize: z.coerce.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
     guestPhone: phSchema.optional().or(z.literal("")),
@@ -98,6 +107,10 @@ export type CreateBookingsInput = z.infer<typeof createBookingsSchema>;
 // list as a customer cart, but with one payment recorded for the whole batch and no online slip.
 export const walkInBookingsSchema = z.object({
   segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(48),
+  equipment: z
+    .array(z.object({ equipmentId: z.uuid(), quantity: z.coerce.number().int().min(1).max(99) }))
+    .max(20)
+    .optional(),
   guestName: z.string().trim().min(1, "Enter a name for the booking.").max(120),
   guestPhone: phSchema.optional().or(z.literal("")),
   // null = booked now, settled at the venue later (pay_at_venue).

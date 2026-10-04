@@ -112,6 +112,13 @@ async function main() {
       })
       .eq("id", profileId);
 
+    // Dual-write the venue_memberships join table. RLS (is_staff_of / is_admin_of) reads THIS table,
+    // not profiles.role — so without it a seeded admin passes the page gate but can't see or manage
+    // the venue's bookings (they come back empty). Mirror the same role onto the membership.
+    await supabase
+      .from("venue_memberships")
+      .upsert({ profile_id: profileId, venue_id: venue.id, role }, { onConflict: "profile_id,venue_id" });
+
     if (i % 2 === 0) {
       await supabase.from("memberships").insert({
         profile_id: profileId,

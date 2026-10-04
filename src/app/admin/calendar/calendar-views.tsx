@@ -11,6 +11,8 @@ import { WalkInBatchSheet } from "./walk-in-batch-sheet";
 import { mergeSelection, slotKey, type SelectedSlot } from "./selection";
 import { rateForHour, type RatePeriod } from "@/lib/pricing";
 import { toZonedTime } from "date-fns-tz";
+import { formatInTimezone } from "@/lib/time";
+import { evaluatePromotions, toPromoRow, totalDiscountCents, type PromoRowInput } from "@/lib/promos/engine";
 
 export interface CourtPricing {
   baseHourlyRateCents: number;
@@ -47,6 +49,9 @@ export function CalendarViews({
   courts,
   rows,
   pricing,
+  venueId,
+  equipmentEnabled,
+  promotions,
   dateLabel,
   defaultView,
 }: {
@@ -55,6 +60,10 @@ export function CalendarViews({
   rows: AdminTimeRow[];
   /** Per-court rates for the multi-select running total (keyed by court id). */
   pricing: Record<string, CourtPricing>;
+  venueId: string;
+  equipmentEnabled: boolean;
+  /** Active promotions, so walk-in sheets show the discount the booking will record. */
+  promotions: PromoRowInput[];
   dateLabel: string;
   /** The venue's admin-set default view; a viewer's own saved choice overrides it. */
   defaultView: string;
@@ -149,6 +158,30 @@ export function CalendarViews({
 
   const totalCents = useMemo(() => segments.reduce((sum, s) => sum + (s.estimateCents ?? 0), 0), [segments]);
 
+  // Promo discount for the batch (walk-ins are never "member" for eligibility). Mirrors the server's
+  // authoritative apply so the running total and sheet show what will actually be charged.
+  const discountCents = useMemo(() => {
+    if (promotions.length === 0 || segments.length === 0) return 0;
+    const onDateIso = formatInTimezone(new Date(segments[0].startsAt), "yyyy-MM-dd", timezone);
+    const lines = evaluatePromotions(
+      {
+        venueId,
+        timezone,
+        isMember: false,
+        onDateIso,
+        segments: segments.map((s) => ({
+          courtId: s.courtId,
+          startsAtIso: s.startsAt,
+          durationMinutes: s.durationMinutes,
+          baseTotalCents: s.estimateCents ?? 0,
+        })),
+      },
+      promotions.map(toPromoRow)
+    );
+    return totalDiscountCents(lines);
+  }, [promotions, segments, venueId, timezone]);
+  const netTotalCents = totalCents - discountCents;
+
   // The grid/timeline own selection; find-a-time has no cells to select.
   const canMultiSelect = view !== "find";
 
@@ -232,6 +265,10 @@ export function CalendarViews({
           selectMode={selectMode}
           selectedKeys={selectedKeys}
           onToggleSelect={onToggleSelect}
+          venueId={venueId}
+          equipmentEnabled={equipmentEnabled}
+          promotions={promotions}
+          pricing={pricing}
         />
       )}
       {view === "timeline" && (
@@ -242,16 +279,34 @@ export function CalendarViews({
           selectMode={selectMode}
           selectedKeys={selectedKeys}
           onToggleSelect={onToggleSelect}
+          venueId={venueId}
+          equipmentEnabled={equipmentEnabled}
+          promotions={promotions}
+          pricing={pricing}
         />
       )}
-      {view === "find" && <FindTime timezone={timezone} courts={courts} rows={rows} dateLabel={dateLabel} />}
+      {view === "find" && (
+        <FindTime
+          timezone={timezone}
+          courts={courts}
+          rows={rows}
+          dateLabel={dateLabel}
+          venueId={venueId}
+          equipmentEnabled={equipmentEnabled}
+          promotions={promotions}
+          pricing={pricing}
+        />
+      )}
 
       {/* Sticky action bar while multi-selecting — count + book/clear. */}
       {selectMode && canMultiSelect && selected.size > 0 && (
         <div className="sticky bottom-3 z-20 mx-auto flex w-fit items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 shadow-lg">
           <span className="text-sm font-medium">
             {selected.size} slot{selected.size === 1 ? "" : "s"} · {segments.length} booking{segments.length === 1 ? "" : "s"}
-            <span className="text-primary"> · {pesos(totalCents)}</span>
+            <span className="text-primary"> · {pesos(netTotalCents)}</span>
+            {discountCents > 0 && (
+              <span className="text-xs font-normal text-muted-foreground"> (−{pesos(discountCents)})</span>
+            )}
           </span>
           <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Map())}>
             Clear
@@ -267,7 +322,10 @@ export function CalendarViews({
         onOpenChange={setBatchOpen}
         segments={segments}
         totalCents={totalCents}
+        discountCents={discountCents}
         timezone={timezone}
+        venueId={venueId}
+        equipmentEnabled={equipmentEnabled}
         onBooked={() => {
           setBatchOpen(false);
           setSelected(new Map());
