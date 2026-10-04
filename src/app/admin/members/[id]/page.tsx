@@ -13,7 +13,7 @@ import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
 import { getTenant } from "@/lib/tenant";
 import { MemberActions } from "./member-actions";
-import { OfficialMemberActions } from "./official-member-actions";
+import { OfficialMemberActions, type MembershipTier } from "./official-member-actions";
 import { requireAdmin } from "@/lib/auth";
 import { featureEnabled } from "@/lib/features";
 
@@ -74,6 +74,18 @@ export default async function MemberDetailPage({
     (m) => m.status === "active" && m.starts_on <= todayStr && (!m.ends_on || m.ends_on >= todayStr)
   );
 
+  // Tiers the admin can tag this member with — the venue's active membership plans (same list members
+  // subscribe to), so manual tagging mirrors self-serve subscriptions.
+  const { data: tiers } =
+    officialMembersEnabled && venue
+      ? await supabase
+          .from("membership_plans")
+          .select("id, name, price_cents, sale_price_cents, duration_days")
+          .eq("venue_id", venue.id)
+          .eq("is_active", true)
+          .order("sort_order")
+      : { data: [] as MembershipTier[] };
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -99,7 +111,12 @@ export default async function MemberDetailPage({
       />
 
       {officialMembersEnabled && (
-        <OfficialMemberActions profileId={profile.id} activeUntil={activeMembership?.ends_on ?? null} />
+        <OfficialMemberActions
+          profileId={profile.id}
+          activeUntil={activeMembership?.ends_on ?? null}
+          activeTier={activeMembership?.tier ?? null}
+          tiers={(tiers ?? []) as MembershipTier[]}
+        />
       )}
 
       <div>
