@@ -15,6 +15,7 @@ import {
 import { getTenant } from "@/lib/tenant";
 import { tenantEmailBrand } from "@/lib/site-url";
 import type { RatePeriod } from "@/lib/pricing";
+import { applyCartPromotions } from "@/lib/promos/apply";
 
 function hhmmToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -67,6 +68,26 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
     return { success: false, ...mapped };
   }
 
+  // Apply any venue promotions (e.g. a daytime free-hour deal on a long single-court session). Walk-ins
+  // have no booker, so they're never a "member" for eligibility. Best-effort — never blocks the booking.
+  const tenant = await getTenant();
+  if (tenant) {
+    await applyCartPromotions(supabase, {
+      venueId: tenant.id,
+      timezone: tenant.timezone,
+      isMember: data.booked_as_member,
+      bookings: [
+        {
+          id: data.id,
+          court_id: data.court_id,
+          time_range: data.time_range as string,
+          total_cents: data.total_cents,
+          booking_group_id: data.booking_group_id,
+        },
+      ],
+    });
+  }
+
   revalidatePath("/admin/calendar");
   return { success: true, referenceCode: data.reference_code };
 }
@@ -107,6 +128,31 @@ export async function createWalkInBookings(input: unknown): Promise<WalkInBookin
   if (error) {
     const mapped = mapBookingError(error);
     return { success: false, ...mapped };
+  }
+
+  // Apply venue promotions to the batch (e.g. a multi-court discount across the courts booked together).
+  const created = (Array.isArray(data) ? data : []) as {
+    id: string;
+    court_id: string;
+    time_range: string;
+    total_cents: number;
+    booking_group_id: string | null;
+    booked_as_member: boolean;
+  }[];
+  const tenant = await getTenant();
+  if (tenant && created.length) {
+    await applyCartPromotions(supabase, {
+      venueId: tenant.id,
+      timezone: tenant.timezone,
+      isMember: created[0].booked_as_member,
+      bookings: created.map((b) => ({
+        id: b.id,
+        court_id: b.court_id,
+        time_range: b.time_range,
+        total_cents: b.total_cents,
+        booking_group_id: b.booking_group_id,
+      })),
+    });
   }
 
   revalidatePath("/admin/calendar");

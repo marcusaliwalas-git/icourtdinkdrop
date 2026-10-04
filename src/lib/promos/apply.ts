@@ -26,8 +26,7 @@ export async function applyCartPromotions(
   params: { venueId: string; timezone: string; isMember: boolean; bookings: CreatedBookingRow[] }
 ): Promise<{ totalDiscountCents: number }> {
   const { venueId, timezone, isMember, bookings } = params;
-  const groupId = bookings[0]?.booking_group_id;
-  if (!groupId || bookings.length === 0) return { totalDiscountCents: 0 };
+  if (bookings.length === 0) return { totalDiscountCents: 0 };
 
   try {
     const { data: promoRows } = await supabase
@@ -62,7 +61,10 @@ export async function applyCartPromotions(
       label: l.label,
     }));
 
-    const { error } = await supabase.rpc("apply_group_promotions", { p_group_id: groupId, p_discounts });
+    // p_group_id is kept for signature stability; the RPC now matches by booking id (so an ungrouped
+    // single walk-in is discounted too). Pass the group when there is one.
+    const p_group_id = bookings[0].booking_group_id;
+    const { error } = await supabase.rpc("apply_group_promotions", { p_group_id, p_discounts });
     if (error) {
       console.error("apply_group_promotions failed:", error);
       return { totalDiscountCents: 0 };
