@@ -67,6 +67,8 @@ export function CalendarTimeline({
   selectMode = false,
   selectedKeys,
   onToggleSelect,
+  venueId,
+  equipmentEnabled,
 }: {
   timezone: string;
   courts: Court[];
@@ -74,6 +76,8 @@ export function CalendarTimeline({
   selectMode?: boolean;
   selectedKeys?: Set<string>;
   onToggleSelect?: (slot: SelectedSlot) => void;
+  venueId: string;
+  equipmentEnabled: boolean;
 }) {
   const [selectedSlot, setSelectedSlot] = useState<{ courtId: string; courtName: string; startsAtIso: string } | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<{ id: string; label: string; startsAtIso: string; status: string } | null>(null);
@@ -235,6 +239,8 @@ export function CalendarTimeline({
         courtName={selectedSlot?.courtName ?? ""}
         startsAtIso={selectedSlot?.startsAtIso ?? ""}
         timezone={timezone}
+        venueId={venueId}
+        equipmentEnabled={equipmentEnabled}
       />
       <BookingActionSheet
         open={selectedBooking !== null}

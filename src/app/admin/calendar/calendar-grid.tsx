@@ -20,6 +20,8 @@ export function CalendarGrid({
   selectMode = false,
   selectedKeys,
   onToggleSelect,
+  venueId,
+  equipmentEnabled,
 }: {
   timezone: string;
   courts: Court[];
@@ -27,6 +29,8 @@ export function CalendarGrid({
   selectMode?: boolean;
   selectedKeys?: Set<string>;
   onToggleSelect?: (slot: SelectedSlot) => void;
+  venueId: string;
+  equipmentEnabled: boolean;
 }) {
   const [selectedSlot, setSelectedSlot] = useState<{ courtId: string; courtName: string; startsAtIso: string } | null>(
     null
@@ -168,6 +172,8 @@ export function CalendarGrid({
         courtName={selectedSlot?.courtName ?? ""}
         startsAtIso={selectedSlot?.startsAtIso ?? ""}
         timezone={timezone}
+        venueId={venueId}
+        equipmentEnabled={equipmentEnabled}
       />
 
       <BookingActionSheet

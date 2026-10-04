@@ -236,6 +236,8 @@ export function CalendarViews({
           selectMode={selectMode}
           selectedKeys={selectedKeys}
           onToggleSelect={onToggleSelect}
+          venueId={venueId}
+          equipmentEnabled={equipmentEnabled}
         />
       )}
       {view === "timeline" && (
@@ -246,9 +248,20 @@ export function CalendarViews({
           selectMode={selectMode}
           selectedKeys={selectedKeys}
           onToggleSelect={onToggleSelect}
+          venueId={venueId}
+          equipmentEnabled={equipmentEnabled}
         />
       )}
-      {view === "find" && <FindTime timezone={timezone} courts={courts} rows={rows} dateLabel={dateLabel} />}
+      {view === "find" && (
+        <FindTime
+          timezone={timezone}
+          courts={courts}
+          rows={rows}
+          dateLabel={dateLabel}
+          venueId={venueId}
+          equipmentEnabled={equipmentEnabled}
+        />
+      )}
 
       {/* Sticky action bar while multi-selecting — count + book/clear. */}
       {selectMode && canMultiSelect && selected.size > 0 && (

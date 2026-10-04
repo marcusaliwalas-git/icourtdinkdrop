@@ -44,22 +44,23 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
   }
 
   const { supabase } = await requireStaff();
-  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes, paymentMethod, paymentRemarks } =
+  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes, paymentMethod, paymentRemarks, equipment } =
     parsed.data;
 
-  const { data, error } = await supabase.rpc("create_booking", {
-    p_court_id: courtId,
-    p_starts_at: startsAt,
-    p_duration_minutes: durationMinutes,
+  // Routed through create_bookings (a cart of one) so a single walk-in can carry equipment rentals —
+  // create_booking has no equipment support. Same atomic capacity-checked flow as the batch walk-in.
+  const { data, error } = await supabase.rpc("create_bookings", {
+    p_segments: [{ court_id: courtId, starts_at: startsAt, duration_minutes: durationMinutes }],
     p_party_size: partySize,
     p_booked_by: null,
     p_guest_name: guestName ?? null,
     p_guest_phone: guestPhone ?? null,
     p_source: "walkin",
     p_notes: notes ?? null,
-    p_payment_method: paymentMethod ?? null,
+    p_payment_method: paymentMethod ?? undefined,
     // Remarks only make sense for an online payment; drop them otherwise.
-    p_payment_remarks: paymentMethod === "online" ? paymentRemarks || null : null,
+    p_payment_remarks: paymentMethod === "online" ? paymentRemarks || undefined : undefined,
+    p_equipment: (equipment ?? []).map((e) => ({ equipment_id: e.equipmentId, quantity: e.quantity })),
   });
 
   if (error) {
@@ -67,8 +68,9 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
     return { success: false, ...mapped };
   }
 
+  const created = (Array.isArray(data) ? data : []) as { reference_code: string }[];
   revalidatePath("/admin/calendar");
-  return { success: true, referenceCode: data.reference_code };
+  return { success: true, referenceCode: created[0]?.reference_code ?? "" };
 }
 
 export type WalkInBookingsResult =

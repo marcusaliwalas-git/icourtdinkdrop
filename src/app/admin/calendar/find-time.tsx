@@ -22,11 +22,15 @@ export function FindTime({
   courts,
   rows,
   dateLabel,
+  venueId,
+  equipmentEnabled,
 }: {
   timezone: string;
   courts: Court[];
   rows: AdminTimeRow[];
   dateLabel: string;
+  venueId: string;
+  equipmentEnabled: boolean;
 }) {
   // Default the start to the first slot that hasn't passed (else the first slot of the day).
   const defaultStart = useMemo(() => {
@@ -143,6 +147,8 @@ export function FindTime({
         courtName={selectedSlot?.courtName ?? ""}
         startsAtIso={selectedSlot?.startsAtIso ?? ""}
         timezone={timezone}
+        venueId={venueId}
+        equipmentEnabled={equipmentEnabled}
       />
     </div>
   );

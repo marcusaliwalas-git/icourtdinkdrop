@@ -40,6 +40,11 @@ export const createBookingSchema = z
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     // Free-text note for a "Paid online" walk-in — which bank and the reference number.
     paymentRemarks: z.string().trim().max(300).optional(),
+    // Equipment rentals on this booking (admin/walk-in only). Routed through create_bookings.
+    equipment: z
+      .array(z.object({ equipmentId: z.uuid(), quantity: z.coerce.number().int().min(1).max(99) }))
+      .max(20)
+      .optional(),
   })
   // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
   // name is the only invalid combination.
