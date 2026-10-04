@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -24,9 +24,16 @@ import { createWalkInBooking } from "./actions";
 import { formatInTimezone } from "@/lib/time";
 import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+import { computeBookingTotalCents } from "@/lib/pricing";
+import { evaluatePromotions, toPromoRow, totalDiscountCents, type PromoRowInput } from "@/lib/promos/engine";
+import { type CourtPricing } from "./calendar-views";
 
 // Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
 const UNPAID = "unpaid";
+
+function pesos(cents: number) {
+  return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
+}
 
 export function WalkInSheet({
   open,
@@ -35,6 +42,9 @@ export function WalkInSheet({
   courtName,
   startsAtIso,
   timezone,
+  venueId,
+  promotions,
+  pricing,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +52,9 @@ export function WalkInSheet({
   courtName: string;
   startsAtIso: string;
   timezone: string;
+  venueId: string;
+  promotions: PromoRowInput[];
+  pricing: Record<string, CourtPricing>;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -51,6 +64,40 @@ export function WalkInSheet({
   const [remarks, setRemarks] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Price + any promo discount for the chosen duration, so staff collect the right amount. Walk-ins
+  // have no booker, so they're never "member" for pricing/eligibility — mirrors the server.
+  const { baseCents, discountCents } = useMemo(() => {
+    const p = pricing[courtId];
+    if (!p || !startsAtIso) return { baseCents: 0, discountCents: 0 };
+    const durationMinutes = Number(durationHours) * 60;
+    const base = computeBookingTotalCents({
+      startsAtIso,
+      durationMinutes,
+      timezone,
+      ratePeriods: p.ratePeriods,
+      baseHourlyRateCents: p.baseHourlyRateCents,
+      baseMemberRateCents: null,
+      isMember: false,
+    });
+    let discount = 0;
+    if (promotions.length > 0) {
+      const onDateIso = formatInTimezone(new Date(startsAtIso), "yyyy-MM-dd", timezone);
+      const lines = evaluatePromotions(
+        {
+          venueId,
+          timezone,
+          isMember: false,
+          onDateIso,
+          segments: [{ courtId, startsAtIso, durationMinutes, baseTotalCents: base }],
+        },
+        promotions.map(toPromoRow)
+      );
+      discount = totalDiscountCents(lines);
+    }
+    return { baseCents: base, discountCents: discount };
+  }, [pricing, courtId, startsAtIso, durationHours, timezone, promotions, venueId]);
+  const netCents = baseCents - discountCents;
 
   function reset() {
     setName("");
@@ -156,6 +203,15 @@ export function WalkInSheet({
                 onChange={(e) => setRemarks(e.target.value)}
               />
             </div>
+          )}
+
+          {baseCents > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Total: <span className="font-medium text-foreground">{pesos(netCents)}</span>
+              {discountCents > 0 && (
+                <span className="text-xs"> ({pesos(baseCents)} − promo {pesos(discountCents)})</span>
+              )}
+            </p>
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}

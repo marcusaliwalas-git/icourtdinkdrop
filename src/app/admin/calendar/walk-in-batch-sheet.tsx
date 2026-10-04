@@ -37,6 +37,7 @@ export function WalkInBatchSheet({
   onOpenChange,
   segments,
   totalCents,
+  discountCents = 0,
   timezone,
   onBooked,
 }: {
@@ -44,6 +45,8 @@ export function WalkInBatchSheet({
   onOpenChange: (open: boolean) => void;
   segments: WalkInSegment[];
   totalCents?: number;
+  /** Promo discount on the batch (shown so staff collect the right amount). */
+  discountCents?: number;
   timezone: string;
   onBooked: () => void;
 }) {
@@ -123,10 +126,16 @@ export function WalkInBatchSheet({
                 )}
               </li>
             ))}
+            {totalCents != null && discountCents > 0 && (
+              <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+                <span>Promo discount</span>
+                <span>−{pesos(discountCents)}</span>
+              </li>
+            )}
             {totalCents != null && (
               <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-medium">
                 <span>Total</span>
-                <span>{pesos(totalCents)}</span>
+                <span>{pesos(totalCents - discountCents)}</span>
               </li>
             )}
           </ul>

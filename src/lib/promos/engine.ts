@@ -144,9 +144,9 @@ export function totalDiscountCents(lines: DiscountLine[]): number {
   return lines.reduce((t, l) => t + l.cents, 0);
 }
 
-/** Map a `promotions` table row (snake_case) to a PromoRow. Pure, so both the client estimate and the
- * server write use the same shape. */
-export function toPromoRow(r: {
+/** A `promotions` table row as loaded from the DB (snake_case). The shape `toPromoRow` maps from —
+ * exported so UI components can type the promotions they pass around. */
+export interface PromoRowInput {
   id: string;
   name: string;
   type: string;
@@ -156,7 +156,11 @@ export function toPromoRow(r: {
   priority: number;
   starts_on: string | null;
   ends_on: string | null;
-}): PromoRow {
+}
+
+/** Map a `promotions` table row (snake_case) to a PromoRow. Pure, so both the client estimate and the
+ * server write use the same shape. */
+export function toPromoRow(r: PromoRowInput): PromoRow {
   return {
     id: r.id,
     name: r.name,

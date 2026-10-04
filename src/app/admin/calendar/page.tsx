@@ -35,6 +35,13 @@ export default async function AdminCalendarPage({
     .order("name");
   courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
 
+  // Active promotions so the walk-in sheets show the same discount the booking will record.
+  const { data: promotions } = await supabase
+    .from("promotions")
+    .select("id, name, type, config, eligibility, stackable, priority, starts_on, ends_on")
+    .eq("venue_id", venue.id)
+    .eq("active", true);
+
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
   // Extend the booking/closure window into the next calendar day so an overnight session's
@@ -139,6 +146,8 @@ export default async function AdminCalendarPage({
           courts={courts ?? []}
           rows={grid.rows}
           pricing={pricing}
+          venueId={venue.id}
+          promotions={promotions ?? []}
           dateLabel={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
           defaultView={venue.calendar_default_view ?? "grid"}
         />
