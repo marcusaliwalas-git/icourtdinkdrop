@@ -208,6 +208,9 @@ export default async function BookPage({
           coaches={coaches ?? []}
           paymentAccounts={paymentAccounts ?? []}
           isLoggedIn={!!user}
+          venueId={venue.id}
+          isMember={isMember}
+          equipmentEnabled={featureEnabled(venue.features, "equipment")}
           defaultView={venue.calendar_default_view ?? "grid"}
         />
       )}

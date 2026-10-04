@@ -76,6 +76,10 @@ export const createBookingsSchema = z
   .object({
     segments: z.array(bookingSegmentSchema).min(1, "Pick at least one slot.").max(24),
     coachId: z.uuid().nullable().optional(),
+    equipment: z
+      .array(z.object({ equipmentId: z.uuid(), quantity: z.coerce.number().int().min(1).max(99) }))
+      .max(20)
+      .optional(),
     partySize: z.coerce.number().int().min(1).max(20).default(1),
     guestName: z.string().trim().min(1).max(120).optional(),
     guestPhone: phSchema.optional().or(z.literal("")),

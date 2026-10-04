@@ -186,6 +186,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
   const {
     segments,
     coachId,
+    equipment,
     partySize,
     guestName,
     guestPhone,
@@ -214,6 +215,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
     p_payment_reference: paymentReference ?? null,
     p_payment_slip_path: paymentSlipPath ?? null,
     p_coach_id: coachId ?? null,
+    p_equipment: (equipment ?? []).map((e) => ({ equipment_id: e.equipmentId, quantity: e.quantity })),
   });
 
   if (error) {

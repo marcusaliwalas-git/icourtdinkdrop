@@ -10,6 +10,7 @@ export type Equipment = {
   id: string;
   name: string;
   hourly_rate_cents: number;
+  member_hourly_rate_cents: number | null;
   stock: number;
   max_per_booking: number | null;
   is_active: boolean;
@@ -37,6 +38,17 @@ function EquipmentRow({ item }: { item: Equipment }) {
       <div className="flex flex-col gap-1.5">
         <Label>Hourly rate (₱)</Label>
         <Input name="hourlyRate" type="number" min={0} step={1} defaultValue={item.hourly_rate_cents / 100} required />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Member rate (₱, optional)</Label>
+        <Input
+          name="memberRate"
+          type="number"
+          min={0}
+          step={1}
+          defaultValue={item.member_hourly_rate_cents != null ? item.member_hourly_rate_cents / 100 : ""}
+          placeholder="Same as standard"
+        />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label>Stock (units owned)</Label>
@@ -111,6 +123,10 @@ export function EquipmentManager({ venueId, equipment }: { venueId: string; equi
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="eqRate">Hourly rate (₱)</Label>
           <Input id="eqRate" name="hourlyRate" type="number" min={0} step={1} placeholder="e.g. 200" required />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="eqMemberRate">Member rate (₱, optional)</Label>
+          <Input id="eqMemberRate" name="memberRate" type="number" min={0} step={1} placeholder="Same as standard" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="eqStock">Stock (units owned)</Label>

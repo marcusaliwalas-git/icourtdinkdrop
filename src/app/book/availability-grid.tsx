@@ -79,6 +79,9 @@ export function AvailabilityGrid({
   coaches,
   paymentAccounts,
   isLoggedIn,
+  venueId,
+  isMember,
+  equipmentEnabled,
   defaultView,
 }: {
   timezone: string;
@@ -89,6 +92,10 @@ export function AvailabilityGrid({
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
+  venueId: string;
+  /** Whether the viewer has an active membership here (drives member equipment rates). */
+  isMember: boolean;
+  equipmentEnabled: boolean;
   /** The venue's default calendar view; a booker's own saved choice overrides it. */
   defaultView: string;
 }) {
@@ -561,6 +568,9 @@ export function AvailabilityGrid({
         paymentAccounts={paymentAccounts}
         isLoggedIn={isLoggedIn}
         timezone={timezone}
+        venueId={venueId}
+        isMember={isMember}
+        equipmentEnabled={equipmentEnabled}
       />
     </>
   );

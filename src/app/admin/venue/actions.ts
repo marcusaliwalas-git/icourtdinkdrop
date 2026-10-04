@@ -545,21 +545,32 @@ function revalidateEquipment() {
   revalidatePath("/book");
 }
 
-type EquipmentFields = { name: string; hourlyRateCents: number; stock: number; maxPerBooking: number | null; isActive: boolean };
+type EquipmentFields = {
+  name: string;
+  hourlyRateCents: number;
+  memberHourlyRateCents: number | null;
+  stock: number;
+  maxPerBooking: number | null;
+  isActive: boolean;
+};
 
 function readEquipment(formData: FormData): EquipmentFields | { error: string } {
   const name = String(formData.get("name") ?? "").trim();
   const hourlyRateCents = Math.round(Number(formData.get("hourlyRate")) * 100);
+  const memberRaw = String(formData.get("memberRate") ?? "").trim();
+  const memberHourlyRateCents = memberRaw === "" ? null : Math.round(Number(memberRaw) * 100);
   const stock = Number(formData.get("stock"));
   const maxRaw = String(formData.get("maxPerBooking") ?? "").trim();
   const maxPerBooking = maxRaw === "" ? null : Number(maxRaw);
   const isActive = formData.get("isActive") === "on" || formData.get("isActive") === "true";
   if (!name) return { error: "Give the equipment a name." };
   if (!Number.isFinite(hourlyRateCents) || hourlyRateCents < 0) return { error: "Enter a valid hourly rate." };
+  if (memberHourlyRateCents !== null && (!Number.isFinite(memberHourlyRateCents) || memberHourlyRateCents < 0))
+    return { error: "Enter a valid member rate, or leave it blank." };
   if (!Number.isInteger(stock) || stock < 0) return { error: "Enter how many units you have." };
   if (maxPerBooking !== null && (!Number.isInteger(maxPerBooking) || maxPerBooking <= 0))
     return { error: "Max per booking must be a positive whole number, or blank." };
-  return { name, hourlyRateCents, stock, maxPerBooking, isActive };
+  return { name, hourlyRateCents, memberHourlyRateCents, stock, maxPerBooking, isActive };
 }
 
 export async function addEquipment(formData: FormData): Promise<ActionResult> {
@@ -572,6 +583,7 @@ export async function addEquipment(formData: FormData): Promise<ActionResult> {
       venue_id: String(formData.get("venueId")),
       name: parsed.name,
       hourly_rate_cents: parsed.hourlyRateCents,
+      member_hourly_rate_cents: parsed.memberHourlyRateCents,
       stock: parsed.stock,
       max_per_booking: parsed.maxPerBooking,
       is_active: parsed.isActive,
@@ -597,6 +609,7 @@ export async function updateEquipment(id: string, formData: FormData): Promise<A
     .update({
       name: parsed.name,
       hourly_rate_cents: parsed.hourlyRateCents,
+      member_hourly_rate_cents: parsed.memberHourlyRateCents,
       stock: parsed.stock,
       max_per_booking: parsed.maxPerBooking,
       is_active: parsed.isActive,
