@@ -20,7 +20,7 @@ export default async function FrontDeskPage() {
   const { data } = await supabase
     .from("bookings")
     .select(
-      "id, status, checked_in_at, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, booking_group_id, courts!inner(name, venue_id), profiles(full_name, phone, email)"
+      "id, status, checked_in_at, party_size, total_cents, payment_status, source, guest_name, guest_phone, guest_email, time_range, reference_code, booking_group_id, courts!inner(name, venue_id), profiles(full_name, phone, email), booking_equipment(quantity, equipment(name))"
     )
     .eq("courts.venue_id", venue.id)
     .in("status", ["pending", "confirmed"])
@@ -46,6 +46,9 @@ export default async function FrontDeskPage() {
       paymentStatus: b.payment_status,
       referenceCode: b.reference_code,
       isOnline: b.source === "online",
+      equipment: ((b.booking_equipment ?? []) as unknown as { quantity: number; equipment: { name: string } | null }[]).map(
+        (e) => ({ name: e.equipment?.name ?? "Equipment", quantity: e.quantity })
+      ),
     };
   });
 
