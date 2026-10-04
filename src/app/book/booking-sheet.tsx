@@ -288,6 +288,16 @@ export function BookingSheet({
                   <span className="text-muted-foreground">{pesos(coachFeeCents)}</span>
                 </li>
               )}
+              {appliedDiscountCents > 0 && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+                  <span>Promo discount</span>
+                  <span>−{pesos(appliedDiscountCents)}</span>
+                </li>
+              )}
+              <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-semibold">
+                <span>Total</span>
+                <span>{pesos(grandTotalCents)}</span>
+              </li>
             </ul>
 
             {coaches.length > 0 && (
@@ -337,14 +347,8 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(grandTotalCents)}</span>
-              {appliedDiscountCents > 0 || selectedCoach
-                ? ` (courts ${pesos(totalCents)}${selectedCoach ? ` + coach ${pesos(coachFeeCents)}` : ""}${appliedDiscountCents > 0 ? ` − discount ${pesos(appliedDiscountCents)}` : ""})`
-                : ""}
-              .{" "}
-              {appliedDiscountCents > 0 && "Promo applied. "}
               {isLoggedIn && "Member rates applied if you're an active member. "}
-              Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
+              Transfer the total above via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
 
             {paymentAccounts.length > 0 && (
