@@ -5,6 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PROMO_TYPES } from "@/lib/promos/registry";
 import type { PromoFormField } from "@/lib/promos/engine";
 import { addPromotion, updatePromotion, deletePromotion } from "./actions";
@@ -24,17 +33,14 @@ export type Promotion = {
 
 // Lightweight view of the registry for the form (key + label + fields), newest-friendly: a new promo
 // type shows up here automatically.
-const TYPE_OPTIONS = Object.values(PROMO_TYPES).map((t) => ({
-  key: t.key,
-  label: t.label,
-  formFields: t.formFields,
-}));
+const TYPE_OPTIONS = Object.values(PROMO_TYPES).map((t) => ({ key: t.key, label: t.label, formFields: t.formFields }));
 
 const ELIGIBILITY_OPTIONS = [
   { value: "all", label: "Everyone" },
   { value: "members_only", label: "Members only" },
   { value: "guests_only", label: "Guests only (not on member rate)" },
 ];
+const ELIGIBILITY_SHORT: Record<string, string> = { all: "Everyone", members_only: "Members", guests_only: "Guests" };
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const peso = (cents: number) => `₱${(cents / 100).toLocaleString("en-PH", { maximumFractionDigits: 0 })}`;
@@ -60,14 +66,7 @@ function ConfigField({ field, config }: { field: PromoFormField; config?: Record
     return (
       <div className="flex flex-col gap-1.5">
         <Label>{field.label}</Label>
-        <Input
-          type="number"
-          name={field.name}
-          min={0}
-          step={1}
-          defaultValue={typeof current === "number" ? current : ""}
-          required={field.required}
-        />
+        <Input type="number" name={field.name} min={0} step={1} defaultValue={typeof current === "number" ? current : ""} required={field.required} />
         {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
       </div>
     );
@@ -162,125 +161,165 @@ function configSummary(promo: Promotion): string {
   return parts.filter(Boolean).join(" · ");
 }
 
-function PromoRow({ promo }: { promo: Promotion }) {
-  const type = PROMO_TYPES[promo.type];
+/** Add or edit one promotion in a popup. `promo` undefined = add mode (type is selectable); in edit
+ * mode the type is fixed (changing it would change the config shape). */
+function PromoDialog({ venueId, promo, trigger }: { venueId: string; promo?: Promotion; trigger: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const initialType = promo?.type ?? TYPE_OPTIONS[0]?.key ?? "";
+  const [typeKey, setTypeKey] = useState(initialType);
   const [isPending, startTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-
-  function onSave(formData: FormData) {
-    setError(null);
-    startTransition(async () => {
-      const result = await updatePromotion(promo.id, formData);
-      if (result.error) setError(result.error);
-    });
-  }
-
-  return (
-    <form action={onSave} className="flex flex-col gap-3 rounded-lg border border-border/60 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="font-medium">{promo.name}</span>
-          <Badge variant="secondary" className="text-[10px] font-normal">{type?.label ?? promo.type}</Badge>
-          {!promo.active && <Badge variant="outline" className="text-[10px]">Inactive</Badge>}
-        </div>
-        <span className="text-xs text-muted-foreground">{configSummary(promo)}</span>
-      </div>
-
-      <input type="hidden" name="type" value={promo.type} />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label>Name</Label>
-          <Input name="name" defaultValue={promo.name} required />
-        </div>
-        {type?.formFields.map((f) => (
-          <ConfigField key={f.name} field={f} config={promo.config} />
-        ))}
-        <CommonFields promo={promo} />
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button type="submit" size="sm" disabled={isPending}>
-          {isPending ? "Saving…" : "Save"}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={isDeleting}
-          onClick={() => startDeleteTransition(async () => void (await deletePromotion(promo.id)))}
-        >
-          Remove
-        </Button>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    </form>
-  );
-}
-
-function AddPromoForm({ venueId }: { venueId: string }) {
-  const [typeKey, setTypeKey] = useState(TYPE_OPTIONS[0]?.key ?? "");
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const selectedType = TYPE_OPTIONS.find((t) => t.key === typeKey);
 
-  function onAdd(formData: FormData) {
-    formData.set("venueId", venueId);
+  function onSubmit(formData: FormData) {
+    if (!promo) formData.set("venueId", venueId);
     setError(null);
     startTransition(async () => {
-      const result = await addPromotion(formData);
+      const result = promo ? await updatePromotion(promo.id, formData) : await addPromotion(formData);
       if (result.error) setError(result.error);
+      else setOpen(false);
+    });
+  }
+
+  function onDelete() {
+    if (!promo) return;
+    setError(null);
+    startDeleteTransition(async () => {
+      const result = await deletePromotion(promo.id);
+      if (result.error) setError(result.error);
+      else setOpen(false);
     });
   }
 
   return (
-    <form action={onAdd} className="grid grid-cols-1 gap-3 rounded-lg border border-dashed border-border/60 p-3 sm:grid-cols-2">
-      <p className="text-sm font-medium sm:col-span-2">Add a promotion</p>
-      <div className="flex flex-col gap-1.5">
-        <Label>Type</Label>
-        <select name="type" value={typeKey} onChange={(e) => setTypeKey(e.target.value)} className={selectClass()}>
-          {TYPE_OPTIONS.map((t) => (
-            <option key={t.key} value={t.key}>
-              {t.label}
-            </option>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) {
+          setError(null);
+          setTypeKey(initialType);
+        }
+      }}
+    >
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{promo ? `Edit ${promo.name}` : "Add a promotion"}</DialogTitle>
+        </DialogHeader>
+        <form action={onSubmit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label>Type</Label>
+            {promo ? (
+              <>
+                <input type="hidden" name="type" value={promo.type} />
+                <div className="flex h-9 items-center text-sm text-muted-foreground">{selectedType?.label ?? promo.type}</div>
+              </>
+            ) : (
+              <select name="type" value={typeKey} onChange={(e) => setTypeKey(e.target.value)} className={selectClass()}>
+                {TYPE_OPTIONS.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Name</Label>
+            <Input name="name" defaultValue={promo?.name} placeholder="e.g. Multi-court discount" required />
+          </div>
+
+          {selectedType?.formFields.map((f) => (
+            <ConfigField key={f.name} field={f} config={promo?.config} />
           ))}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label>Name</Label>
-        <Input name="name" placeholder="e.g. Multi-court discount" required />
-      </div>
-      {selectedType?.formFields.map((f) => (
-        <ConfigField key={f.name} field={f} />
-      ))}
-      <CommonFields />
-      <div className="flex items-center gap-2 sm:col-span-2">
-        <Button type="submit" disabled={isPending}>
-          {isPending ? "Adding…" : "Add promotion"}
-        </Button>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    </form>
+          <CommonFields promo={promo} />
+
+          {error && <p className="text-sm text-destructive sm:col-span-2">{error}</p>}
+
+          <DialogFooter className="sm:col-span-2">
+            {promo && (
+              <Button type="button" variant="ghost" className="mr-auto text-destructive" disabled={isDeleting} onClick={onDelete}>
+                {isDeleting ? "Removing…" : "Remove"}
+              </Button>
+            )}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Saving…" : promo ? "Save changes" : "Add promotion"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function PromotionsManager({ venueId, promotions }: { venueId: string; promotions: Promotion[] }) {
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
-      <p className="text-sm text-muted-foreground">
-        Automatic discounts applied at checkout — e.g. a multi-court discount when someone books several
-        courts together. Promotions apply to the public booking cart; the discount shows before the
-        customer pays and is recorded on each booking.
-      </p>
-
-      <div className="flex flex-col gap-3">
-        {promotions.map((p) => (
-          <PromoRow key={p.id} promo={p} />
-        ))}
-        {promotions.length === 0 && <p className="text-sm text-muted-foreground">No promotions yet. Add one below.</p>}
+    <div className="flex max-w-3xl flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-prose text-sm text-muted-foreground">
+          Automatic discounts applied at checkout — e.g. a multi-court discount when someone books several
+          courts together. Promotions apply to the public booking cart; the discount shows before the
+          customer pays and is recorded on each booking.
+        </p>
+        <PromoDialog venueId={venueId} trigger={<Button size="sm">Add promotion</Button>} />
       </div>
 
-      <AddPromoForm venueId={venueId} />
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Details</TableHead>
+            <TableHead>Eligibility</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="w-0"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {promotions.map((p) => {
+            const type = PROMO_TYPES[p.type];
+            return (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.name}</TableCell>
+                <TableCell className="text-muted-foreground">{type?.label ?? p.type}</TableCell>
+                <TableCell className="max-w-[14rem] truncate text-xs text-muted-foreground" title={configSummary(p)}>
+                  {configSummary(p)}
+                </TableCell>
+                <TableCell className="text-muted-foreground">{ELIGIBILITY_SHORT[p.eligibility] ?? p.eligibility}</TableCell>
+                <TableCell>
+                  {p.active ? (
+                    <Badge variant="secondary">Active</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      Inactive
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <PromoDialog
+                    venueId={venueId}
+                    promo={p}
+                    trigger={
+                      <Button size="sm" variant="outline">
+                        Edit
+                      </Button>
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          {promotions.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
+                No promotions yet. Add one to start discounting.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }
