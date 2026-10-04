@@ -368,6 +368,17 @@ function parseSalePrice(value: FormDataEntryValue | null): number | null {
   return raw === "" ? null : Math.round(Number(raw) * 100);
 }
 
+/** The tier's custom-field spec arrives as a JSON string from the admin editor. Parse leniently; the
+ * zod schema validates the shape. */
+function parseFieldsJson(value: FormDataEntryValue | null): unknown {
+  try {
+    const parsed = JSON.parse(String(value ?? "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function addMembershipPlan(formData: FormData): Promise<ActionResult> {
   const parsed = membershipPlanSchema.safeParse({
     venueId: formData.get("venueId"),
@@ -376,6 +387,7 @@ export async function addMembershipPlan(formData: FormData): Promise<ActionResul
     salePriceCents: parseSalePrice(formData.get("salePrice")),
     durationDays: Number(formData.get("durationDays")),
     inclusions: parseInclusions(formData.get("inclusions")),
+    fields: parseFieldsJson(formData.get("fieldsJson")),
     sortOrder: Number(formData.get("sortOrder")) || 0,
     isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
   });
@@ -389,6 +401,7 @@ export async function addMembershipPlan(formData: FormData): Promise<ActionResul
     sale_price_cents: parsed.data.salePriceCents,
     duration_days: parsed.data.durationDays,
     inclusions: parsed.data.inclusions,
+    fields: parsed.data.fields,
     sort_order: parsed.data.sortOrder,
     is_active: parsed.data.isActive,
   });
@@ -411,6 +424,7 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
     salePriceCents: parseSalePrice(formData.get("salePrice")),
     durationDays: Number(formData.get("durationDays")),
     inclusions: parseInclusions(formData.get("inclusions")),
+    fields: parseFieldsJson(formData.get("fieldsJson")),
     sortOrder: Number(formData.get("sortOrder")) || 0,
     isActive: formData.get("isActive") === "on" || formData.get("isActive") === "true",
   });
@@ -425,6 +439,7 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
       sale_price_cents: parsed.data.salePriceCents,
       duration_days: parsed.data.durationDays,
       inclusions: parsed.data.inclusions,
+      fields: parsed.data.fields,
       sort_order: parsed.data.sortOrder,
       is_active: parsed.data.isActive,
     })
@@ -445,8 +460,35 @@ export async function updateMembershipPlan(id: string, formData: FormData): Prom
 
 export async function deleteMembershipPlan(id: string): Promise<ActionResult> {
   const supabase = await createClient();
+
+  // Members hold a tier by name (a snapshot, not an FK), so deleting the plan wouldn't remove them — but
+  // it would strip the tier's field spec, so their details could no longer be viewed or collected. Guide
+  // the admin to deactivate instead, which keeps the spec, details, and history intact.
+  const { data: plan } = await supabase.from("membership_plans").select("venue_id, name").eq("id", id).maybeSingle();
+  if (plan) {
+    const { count } = await supabase
+      .from("memberships")
+      .select("id", { count: "exact", head: true })
+      .eq("venue_id", plan.venue_id)
+      .eq("tier", plan.name)
+      .eq("status", "active");
+    if ((count ?? 0) > 0) {
+      return {
+        error: "Members are on this tier — deactivate it instead of deleting, so their details and history stay intact.",
+      };
+    }
+  }
+
   const { error } = await supabase.from("membership_plans").delete().eq("id", id);
-  if (error) return { error: error.message };
+  // A plan referenced by past subscription requests can't be hard-deleted (FK) — deactivate it instead.
+  if (error) {
+    return {
+      error:
+        error.code === "23503"
+          ? "This tier has subscription history — deactivate it instead of deleting."
+          : error.message,
+    };
+  }
   await auditCurrent(supabase, "membership_plan_deleted", "membership_plan", id, null);
   revalidateMembershipPlans();
   return { success: true };

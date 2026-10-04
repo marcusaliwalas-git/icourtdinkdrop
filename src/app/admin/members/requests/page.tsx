@@ -4,6 +4,7 @@ import { featureEnabled } from "@/lib/features";
 import { createClient } from "@/lib/supabase/server";
 import { formatInTimezone } from "@/lib/time";
 import { SubscriptionRequests, type RequestRow } from "./requests-client";
+import { parseCapturedDetails } from "@/lib/memberships/fields";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function SubscriptionRequestsPage() {
   const { data } = await supabase
     .from("membership_requests")
     .select(
-      "id, tier, amount_cents, duration_days, payment_reference, status, created_at, reviewed_at, review_notes, profiles!membership_requests_profile_id_fkey(full_name, email)"
+      "id, tier, amount_cents, duration_days, payment_reference, status, created_at, reviewed_at, review_notes, details, profiles!membership_requests_profile_id_fkey(full_name, email)"
     )
     .eq("venue_id", venue.id)
     .order("created_at", { ascending: false })
@@ -38,6 +39,7 @@ export default async function SubscriptionRequestsPage() {
       status: r.status,
       submitted: formatInTimezone(new Date(r.created_at), "MMM d, h:mm a", venue.timezone),
       reviewNotes: r.review_notes,
+      details: parseCapturedDetails(r.details),
     };
   });
 

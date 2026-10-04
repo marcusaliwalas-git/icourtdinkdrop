@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getTenant } from "@/lib/tenant";
 import { formatInTimezone } from "@/lib/time";
+import { parseFieldSpecs, validateMembershipDetails } from "@/lib/memberships/fields";
 
 type ActionResult = { error?: string; success?: boolean };
 
@@ -165,5 +166,52 @@ export async function endOfficialMembership(profileId: string): Promise<ActionRe
   await logAudit(supabase, user.id, "official_membership_ended", profileId, null, { ends_on: today });
   revalidatePath(`/admin/members/${profileId}`);
   revalidatePath("/admin/members");
+  return { success: true };
+}
+
+/** Admin on-behalf: record (or correct) a member's custom membership details for their active tier —
+ * the backfill path for members who joined before the tier defined these fields, or who provide them
+ * at the counter. Writes directly under the admin RLS on memberships. */
+export async function setMemberMembershipDetails(
+  profileId: string,
+  details: Record<string, string>
+): Promise<ActionResult> {
+  const { supabase, user } = await requireAdmin();
+  const venue = await getTenant();
+  if (!venue) return { error: "No venue in context." };
+
+  const today = formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone);
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("id, tier")
+    .eq("profile_id", profileId)
+    .eq("venue_id", venue.id)
+    .eq("status", "active")
+    .or(`ends_on.is.null,ends_on.gte.${today}`)
+    .order("ends_on", { ascending: false, nullsFirst: true })
+    .limit(1)
+    .maybeSingle();
+  if (!membership) return { error: "This member has no active membership here." };
+
+  const { data: plan } = await supabase
+    .from("membership_plans")
+    .select("fields")
+    .eq("venue_id", venue.id)
+    .eq("name", membership.tier)
+    .order("is_active", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const specs = parseFieldSpecs(plan?.fields);
+  const checked = validateMembershipDetails(specs, details);
+  if (!checked.ok) return { error: checked.error };
+
+  const { error } = await supabase
+    .from("memberships")
+    .update({ details: checked.details })
+    .eq("id", membership.id);
+  if (error) return { error: error.message };
+
+  await logAudit(supabase, user.id, "membership_details_updated", profileId, null, { tier: membership.tier });
+  revalidatePath(`/admin/members/${profileId}`);
   return { success: true };
 }

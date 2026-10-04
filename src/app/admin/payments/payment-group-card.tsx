@@ -12,6 +12,7 @@ function pesos(cents: number) {
 }
 
 type Slot = { courtName: string; when: string; baseCents: number };
+type EquipmentLine = { name: string; quantity: number; feeCents: number };
 
 /** Result shape differs between the group actions ({error}) and the single-booking actions
  * ({message}); normalise to one string. */
@@ -25,6 +26,7 @@ export function PaymentGroupCard({
   customer,
   contact,
   slots,
+  equipmentLines,
   discountCents,
   discountLabel,
   totalCents,
@@ -37,6 +39,7 @@ export function PaymentGroupCard({
   customer: string;
   contact: string | null;
   slots: Slot[];
+  equipmentLines: EquipmentLine[];
   discountCents: number;
   discountLabel: string | null;
   totalCents: number;
@@ -90,6 +93,17 @@ export function PaymentGroupCard({
                 <span className="block text-xs text-muted-foreground">{s.when}</span>
               </span>
               <span className="shrink-0 text-muted-foreground">{pesos(s.baseCents)}</span>
+            </li>
+          ))}
+          {equipmentLines.map((e, i) => (
+            <li key={`eq-${i}`} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+              <span className="min-w-0">
+                <span className="font-medium text-foreground">
+                  {e.quantity}× {e.name}
+                </span>
+                <span className="block text-xs text-muted-foreground">Equipment rental</span>
+              </span>
+              <span className="shrink-0 text-muted-foreground">{pesos(e.feeCents)}</span>
             </li>
           ))}
           {discountCents > 0 && (

@@ -6,6 +6,7 @@ import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { MembershipPlansManager } from "./membership-plans-manager";
+import { parseFieldSpecs } from "@/lib/memberships/fields";
 import { EquipmentManager, type Equipment } from "./equipment-manager";
 import { PromotionsManager, type Promotion } from "./promotions-manager";
 import { getTenant } from "@/lib/tenant";
@@ -102,7 +103,7 @@ export default async function AdminVenuePage() {
   const { data: membershipPlans } = officialMembersEnabled
     ? await supabase
         .from("membership_plans")
-        .select("id, name, price_cents, sale_price_cents, duration_days, inclusions, sort_order, is_active")
+        .select("id, name, price_cents, sale_price_cents, duration_days, inclusions, fields, sort_order, is_active")
         .eq("venue_id", venue.id)
         .order("sort_order")
     : {
@@ -113,6 +114,7 @@ export default async function AdminVenuePage() {
           sale_price_cents: number | null;
           duration_days: number;
           inclusions: string[];
+          fields: unknown;
           sort_order: number;
           is_active: boolean;
         }[],
@@ -170,7 +172,7 @@ export default async function AdminVenuePage() {
           <TabsContent value="membership">
             <MembershipPlansManager
               venueId={venue.id}
-              plans={membershipPlans ?? []}
+              plans={(membershipPlans ?? []).map((p) => ({ ...p, fields: parseFieldSpecs(p.fields) }))}
               paymentAccounts={(paymentAccounts ?? []).map((a) => ({
                 bank_name: a.bank_name,
                 account_name: a.account_name,

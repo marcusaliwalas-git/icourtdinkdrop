@@ -730,6 +730,7 @@ export type Database = {
         Row: {
           created_at: string
           duration_days: number
+          fields: Json
           id: string
           inclusions: string[]
           is_active: boolean
@@ -742,6 +743,7 @@ export type Database = {
         Insert: {
           created_at?: string
           duration_days: number
+          fields?: Json
           id?: string
           inclusions?: string[]
           is_active?: boolean
@@ -754,6 +756,7 @@ export type Database = {
         Update: {
           created_at?: string
           duration_days?: number
+          fields?: Json
           id?: string
           inclusions?: string[]
           is_active?: boolean
@@ -777,6 +780,7 @@ export type Database = {
         Row: {
           amount_cents: number
           created_at: string
+          details: Json
           duration_days: number
           id: string
           payment_reference: string | null
@@ -793,6 +797,7 @@ export type Database = {
         Insert: {
           amount_cents: number
           created_at?: string
+          details?: Json
           duration_days: number
           id?: string
           payment_reference?: string | null
@@ -809,6 +814,7 @@ export type Database = {
         Update: {
           amount_cents?: number
           created_at?: string
+          details?: Json
           duration_days?: number
           id?: string
           payment_reference?: string | null
@@ -856,6 +862,7 @@ export type Database = {
       memberships: {
         Row: {
           created_at: string
+          details: Json
           ends_on: string | null
           id: string
           profile_id: string
@@ -866,6 +873,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          details?: Json
           ends_on?: string | null
           id?: string
           profile_id: string
@@ -876,6 +884,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          details?: Json
           ends_on?: string | null
           id?: string
           profile_id?: string
@@ -1970,6 +1979,7 @@ export type Database = {
         Returns: {
           amount_cents: number
           created_at: string
+          details: Json
           duration_days: number
           id: string
           payment_reference: string | null
@@ -2048,10 +2058,16 @@ export type Database = {
         Returns: string
       }
       submit_membership_request: {
-        Args: { p_plan: string; p_reference?: string; p_slip_path?: string }
+        Args: {
+          p_details?: Json
+          p_plan: string
+          p_reference?: string
+          p_slip_path?: string
+        }
         Returns: {
           amount_cents: number
           created_at: string
+          details: Json
           duration_days: number
           id: string
           payment_reference: string | null
@@ -2068,6 +2084,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "membership_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_membership_details: {
+        Args: { p_details: Json; p_venue: string }
+        Returns: {
+          created_at: string
+          details: Json
+          ends_on: string | null
+          id: string
+          profile_id: string
+          starts_on: string
+          status: string
+          tier: string
+          venue_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "memberships"
           isOneToOne: true
           isSetofReturn: false
         }

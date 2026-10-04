@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { submitMembershipRequest } from "./actions";
+import { validateMembershipDetails, type MembershipFieldSpec } from "@/lib/memberships/fields";
+import { MembershipFieldInputs } from "./membership-field-inputs";
 
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
@@ -19,6 +21,7 @@ export interface Plan {
   salePriceCents: number | null;
   durationDays: number;
   inclusions: string[];
+  fields: MembershipFieldSpec[];
 }
 
 /** The price the member actually pays — the sale price when it's set and below the regular price. */
@@ -67,6 +70,7 @@ export function MembershipPurchase({
   const [planId, setPlanId] = useState(selectablePlans[0]?.id ?? "");
   const [reference, setReference] = useState("");
   const [slip, setSlip] = useState<File | null>(null);
+  const [details, setDetails] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -101,6 +105,12 @@ export function MembershipPurchase({
       setError("Use an image (JPG, PNG, WebP, HEIC) or PDF.");
       return;
     }
+    // Validate the tier's custom fields before uploading anything (server re-checks authoritatively).
+    const check = validateMembershipDetails(selected.fields, details);
+    if (!check.ok) {
+      setError(check.error);
+      return;
+    }
 
     startTransition(async () => {
       const ext = slip.name.split(".").pop() || "jpg";
@@ -118,6 +128,7 @@ export function MembershipPurchase({
         planId: selected.id,
         paymentReference: reference,
         paymentSlipPath: path,
+        details,
       });
       if (!result.success) {
         setError(result.message);
@@ -181,6 +192,18 @@ export function MembershipPurchase({
           Membership unlocks member rates and the members-only booking window at this venue.
         </p>
       </div>
+
+      {/* Tier-specific details (emergency contact, address, …) defined by the venue for this plan. */}
+      {selected && selected.fields.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+          <p className="text-sm font-medium">Your details</p>
+          <MembershipFieldInputs
+            fields={selected.fields}
+            values={details}
+            onChange={(key, value) => setDetails((prev) => ({ ...prev, [key]: value }))}
+          />
+        </div>
+      )}
 
       {accounts.length > 0 && selected && (
         <div className="rounded-xl border bg-card p-4">

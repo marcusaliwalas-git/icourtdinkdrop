@@ -345,6 +345,48 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
   return { ...base, slipUrl: signed?.signedUrl ?? null };
 }
 
+export type BookingCharges = {
+  /** Pure court price (total − coach − equipment, with any promo added back for the base line). */
+  courtCents: number;
+  coachName: string | null;
+  coachFeeCents: number;
+  equipment: { name: string; quantity: number; feeCents: number }[];
+  discountCents: number;
+  discountLabel: string | null;
+  totalCents: number;
+};
+
+/** Charge breakdown for the booking detail sheet, so staff can see what makes up the total —
+ * court, any coach, any equipment rental, and a promo discount. */
+export async function getBookingCharges(bookingId: string): Promise<BookingCharges | null> {
+  const { supabase } = await requireStaff();
+  const { data } = await supabase
+    .from("bookings")
+    .select(
+      "total_cents, discount_cents, discount_label, coach_fee_cents, coaches(name), booking_equipment(quantity, fee_cents, equipment(name))"
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!data) return null;
+
+  const coach = (data.coaches ?? null) as unknown as { name: string } | null;
+  const equipment = ((data.booking_equipment ?? []) as unknown as { quantity: number; fee_cents: number; equipment: { name: string } | null }[]).map(
+    (e) => ({ name: e.equipment?.name ?? "Equipment", quantity: e.quantity, feeCents: e.fee_cents })
+  );
+  const equipFee = equipment.reduce((s, e) => s + e.feeCents, 0);
+  const coachFee = data.coach_fee_cents ?? 0;
+  return {
+    // Court base reads as the pre-promo court price so the receipt is base → add-ons → discount → total.
+    courtCents: data.total_cents + data.discount_cents - coachFee - equipFee,
+    coachName: coach?.name ?? null,
+    coachFeeCents: coachFee,
+    equipment,
+    discountCents: data.discount_cents,
+    discountLabel: data.discount_label,
+    totalCents: data.total_cents,
+  };
+}
+
 /**
  * Record (or clear) how a booking was paid, from the admin calendar — e.g. a walk-in paid cash or
  * online, or an owner correcting it later. Setting a method settles the booking (online ->
@@ -398,6 +440,11 @@ export interface RescheduleContext {
   timezone: string;
   durationMinutes: number;
   currentTotalCents: number;
+  // Promo discount currently on the booking — forfeited on reschedule, so the preview can show it.
+  currentDiscountCents: number;
+  // Coach + equipment fees folded into the total. They carry over unchanged (duration is kept), so the
+  // preview re-prices only the court and adds these back — never mistaking them for a court difference.
+  addonsCents: number;
   currentStartIso: string;
   maxAdvanceDays: number;
   isMember: boolean;
@@ -416,10 +463,16 @@ export async function getRescheduleContext(bookingId: string): Promise<Reschedul
 
   const { data: booking } = await supabase
     .from("bookings")
-    .select("id, court_id, booked_by, total_cents, time_range")
+    .select("id, court_id, booked_by, total_cents, discount_cents, coach_fee_cents, time_range, booking_equipment(fee_cents)")
     .eq("id", bookingId)
     .maybeSingle();
   if (!booking) return null;
+
+  const equipmentFeeCents = ((booking.booking_equipment ?? []) as unknown as { fee_cents: number }[]).reduce(
+    (s, e) => s + e.fee_cents,
+    0
+  );
+  const addonsCents = (booking.coach_fee_cents ?? 0) + equipmentFeeCents;
 
   const { data: court } = await supabase
     .from("courts")
@@ -465,6 +518,8 @@ export async function getRescheduleContext(bookingId: string): Promise<Reschedul
     timezone: venue.timezone,
     durationMinutes: Math.round((end.getTime() - start.getTime()) / 60000),
     currentTotalCents: booking.total_cents,
+    currentDiscountCents: booking.discount_cents ?? 0,
+    addonsCents,
     currentStartIso: start.toISOString(),
     maxAdvanceDays: venue.max_advance_days,
     isMember,
