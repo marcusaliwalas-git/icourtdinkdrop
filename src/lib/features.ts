@@ -24,6 +24,12 @@ export const VENUE_FEATURES = [
     description:
       "Tag members as official (annual) to grant the member rate and a longer booking window, plus the member/non-member split on Sales.",
   },
+  {
+    key: "equipment",
+    label: "Equipment rental",
+    description:
+      "Rent out gear by the hour (paddles, ball machines, …) as a booking add-on, with per-item stock limits, plus the admin Equipment manager.",
+  },
 ] as const;
 
 export type VenueFeatureKey = (typeof VENUE_FEATURES)[number]["key"];

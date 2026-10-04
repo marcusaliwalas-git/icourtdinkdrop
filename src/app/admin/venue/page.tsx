@@ -6,6 +6,7 @@ import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
 import { MembershipPlansManager } from "./membership-plans-manager";
+import { EquipmentManager, type Equipment } from "./equipment-manager";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
 import { requireAdmin } from "@/lib/auth";
@@ -116,6 +117,16 @@ export default async function AdminVenuePage() {
         }[],
       };
 
+  const equipmentEnabled = featureEnabled(venue.features, "equipment");
+  const { data: equipment } = equipmentEnabled
+    ? await supabase
+        .from("equipment")
+        .select("id, name, hourly_rate_cents, stock, max_per_booking, is_active")
+        .eq("venue_id", venue.id)
+        .order("sort_order")
+        .order("name")
+    : { data: [] as Equipment[] };
+
   return (
     <div>
       <p className="font-mono text-xs tracking-[0.2em] text-primary uppercase">Venue &amp; courts</p>
@@ -127,6 +138,7 @@ export default async function AdminVenuePage() {
           <TabsTrigger value="hours">Hours</TabsTrigger>
           <TabsTrigger value="payment">Payment</TabsTrigger>
           {officialMembersEnabled && <TabsTrigger value="membership">Membership</TabsTrigger>}
+          {equipmentEnabled && <TabsTrigger value="equipment">Equipment</TabsTrigger>}
           <TabsTrigger value="closures">Closures</TabsTrigger>
         </TabsList>
         <TabsContent value="details" className="max-w-lg">
@@ -156,6 +168,11 @@ export default async function AdminVenuePage() {
                 account_number: a.account_number,
               }))}
             />
+          </TabsContent>
+        )}
+        {equipmentEnabled && (
+          <TabsContent value="equipment">
+            <EquipmentManager venueId={venue.id} equipment={(equipment ?? []) as Equipment[]} />
           </TabsContent>
         )}
         <TabsContent value="closures">

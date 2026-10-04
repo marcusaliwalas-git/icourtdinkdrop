@@ -538,3 +538,92 @@ export async function deleteRatePeriod(id: string): Promise<ActionResult> {
   revalidatePath("/admin/venue");
   return { success: true };
 }
+
+// ── Equipment (hourly rentals: paddles, ball machines, …) ────────────────────────
+function revalidateEquipment() {
+  revalidatePath("/admin/venue");
+  revalidatePath("/book");
+}
+
+type EquipmentFields = { name: string; hourlyRateCents: number; stock: number; maxPerBooking: number | null; isActive: boolean };
+
+function readEquipment(formData: FormData): EquipmentFields | { error: string } {
+  const name = String(formData.get("name") ?? "").trim();
+  const hourlyRateCents = Math.round(Number(formData.get("hourlyRate")) * 100);
+  const stock = Number(formData.get("stock"));
+  const maxRaw = String(formData.get("maxPerBooking") ?? "").trim();
+  const maxPerBooking = maxRaw === "" ? null : Number(maxRaw);
+  const isActive = formData.get("isActive") === "on" || formData.get("isActive") === "true";
+  if (!name) return { error: "Give the equipment a name." };
+  if (!Number.isFinite(hourlyRateCents) || hourlyRateCents < 0) return { error: "Enter a valid hourly rate." };
+  if (!Number.isInteger(stock) || stock < 0) return { error: "Enter how many units you have." };
+  if (maxPerBooking !== null && (!Number.isInteger(maxPerBooking) || maxPerBooking <= 0))
+    return { error: "Max per booking must be a positive whole number, or blank." };
+  return { name, hourlyRateCents, stock, maxPerBooking, isActive };
+}
+
+export async function addEquipment(formData: FormData): Promise<ActionResult> {
+  const parsed = readEquipment(formData);
+  if ("error" in parsed) return parsed;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("equipment")
+    .insert({
+      venue_id: String(formData.get("venueId")),
+      name: parsed.name,
+      hourly_rate_cents: parsed.hourlyRateCents,
+      stock: parsed.stock,
+      max_per_booking: parsed.maxPerBooking,
+      is_active: parsed.isActive,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "equipment_created", "equipment", data.id, {
+    name: parsed.name,
+    hourly_rate_cents: parsed.hourlyRateCents,
+    stock: parsed.stock,
+  });
+  revalidateEquipment();
+  return { success: true };
+}
+
+export async function updateEquipment(id: string, formData: FormData): Promise<ActionResult> {
+  const parsed = readEquipment(formData);
+  if ("error" in parsed) return parsed;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("equipment")
+    .update({
+      name: parsed.name,
+      hourly_rate_cents: parsed.hourlyRateCents,
+      stock: parsed.stock,
+      max_per_booking: parsed.maxPerBooking,
+      is_active: parsed.isActive,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That item isn't for your venue." };
+  await auditCurrent(supabase, "equipment_updated", "equipment", id, {
+    name: parsed.name,
+    hourly_rate_cents: parsed.hourlyRateCents,
+    stock: parsed.stock,
+  });
+  revalidateEquipment();
+  return { success: true };
+}
+
+export async function deleteEquipment(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("equipment").delete().eq("id", id);
+  // A referenced item (already rented on a booking) can't be deleted — tell the admin to deactivate it.
+  if (error) {
+    return {
+      error: error.code === "23503" ? "This item has been rented — set it inactive instead of deleting." : error.message,
+    };
+  }
+  await auditCurrent(supabase, "equipment_deleted", "equipment", id, null);
+  revalidateEquipment();
+  return { success: true };
+}
