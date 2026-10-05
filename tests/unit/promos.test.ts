@@ -148,6 +148,26 @@ describe("freeHours.apply", () => {
     const lines = freeHours.apply(ctx([segment("a", 4, 180000), segment("b", 4, 200000)]), cfg, fhPromo);
     expect(lines.map((l) => l.cents)).toEqual([45000, 50000]);
   });
+
+  it("supports an overnight window (e.g. 20:00–02:00)", () => {
+    const overnight = { windowStart: "20:00", windowEnd: "02:00", minHours: 4, freeHours: 1 };
+    // 22:00 Manila = 14:00 UTC; a 4h booking runs 22:00–02:00, exactly inside 20:00→02:00.
+    const night = ctx([
+      { courtId: "a", startsAtIso: "2026-10-05T14:00:00.000Z", durationMinutes: 240, baseTotalCents: 180000 },
+    ]);
+    const lines = freeHours.apply(night, overnight, fhPromo);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].cents).toBe(45000);
+  });
+
+  it("skips a booking that runs past an overnight window's end", () => {
+    const overnight = { windowStart: "20:00", windowEnd: "02:00", minHours: 4, freeHours: 1 };
+    // 23:00 Manila = 15:00 UTC; a 4h booking runs 23:00–03:00, past the 02:00 end.
+    const late = ctx([
+      { courtId: "a", startsAtIso: "2026-10-05T15:00:00.000Z", durationMinutes: 240, baseTotalCents: 180000 },
+    ]);
+    expect(freeHours.apply(late, overnight, fhPromo)).toEqual([]);
+  });
 });
 
 describe("evaluatePromotions", () => {
