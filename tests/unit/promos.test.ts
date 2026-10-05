@@ -70,6 +70,39 @@ describe("volumeDiscount.apply", () => {
   });
 });
 
+describe("volumeDiscount.apply with a time window", () => {
+  const evening = { minCourts: 3, centsOffPerHour: 5000, windowStart: "18:00", windowEnd: "21:00" };
+  // 18:00 Manila = 10:00 UTC; a 2h evening slot runs 18:00–20:00, inside 18:00–21:00.
+  function segAt(courtId: string, startUtcIso: string, hours: number): PromoSegment {
+    return { courtId, startsAtIso: startUtcIso, durationMinutes: hours * 60, baseTotalCents: 100000 };
+  }
+  const eve = (court: string) => segAt(court, "2026-10-05T10:00:00.000Z", 2); // 18:00 Manila
+  const morning = (court: string) => segAt(court, "2026-10-05T01:00:00.000Z", 2); // 09:00 Manila
+
+  it("discounts in-window slots once the threshold is met", () => {
+    const lines = volumeDiscount.apply(ctx([eve("a"), eve("b"), eve("c")]), evening, promo());
+    expect(lines.map((l) => l.cents)).toEqual([10000, 10000, 10000]);
+  });
+
+  it("ignores out-of-window slots when counting courts (below threshold → nothing)", () => {
+    // 2 in window + 1 outside → only 2 eligible courts, min is 3.
+    const lines = volumeDiscount.apply(ctx([eve("a"), eve("b"), morning("c")]), evening, promo());
+    expect(lines).toEqual([]);
+  });
+
+  it("discounts only the in-window slots when the threshold is met by them", () => {
+    const lines = volumeDiscount.apply(ctx([eve("a"), eve("b"), eve("c"), morning("d")]), evening, promo());
+    expect(lines.map((l) => l.segmentIndex)).toEqual([0, 1, 2]); // the morning slot (index 3) is excluded
+  });
+
+  it("excludes a slot that runs past the window end", () => {
+    // 20:00 Manila (12:00 UTC) for 2h ends 22:00 — not fully inside 18:00–21:00.
+    const late = segAt("a", "2026-10-05T12:00:00.000Z", 2);
+    const lines = volumeDiscount.apply(ctx([late, eve("b"), eve("c")]), evening, promo());
+    expect(lines).toEqual([]); // only 2 in-window courts
+  });
+});
+
 describe("freeHours.apply", () => {
   // Default test segment starts 01:00Z = 09:00 Asia/Manila (UTC+8), so a 4h booking runs 09:00–13:00.
   const cfg = { windowStart: "08:00", windowEnd: "16:00", minHours: 4, freeHours: 1 };
