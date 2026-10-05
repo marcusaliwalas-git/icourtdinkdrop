@@ -180,13 +180,76 @@ describe("create_booking — pricing and rules", () => {
     });
   });
 
-  it("uses the member rate when the booker has an active membership", async () => {
+  // A Manila (UTC+8) wall-clock time `daysAhead` days out, as a UTC Date.
+  function manilaFuture(daysAhead: number, hhmm: string): Date {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + daysAhead);
+    return new Date(`${d.toISOString().slice(0, 10)}T${hhmm}:00+08:00`);
+  }
+
+  async function makeOvernightVenue(client: import("pg").PoolClient) {
+    const fixture = await createVenueWithCourt(client);
+    // Every day: open 6 PM, close 2 AM the next day.
+    await client.query(
+      `update operating_hours set open_time = '18:00', close_time = '02:00', closes_next_day = true where venue_id = $1`,
+      [fixture.venueId]
+    );
+    return fixture;
+  }
+
+  it("allows an overnight booking that crosses midnight", async () => {
     await withRollback(async (client) => {
-      const { courtId } = await createVenueWithCourt(client, {
+      const { courtId } = await makeOvernightVenue(client);
+      // 11 PM → 2 AM: starts on the open day, ends at the overnight close.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: manilaFuture(4, "23:00"),
+        durationMinutes: 180,
+        guestName: "NightOwl",
+        guestPhone: "+639170000040",
+      });
+      expect(booking.status).toBe("pending");
+    });
+  });
+
+  it("allows a booking in the early-morning tail of the previous day's overnight session", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await makeOvernightVenue(client);
+      // 1 AM → 2 AM belongs to the prior day's 6 PM–2 AM session.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: manilaFuture(4, "01:00"),
+        durationMinutes: 60,
+        guestName: "AfterMidnight",
+        guestPhone: "+639170000041",
+      });
+      expect(booking.status).toBe("pending");
+    });
+  });
+
+  it("rejects a booking after the overnight session has closed", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await makeOvernightVenue(client);
+      // 3 AM is past the 2 AM close and before the 6 PM open — outside hours.
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: manilaFuture(4, "03:00"),
+          durationMinutes: 60,
+          guestName: "TooLate",
+          guestPhone: "+639170000042",
+        })
+      ).rejects.toThrow(/OUTSIDE_OPERATING_HOURS/);
+    });
+  });
+
+  it("uses the member rate when the booker is an active member of that venue", async () => {
+    await withRollback(async (client) => {
+      const { courtId, venueId } = await createVenueWithCourt(client, {
         hourlyRateCents: 120000,
         memberRateCents: 90000,
       });
-      const profileId = await createMemberProfile(client);
+      const profileId = await createMemberProfile(client, { venueId });
 
       const booking = await callCreateBooking(client, {
         courtId,
@@ -196,6 +259,26 @@ describe("create_booking — pricing and rules", () => {
       });
 
       expect(booking.total_cents).toBe(90000);
+    });
+  });
+
+  it("charges the guest rate when a member books at a DIFFERENT venue", async () => {
+    await withRollback(async (client) => {
+      // The member belongs to venue A…
+      const venueA = await createVenueWithCourt(client, { hourlyRateCents: 100000, memberRateCents: 70000 });
+      const profileId = await createMemberProfile(client, { venueId: venueA.venueId });
+      // …but books at venue B, which also offers a member rate.
+      const venueB = await createVenueWithCourt(client, { hourlyRateCents: 120000, memberRateCents: 90000 });
+
+      const booking = await callCreateBooking(client, {
+        courtId: venueB.courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        bookedBy: profileId,
+      });
+
+      // Not a member of B → guest rate, not B's 90000 member rate.
+      expect(booking.total_cents).toBe(120000);
     });
   });
 
@@ -875,4 +958,125 @@ describe("reschedule_booking", () => {
       ).rejects.toThrow(/NOT_AUTHORIZED/);
     });
   });
+
+  it("charges an active member the member rate and flags the booking as a member booking", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client, {
+        hourlyRateCents: 100000,
+        memberRateCents: 60000,
+      });
+      const member = await createMemberProfile(client, { active: true, venueId });
+
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        bookedBy: member,
+        source: "online",
+      });
+      expect(booking.total_cents).toBe(60000); // member rate, not 100000
+      expect(booking.booked_as_member).toBe(true);
+    });
+  });
+
+  it("charges a non-member the standard rate and does not flag it", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client, {
+        hourlyRateCents: 100000,
+        memberRateCents: 60000,
+      });
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(2),
+        durationMinutes: 60,
+        guestName: "Non Member",
+        guestPhone: "+639170000101",
+      });
+      expect(booking.total_cents).toBe(100000);
+      expect(booking.booked_as_member).toBe(false);
+    });
+  });
+
+  it("lets an active member book past the standard window, up to the member window", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client, { maxAdvanceDays: 14 });
+      await client.query(`update venues set member_advance_days = 30 where id = $1`, [venueId]);
+      const member = await createMemberProfile(client, { active: true, venueId });
+
+      // Day 20 is beyond the public 14-day window but within the member's 30-day window.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(20),
+        durationMinutes: 60,
+        bookedBy: member,
+        source: "online",
+      });
+      expect(booking.booked_as_member).toBe(true);
+
+      // A non-member at the same distance is rejected by the standard window.
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(20, 12),
+          durationMinutes: 60,
+          guestName: "Too Far",
+          guestPhone: "+639170000102",
+        })
+      ).rejects.toThrow(/OUTSIDE_BOOKING_WINDOW/);
+    });
+  });
+
+  it("treats a membership starting today in the venue's timezone as active (not UTC)", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client, { maxAdvanceDays: 14 });
+      await client.query(`update venues set member_advance_days = 30 where id = $1`, [venueId]);
+      const member = await createMemberProfile(client, { active: true, venueId });
+      // Grant a membership that starts on the venue's LOCAL today, exactly as the admin grant does.
+      // On a venue ahead of UTC this date can be one day past UTC's current_date; the perk must
+      // still apply (regression: it previously read as not-yet-active during local early mornings).
+      await client.query(
+        `update memberships
+           set starts_on = (now() at time zone (select timezone from venues where id = $2))::date,
+               ends_on   = (now() at time zone (select timezone from venues where id = $2))::date + 365
+         where profile_id = $1 and venue_id = $2`,
+        [member, venueId]
+      );
+      // 20 days out is beyond the public 14-day window but within the member's 30-day window.
+      const booking = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(20),
+        durationMinutes: 60,
+        bookedBy: member,
+        source: "online",
+      });
+      expect(booking.booked_as_member).toBe(true);
+    });
+  });
+
+  it("exempts admin walk-ins from the booking window (any future date allowed)", async () => {
+    await withRollback(async (client) => {
+      const { courtId } = await createVenueWithCourt(client, { maxAdvanceDays: 7 });
+      // 60 days out — far beyond the 7-day public window.
+      const walkIn = await callCreateBooking(client, {
+        courtId,
+        startsAt: daysFromNow(60),
+        durationMinutes: 60,
+        guestName: "Front Desk Guest",
+        guestPhone: "+639170000201",
+        source: "walkin",
+      });
+      expect(walkIn.status).toBe("confirmed");
+      // A customer's online booking at the same distance is still rejected by the window.
+      await expect(
+        callCreateBooking(client, {
+          courtId,
+          startsAt: daysFromNow(60, 12),
+          durationMinutes: 60,
+          guestName: "Online Guest",
+          guestPhone: "+639170000202",
+        })
+      ).rejects.toThrow(/OUTSIDE_BOOKING_WINDOW/);
+    });
+  });
 });
+

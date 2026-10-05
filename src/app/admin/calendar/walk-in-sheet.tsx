@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -21,8 +21,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createWalkInBooking } from "./actions";
+import { createClient } from "@/lib/supabase/client";
 import { formatInTimezone } from "@/lib/time";
 import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+import { computeBookingTotalCents } from "@/lib/pricing";
+import { evaluatePromotions, toPromoRow, totalDiscountCents, type PromoRowInput } from "@/lib/promos/engine";
+import { type CourtPricing } from "./calendar-views";
+
+// Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
+const UNPAID = "unpaid";
+
+// One rentable item + units free for the chosen slot. Walk-ins are non-member → standard rate.
+interface EquipItem {
+  id: string;
+  name: string;
+  hourly_rate_cents: number;
+  max_per_booking: number | null;
+  available: number;
+}
+
+function pesos(cents: number) {
+  return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
+}
 
 export function WalkInSheet({
   open,
@@ -31,6 +52,10 @@ export function WalkInSheet({
   courtName,
   startsAtIso,
   timezone,
+  venueId,
+  equipmentEnabled,
+  promotions,
+  pricing,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,21 +63,92 @@ export function WalkInSheet({
   courtName: string;
   startsAtIso: string;
   timezone: string;
+  venueId: string;
+  equipmentEnabled: boolean;
+  promotions: PromoRowInput[];
+  pricing: Record<string, CourtPricing>;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [durationHours, setDurationHours] = useState("1");
-  const [partySize, setPartySize] = useState("2");
+  const [payment, setPayment] = useState<string>("cash");
+  const [remarks, setRemarks] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [equipItems, setEquipItems] = useState<EquipItem[]>([]);
+  const [equipQty, setEquipQty] = useState<Record<string, number>>({});
+
+  const durationMinutes = Number(durationHours) * 60;
+
+  // Availability for this slot's range, re-fetched when the sheet opens or the duration changes.
+  const rangeKey = startsAtIso ? `["${startsAtIso}","${new Date(new Date(startsAtIso).getTime() + durationMinutes * 60_000).toISOString()}")` : "";
+  useEffect(() => {
+    if (!open || !equipmentEnabled || !rangeKey) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.rpc("equipment_availability", { p_venue: venueId, p_range: rangeKey });
+      if (!cancelled) setEquipItems((data ?? []) as EquipItem[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, equipmentEnabled, venueId, rangeKey]);
+
+  const equipLines = equipItems
+    .map((item) => ({ item, qty: equipQty[item.id] ?? 0 }))
+    .filter((l) => l.qty > 0)
+    .map((l) => ({ ...l, feeCents: Math.round((l.item.hourly_rate_cents * l.qty * durationMinutes) / 60) }));
+  const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
+
+  function setQty(item: EquipItem, next: number) {
+    const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+    setEquipQty((prev) => ({ ...prev, [item.id]: Math.max(0, Math.min(next, cap)) }));
+  }
+
+  // Price + any promo discount for the chosen duration, so staff collect the right amount. Walk-ins
+  // have no booker, so they're never "member" for pricing/eligibility — mirrors the server.
+  const { baseCents, discountCents } = useMemo(() => {
+    const p = pricing[courtId];
+    if (!p || !startsAtIso) return { baseCents: 0, discountCents: 0 };
+    const durationMinutes = Number(durationHours) * 60;
+    const base = computeBookingTotalCents({
+      startsAtIso,
+      durationMinutes,
+      timezone,
+      ratePeriods: p.ratePeriods,
+      baseHourlyRateCents: p.baseHourlyRateCents,
+      baseMemberRateCents: null,
+      isMember: false,
+    });
+    let discount = 0;
+    if (promotions.length > 0) {
+      const onDateIso = formatInTimezone(new Date(startsAtIso), "yyyy-MM-dd", timezone);
+      const lines = evaluatePromotions(
+        {
+          venueId,
+          timezone,
+          isMember: false,
+          onDateIso,
+          segments: [{ courtId, startsAtIso, durationMinutes, baseTotalCents: base }],
+        },
+        promotions.map(toPromoRow)
+      );
+      discount = totalDiscountCents(lines);
+    }
+    return { baseCents: base, discountCents: discount };
+  }, [pricing, courtId, startsAtIso, durationHours, timezone, promotions, venueId]);
+  const netCents = baseCents - discountCents;
 
   function reset() {
     setName("");
     setPhone("");
     setDurationHours("1");
-    setPartySize("2");
+    setPayment("cash");
+    setRemarks("");
     setError(null);
+    setEquipQty({});
   }
 
   function onSubmit(e: React.FormEvent) {
@@ -62,10 +158,12 @@ export function WalkInSheet({
       const result = await createWalkInBooking({
         courtId,
         startsAt: startsAtIso,
-        durationMinutes: Number(durationHours) * 60,
-        partySize: Number(partySize),
+        durationMinutes,
         guestName: name,
         guestPhone: phone,
+        paymentMethod: payment === UNPAID ? undefined : payment,
+        paymentRemarks: payment === "online" ? remarks : undefined,
+        equipment: equipLines.map((l) => ({ equipmentId: l.item.id, quantity: l.qty })),
       });
       if (!result.success) {
         setError(result.message);
@@ -100,44 +198,104 @@ export function WalkInSheet({
             <Input id="wiName" value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="wiPhone">Mobile number</Label>
+            <Label htmlFor="wiPhone">Mobile number (optional)</Label>
             <Input
               id="wiPhone"
               placeholder="09171234567"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              required
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="wiDuration">Duration</Label>
+            <Select value={durationHours} onValueChange={setDurationHours}>
+              <SelectTrigger id="wiDuration">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DURATION_HOURS.map((h) => (
+                  <SelectItem key={h} value={String(h)}>
+                    {durationLabel(h)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="wiPayment">Payment</Label>
+            <Select value={payment} onValueChange={setPayment}>
+              <SelectTrigger id="wiPayment">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {PAYMENT_METHOD_LABELS[m]}
+                  </SelectItem>
+                ))}
+                <SelectItem value={UNPAID}>Not paid yet</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {payment === "online" && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="wiDuration">Duration</Label>
-              <Select value={durationHours} onValueChange={setDurationHours}>
-                <SelectTrigger id="wiDuration">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DURATION_HOURS.map((h) => (
-                    <SelectItem key={h} value={String(h)}>
-                      {durationLabel(h)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="wiParty">Party size</Label>
+              <Label htmlFor="wiRemarks">Bank & reference number</Label>
               <Input
-                id="wiParty"
-                type="number"
-                min={1}
-                max={20}
-                value={partySize}
-                onChange={(e) => setPartySize(e.target.value)}
-                required
+                id="wiRemarks"
+                placeholder="e.g. BPI · ref 1234567"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
               />
             </div>
-          </div>
+          )}
+
+          {equipmentEnabled && equipItems.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label>Add equipment (optional)</Label>
+              <ul className="flex flex-col divide-y divide-border/60 rounded-md border text-sm">
+                {equipItems.map((item) => {
+                  const qty = equipQty[item.id] ?? 0;
+                  const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+                  const soldOut = item.available <= 0;
+                  return (
+                    <li key={item.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <span className="min-w-0">
+                        <span className="font-medium">{item.name}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {pesos(item.hourly_rate_cents)}/hr ·{" "}
+                          {soldOut ? "none free for this time" : `${item.available} available`}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <Button type="button" variant="outline" size="icon" className="size-7" disabled={qty <= 0} onClick={() => setQty(item, qty - 1)} aria-label={`Fewer ${item.name}`}>
+                          −
+                        </Button>
+                        <span className="w-5 text-center tabular-nums">{qty}</span>
+                        <Button type="button" variant="outline" size="icon" className="size-7" disabled={qty >= cap} onClick={() => setQty(item, qty + 1)} aria-label={`More ${item.name}`}>
+                          +
+                        </Button>
+                      </span>
+                    </li>
+                  );
+                })}
+                {equipmentFeeCents > 0 && (
+                  <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-medium">
+                    <span>Equipment</span>
+                    <span>{pesos(equipmentFeeCents)}</span>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          {baseCents > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Total: <span className="font-medium text-foreground">{pesos(netCents)}</span>
+              {discountCents > 0 && (
+                <span className="text-xs"> ({pesos(baseCents)} − promo {pesos(discountCents)})</span>
+              )}
+            </p>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

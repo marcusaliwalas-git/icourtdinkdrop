@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdmin } from "@/lib/auth";
-import { createBookingSchema } from "@/lib/validation/booking";
+import { requireAdmin, requireStaff } from "@/lib/auth";
+import { createBookingSchema, bookingPaymentSchema, walkInBookingsSchema } from "@/lib/validation/booking";
+import { guidelineLines } from "@/lib/validation/venue";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,7 +12,10 @@ import {
   sendBookingCancellationEmail,
   sendBookingRescheduledEmail,
 } from "@/lib/email";
+import { getTenant } from "@/lib/tenant";
+import { tenantEmailBrand } from "@/lib/site-url";
 import type { RatePeriod } from "@/lib/pricing";
+import { applyCartPromotions } from "@/lib/promos/apply";
 
 function hhmmToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -40,19 +44,24 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
     return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
 
-  const { supabase } = await requireAdmin();
-  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes } = parsed.data;
+  const { supabase } = await requireStaff();
+  const { courtId, startsAt, durationMinutes, partySize, guestName, guestPhone, notes, paymentMethod, paymentRemarks, equipment } =
+    parsed.data;
 
-  const { data, error } = await supabase.rpc("create_booking", {
-    p_court_id: courtId,
-    p_starts_at: startsAt,
-    p_duration_minutes: durationMinutes,
+  // Routed through create_bookings (a cart of one) so a single walk-in can carry equipment rentals —
+  // create_booking has no equipment support. Same atomic capacity-checked flow as the batch walk-in.
+  const { data, error } = await supabase.rpc("create_bookings", {
+    p_segments: [{ court_id: courtId, starts_at: startsAt, duration_minutes: durationMinutes }],
     p_party_size: partySize,
     p_booked_by: null,
     p_guest_name: guestName ?? null,
     p_guest_phone: guestPhone ?? null,
     p_source: "walkin",
     p_notes: notes ?? null,
+    p_payment_method: paymentMethod ?? undefined,
+    // Remarks only make sense for an online payment; drop them otherwise.
+    p_payment_remarks: paymentMethod === "online" ? paymentRemarks || undefined : undefined,
+    p_equipment: (equipment ?? []).map((e) => ({ equipment_id: e.equipmentId, quantity: e.quantity })),
   });
 
   if (error) {
@@ -60,12 +69,110 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
     return { success: false, ...mapped };
   }
 
+  const created = (Array.isArray(data) ? data : []) as {
+    id: string;
+    court_id: string;
+    time_range: string;
+    total_cents: number;
+    booking_group_id: string | null;
+    booked_as_member: boolean;
+    reference_code: string;
+  }[];
+
+  // Apply any venue promotions (e.g. a daytime free-hour deal on a long single-court session). Walk-ins
+  // have no booker, so they're never a "member" for eligibility. Best-effort — never blocks the booking.
+  const tenant = await getTenant();
+  if (tenant && created.length) {
+    await applyCartPromotions(supabase, {
+      venueId: tenant.id,
+      timezone: tenant.timezone,
+      isMember: created[0].booked_as_member,
+      bookings: created.map((b) => ({
+        id: b.id,
+        court_id: b.court_id,
+        time_range: b.time_range,
+        total_cents: b.total_cents,
+        booking_group_id: b.booking_group_id,
+      })),
+    });
+  }
+
   revalidatePath("/admin/calendar");
-  return { success: true, referenceCode: data.reference_code };
+  return { success: true, referenceCode: created[0]?.reference_code ?? "" };
 }
 
-export async function adminCancelBooking(bookingId: string): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+export type WalkInBookingsResult =
+  | { success: true; count: number }
+  | { success: false; code: string; message: string };
+
+/** Book several walk-in slots at once — e.g. an open-play session holding 4 courts from 7-11pm.
+ * Reuses create_bookings (atomic; groups the slots under one booking_group_id) with source 'walkin'
+ * and one payment recorded for the whole batch. Contiguous hours are merged into one segment per
+ * court by the caller. */
+export async function createWalkInBookings(input: unknown): Promise<WalkInBookingsResult> {
+  const parsed = walkInBookingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const { supabase } = await requireStaff();
+  const { segments, equipment, guestName, guestPhone, paymentMethod, paymentRemarks } = parsed.data;
+
+  const { data, error } = await supabase.rpc("create_bookings", {
+    p_segments: segments.map((s) => ({
+      court_id: s.courtId,
+      starts_at: s.startsAt,
+      duration_minutes: s.durationMinutes,
+    })),
+    p_party_size: 1,
+    p_booked_by: null,
+    p_guest_name: guestName,
+    p_guest_phone: guestPhone || null,
+    p_source: "walkin",
+    p_payment_method: paymentMethod ?? undefined,
+    // Remarks only make sense for an online payment; drop them otherwise.
+    p_payment_remarks: paymentMethod === "online" ? paymentRemarks || undefined : undefined,
+    p_equipment: (equipment ?? []).map((e) => ({ equipment_id: e.equipmentId, quantity: e.quantity })),
+  });
+
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+
+  // Apply venue promotions to the batch (e.g. a multi-court discount across the courts booked together).
+  const created = (Array.isArray(data) ? data : []) as {
+    id: string;
+    court_id: string;
+    time_range: string;
+    total_cents: number;
+    booking_group_id: string | null;
+    booked_as_member: boolean;
+  }[];
+  const tenant = await getTenant();
+  if (tenant && created.length) {
+    await applyCartPromotions(supabase, {
+      venueId: tenant.id,
+      timezone: tenant.timezone,
+      isMember: created[0].booked_as_member,
+      bookings: created.map((b) => ({
+        id: b.id,
+        court_id: b.court_id,
+        time_range: b.time_range,
+        total_cents: b.total_cents,
+        booking_group_id: b.booking_group_id,
+      })),
+    });
+  }
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/front-desk");
+  return { success: true, count: Array.isArray(data) ? data.length : segments.length };
+}
+
+export async function adminCancelBooking(bookingId: string, reason?: string): Promise<WalkInResult> {
+  const { supabase } = await requireStaff();
   const { data, error } = await supabase.rpc("cancel_booking", { p_booking_id: bookingId });
   if (error) {
     const mapped = mapBookingError(error);
@@ -89,6 +196,8 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
       endsAt: end,
       timezone,
       referenceCode: data.reference_code,
+      reason: reason?.trim() || null,
+      ...tenantEmailBrand(await getTenant()),
     });
   }
 
@@ -97,8 +206,48 @@ export async function adminCancelBooking(bookingId: string): Promise<WalkInResul
   return { success: true, referenceCode: "" };
 }
 
+/**
+ * Void a booking — an admin correction for a mistaken/duplicate entry or a past booking that needs
+ * removing after it started (the normal cancel is blocked once a booking begins). The booking is
+ * kept for the audit trail but drops out of realized revenue and frees its slot. Requires a reason;
+ * no customer email is sent (a "voided" notice for a past booking would only confuse).
+ */
+export async function adminVoidBooking(bookingId: string, reason: string): Promise<WalkInResult> {
+  const { supabase } = await requireAdmin(); // void is a financial/audit correction — admin only
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    return { success: false, code: "REASON_REQUIRED", message: "Enter a reason for voiding this booking." };
+  }
+  const { error } = await supabase.rpc("void_booking", { p_booking_id: bookingId, p_reason: trimmed });
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/admin/sales");
+  return { success: true, referenceCode: "" };
+}
+
+/** Front-desk check-in: toggle a booking's "arrived" marker. A customer must be confirmed to check
+ * in (verify payment via Confirm first); undo clears it. */
+export async function adminSetCheckedIn(bookingId: string, checkedIn: boolean): Promise<WalkInResult> {
+  const { supabase } = await requireStaff();
+  const { error } = await supabase.rpc("set_booking_checked_in", {
+    p_booking_id: bookingId,
+    p_checked_in: checkedIn,
+  });
+  if (error) {
+    const mapped = mapBookingError(error);
+    return { success: false, ...mapped };
+  }
+  revalidatePath("/admin/front-desk");
+  revalidatePath("/admin/calendar");
+  return { success: true, referenceCode: "" };
+}
+
 export async function adminConfirmBooking(bookingId: string): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { data, error } = await supabase.rpc("confirm_booking", { p_booking_id: bookingId });
   if (error) {
     const mapped = mapBookingError(error);
@@ -115,6 +264,7 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
     const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
     const { start, end } = parseTstzRange(data.time_range);
 
+    const tenant = await getTenant();
     await sendBookingConfirmationEmail({
       to: recipientEmail,
       courtName: court?.name ?? "Court",
@@ -123,6 +273,8 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      guidelines: guidelineLines(tenant?.guidelines),
+      ...tenantEmailBrand(tenant),
     });
   }
 
@@ -135,6 +287,18 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
 export type BookingPaymentProof = {
   paymentReference: string | null;
   slipUrl: string | null;
+  paymentMethod: string | null;
+  paymentStatus: string | null;
+  paymentRemarks: string | null;
+  source: string | null;
+  // Booker identity for the calendar detail sheet. For a guest these come from the booking's own
+  // columns; for a member they fall back to the linked profile (full_name / mirrored email / phone).
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  referenceCode: string | null;
+  // Whether the viewer is a full admin (vs front-desk staff) — gates admin-only actions like Void.
+  isAdmin: boolean;
 };
 
 /** Storage has no select policy on the payment-slips bucket at all (see its migration) — a
@@ -142,15 +306,35 @@ export type BookingPaymentProof = {
  * client-side/anon read, so a slip can't be enumerated or guessed even by another admin's
  * browser session. */
 export async function getBookingPaymentProof(bookingId: string): Promise<BookingPaymentProof> {
-  const { supabase } = await requireAdmin();
+  const { supabase, role } = await requireStaff();
   const { data } = await supabase
     .from("bookings")
-    .select("payment_reference, payment_slip_path")
+    .select(
+      "payment_reference, payment_slip_path, payment_method, payment_status, payment_remarks, source, guest_name, guest_email, guest_phone, reference_code, profiles(full_name, email, phone)"
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
+  const profile = (data?.profiles ?? null) as unknown as {
+    full_name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
+  const base = {
+    paymentReference: data?.payment_reference ?? null,
+    paymentMethod: data?.payment_method ?? null,
+    paymentStatus: data?.payment_status ?? null,
+    paymentRemarks: data?.payment_remarks ?? null,
+    source: data?.source ?? null,
+    name: data?.guest_name ?? profile?.full_name ?? null,
+    email: data?.guest_email ?? profile?.email ?? null,
+    phone: data?.guest_phone ?? profile?.phone ?? null,
+    referenceCode: data?.reference_code ?? null,
+    isAdmin: role === "admin",
+  };
+
   if (!data?.payment_slip_path) {
-    return { paymentReference: data?.payment_reference ?? null, slipUrl: null };
+    return { ...base, slipUrl: null };
   }
 
   const adminClient = createAdminClient();
@@ -158,7 +342,95 @@ export async function getBookingPaymentProof(bookingId: string): Promise<Booking
     .from("payment-slips")
     .createSignedUrl(data.payment_slip_path, 60 * 10);
 
-  return { paymentReference: data.payment_reference, slipUrl: signed?.signedUrl ?? null };
+  return { ...base, slipUrl: signed?.signedUrl ?? null };
+}
+
+export type BookingCharges = {
+  /** Pure court price (total − coach − equipment, with any promo added back for the base line). */
+  courtCents: number;
+  coachName: string | null;
+  coachFeeCents: number;
+  equipment: { name: string; quantity: number; feeCents: number }[];
+  discountCents: number;
+  discountLabel: string | null;
+  totalCents: number;
+};
+
+/** Charge breakdown for the booking detail sheet, so staff can see what makes up the total —
+ * court, any coach, any equipment rental, and a promo discount. */
+export async function getBookingCharges(bookingId: string): Promise<BookingCharges | null> {
+  const { supabase } = await requireStaff();
+  const { data } = await supabase
+    .from("bookings")
+    .select(
+      "total_cents, discount_cents, discount_label, coach_fee_cents, coaches(name), booking_equipment(quantity, fee_cents, equipment(name))"
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!data) return null;
+
+  const coach = (data.coaches ?? null) as unknown as { name: string } | null;
+  const equipment = ((data.booking_equipment ?? []) as unknown as { quantity: number; fee_cents: number; equipment: { name: string } | null }[]).map(
+    (e) => ({ name: e.equipment?.name ?? "Equipment", quantity: e.quantity, feeCents: e.fee_cents })
+  );
+  const equipFee = equipment.reduce((s, e) => s + e.feeCents, 0);
+  const coachFee = data.coach_fee_cents ?? 0;
+  return {
+    // Court base reads as the pre-promo court price so the receipt is base → add-ons → discount → total.
+    courtCents: data.total_cents + data.discount_cents - coachFee - equipFee,
+    coachName: coach?.name ?? null,
+    coachFeeCents: coachFee,
+    equipment,
+    discountCents: data.discount_cents,
+    discountLabel: data.discount_label,
+    totalCents: data.total_cents,
+  };
+}
+
+/**
+ * Record (or clear) how a booking was paid, from the admin calendar — e.g. a walk-in paid cash or
+ * online, or an owner correcting it later. Setting a method settles the booking (online ->
+ * paid_online, cash/complimentary -> paid_at_venue); clearing it marks the booking unpaid
+ * (pay_at_venue). Scoped to admin-created bookings (walk-in/admin source) so it never touches the
+ * online customer slip-verification flow. RLS limits the write to an admin of the booking's venue.
+ */
+export async function setBookingPayment(input: unknown): Promise<WalkInResult> {
+  const parsed = bookingPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const { bookingId, paymentMethod, paymentRemarks } = parsed.data;
+
+  const paymentStatus = !paymentMethod
+    ? "pay_at_venue"
+    : paymentMethod === "online"
+      ? "paid_online"
+      : paymentMethod === "complimentary"
+        ? "complimentary"
+        : "paid_at_venue";
+
+  const { supabase } = await requireStaff();
+  const { data, error } = await supabase
+    .from("bookings")
+    .update({
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      // Remarks belong to an online payment; clear them for any other method.
+      payment_remarks: paymentMethod === "online" ? paymentRemarks || null : null,
+    })
+    .eq("id", bookingId)
+    .in("source", ["walkin", "admin"])
+    .select("id");
+
+  if (error) return { success: false, code: "UNKNOWN", message: error.message };
+  if (!data?.length) {
+    return { success: false, code: "NOT_ALLOWED", message: "This booking's payment can't be edited here." };
+  }
+
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/front-desk");
+  revalidatePath("/admin/bookings");
+  return { success: true, referenceCode: "" };
 }
 
 export interface RescheduleContext {
@@ -168,6 +440,11 @@ export interface RescheduleContext {
   timezone: string;
   durationMinutes: number;
   currentTotalCents: number;
+  // Promo discount currently on the booking — forfeited on reschedule, so the preview can show it.
+  currentDiscountCents: number;
+  // Coach + equipment fees folded into the total. They carry over unchanged (duration is kept), so the
+  // preview re-prices only the court and adds these back — never mistaking them for a court difference.
+  addonsCents: number;
   currentStartIso: string;
   maxAdvanceDays: number;
   isMember: boolean;
@@ -182,14 +459,20 @@ export interface RescheduleContext {
 /** Everything the reschedule UI needs to list valid new start times and preview the price
  * (via lib/pricing) live, without a round-trip per slot the admin tries. */
 export async function getRescheduleContext(bookingId: string): Promise<RescheduleContext | null> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
 
   const { data: booking } = await supabase
     .from("bookings")
-    .select("id, court_id, booked_by, total_cents, time_range")
+    .select("id, court_id, booked_by, total_cents, discount_cents, coach_fee_cents, time_range, booking_equipment(fee_cents)")
     .eq("id", bookingId)
     .maybeSingle();
   if (!booking) return null;
+
+  const equipmentFeeCents = ((booking.booking_equipment ?? []) as unknown as { fee_cents: number }[]).reduce(
+    (s, e) => s + e.fee_cents,
+    0
+  );
+  const addonsCents = (booking.coach_fee_cents ?? 0) + equipmentFeeCents;
 
   const { data: court } = await supabase
     .from("courts")
@@ -204,7 +487,7 @@ export async function getRescheduleContext(bookingId: string): Promise<Reschedul
     supabase.from("operating_hours").select("day_of_week, open_time, close_time").eq("venue_id", court.venue_id),
     supabase
       .from("court_rate_periods")
-      .select("start_time, end_time, hourly_rate_cents, member_rate_cents")
+      .select("start_time, end_time, hourly_rate_cents, member_rate_cents, days_of_week")
       .eq("court_id", booking.court_id),
   ]);
 
@@ -235,6 +518,8 @@ export async function getRescheduleContext(bookingId: string): Promise<Reschedul
     timezone: venue.timezone,
     durationMinutes: Math.round((end.getTime() - start.getTime()) / 60000),
     currentTotalCents: booking.total_cents,
+    currentDiscountCents: booking.discount_cents ?? 0,
+    addonsCents,
     currentStartIso: start.toISOString(),
     maxAdvanceDays: venue.max_advance_days,
     isMember,
@@ -259,7 +544,7 @@ export async function adminRescheduleBooking(
   newCourtId: string,
   newStartsAtIso: string
 ): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { data, error } = await supabase.rpc("reschedule_booking", {
     p_booking_id: bookingId,
     p_new_court_id: newCourtId,
@@ -288,6 +573,7 @@ export async function adminRescheduleBooking(
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      ...tenantEmailBrand(await getTenant()),
     });
   }
 
@@ -298,7 +584,7 @@ export async function adminRescheduleBooking(
 }
 
 export async function adminMarkNoShow(bookingId: string): Promise<WalkInResult> {
-  const { supabase } = await requireAdmin();
+  const { supabase } = await requireStaff();
   const { error } = await supabase.rpc("mark_no_show", { p_booking_id: bookingId });
   if (error) {
     const mapped = mapBookingError(error);

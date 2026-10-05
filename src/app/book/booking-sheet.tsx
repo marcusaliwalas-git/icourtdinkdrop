@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { createBookings, type CreatedBooking } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 import { buildIcs } from "@/lib/ics";
+import { formatInTimezone } from "@/lib/time";
 
 const MAX_SLIP_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_SLIP_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
@@ -37,6 +38,25 @@ export interface CoachOption {
   hourly_rate_cents: number;
 }
 
+// One rentable item + how many are free for the chosen time (from equipment_availability).
+interface EquipItem {
+  id: string;
+  name: string;
+  hourly_rate_cents: number;
+  member_hourly_rate_cents: number | null;
+  max_per_booking: number | null;
+  available: number;
+}
+
+// A venue receiving account, shown so the customer knows where to transfer the fee.
+export interface PaymentAccount {
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  remarks: string | null;
+  qr_url: string | null;
+}
+
 function pesos(cents: number) {
   return (cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 }
@@ -44,22 +64,62 @@ function pesos(cents: number) {
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
+// The account number, click-to-copy with a brief "Copied" confirmation. The number is also
+// select-all so it stays copyable by hand if the clipboard API is blocked.
+function CopyableAccountNumber({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable (e.g. insecure context) — the text stays selectable.
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy account number"
+      className="inline-flex items-center gap-1.5 font-mono text-foreground transition-colors hover:text-primary"
+    >
+      <span className="select-all">{value}</span>
+      <span className="font-sans text-xs text-muted-foreground">{copied ? "Copied ✓" : "Copy"}</span>
+    </button>
+  );
+}
+
 export function BookingSheet({
   open,
   onOpenChange,
   onBookingConfirmed,
   segments,
   totalCents,
+  discountCents = 0,
   coaches,
+  paymentAccounts,
   isLoggedIn,
+  timezone,
+  venueId,
+  isMember,
+  equipmentEnabled,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onBookingConfirmed?: () => void;
   segments: CartSegment[];
   totalCents: number;
+  /** Promo discount on the court subtotal (coaching is never discounted). */
+  discountCents?: number;
   coaches: CoachOption[];
+  paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
+  timezone: string;
+  venueId: string;
+  /** Active membership here — equipment is shown/charged at the member rate when true. */
+  isMember: boolean;
+  equipmentEnabled: boolean;
 }) {
   const router = useRouter();
   const [coachId, setCoachId] = useState("");
@@ -75,6 +135,38 @@ export function BookingSheet({
     whatsAppShareLink: string;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [equipItems, setEquipItems] = useState<EquipItem[]>([]);
+  const [equipQty, setEquipQty] = useState<Record<string, number>>({});
+  // One bounded key per sheet session: stable across retries of this attempt (so a double-tap
+  // de-dupes to the same booking), and a fixed length regardless of cart size — the old
+  // court@time-per-slot key blew past the 200-char limit at 3+ slots and failed validation.
+  const idempotencyKey = useMemo(() => `cart-${crypto.randomUUID()}`, []);
+
+  // The cart's overall time span — equipment is reserved and charged over this, matching the RPC.
+  const span = useMemo(() => {
+    if (segments.length === 0) return null;
+    const starts = segments.map((s) => new Date(s.startsAtIso).getTime());
+    const ends = segments.map((s) => new Date(s.startsAtIso).getTime() + s.durationMinutes * 60_000);
+    const start = Math.min(...starts);
+    const end = Math.max(...ends);
+    return { startIso: new Date(start).toISOString(), endIso: new Date(end).toISOString(), minutes: (end - start) / 60_000 };
+  }, [segments]);
+
+  // Live availability for the chosen span (only live rentals count against stock). Re-fetched when the
+  // sheet opens or the span changes.
+  useEffect(() => {
+    if (!open || !equipmentEnabled || !span) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const range = `["${span.startIso}","${span.endIso}")`;
+      const { data } = await supabase.rpc("equipment_availability", { p_venue: venueId, p_range: range });
+      if (!cancelled) setEquipItems((data ?? []) as EquipItem[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, equipmentEnabled, venueId, span]);
 
   if (segments.length === 0 && !confirmation) return null;
 
@@ -82,7 +174,29 @@ export function BookingSheet({
   const totalMinutes = segments.reduce((sum, s) => sum + s.durationMinutes, 0);
   const selectedCoach = coaches.find((c) => c.id === coachId) ?? null;
   const coachFeeCents = selectedCoach ? Math.round((selectedCoach.hourly_rate_cents * totalMinutes) / 60) : 0;
-  const grandTotalCents = totalCents + coachFeeCents;
+
+  // Equipment pricing — member rate when the booker is a member and the item has one; charged over the
+  // cart span (matches create_bookings). Each selected item is a receipt line.
+  const spanMinutes = span?.minutes ?? 0;
+  function equipRate(item: EquipItem): number {
+    return isMember && item.member_hourly_rate_cents != null ? item.member_hourly_rate_cents : item.hourly_rate_cents;
+  }
+  const equipLines = equipItems
+    .map((item) => ({ item, qty: equipQty[item.id] ?? 0 }))
+    .filter((l) => l.qty > 0)
+    .map((l) => ({ ...l, feeCents: Math.round((equipRate(l.item) * l.qty * spanMinutes) / 60) }));
+  const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
+
+  // The promo discount applies to the court subtotal only (never the coach or equipment fees), capped
+  // at the subtotal.
+  const appliedDiscountCents = Math.min(discountCents, totalCents);
+  const grandTotalCents = totalCents + coachFeeCents + equipmentFeeCents - appliedDiscountCents;
+
+  function setQty(item: EquipItem, next: number) {
+    const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+    const clamped = Math.max(0, Math.min(next, cap));
+    setEquipQty((prev) => ({ ...prev, [item.id]: clamped }));
+  }
 
   function handleClose(next: boolean) {
     if (!next) {
@@ -94,6 +208,7 @@ export function BookingSheet({
       setGuestEmail("");
       setPaymentReference("");
       setPaymentSlipFile(null);
+      setEquipQty({});
     }
     onOpenChange(next);
   }
@@ -127,12 +242,13 @@ export function BookingSheet({
           durationMinutes: s.durationMinutes,
         })),
         guestName: isLoggedIn ? undefined : guestName,
-        guestPhone: isLoggedIn ? undefined : guestPhone,
+        guestPhone: isLoggedIn ? undefined : guestPhone || undefined,
         guestEmail: isLoggedIn ? undefined : guestEmail || undefined,
         coachId: coachId || null,
+        equipment: equipLines.map((l) => ({ equipmentId: l.item.id, quantity: l.qty })),
         paymentReference: paymentReference.trim() || undefined,
         paymentSlipPath: path,
-        idempotencyKey: `cart-${segments.map((s) => `${s.courtId}@${s.startsAtIso}`).join(",")}-${Date.now()}`,
+        idempotencyKey,
       });
 
       if (!result.success) {
@@ -222,7 +338,10 @@ export function BookingSheet({
                 <li key={`${s.courtId}-${s.startsAtIso}`} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                   <span>
                     <span className="font-medium">{s.courtName}</span>
-                    <span className="text-muted-foreground"> · {s.label}</span>
+                    <span className="text-muted-foreground">
+                      {" · "}
+                      {formatInTimezone(new Date(s.startsAtIso), "EEE, MMM d", timezone)} · {s.label}
+                    </span>
                   </span>
                   <span className="text-muted-foreground">{pesos(s.estimateCents)}</span>
                 </li>
@@ -236,6 +355,27 @@ export function BookingSheet({
                   <span className="text-muted-foreground">{pesos(coachFeeCents)}</span>
                 </li>
               )}
+              {equipLines.map((l) => (
+                <li key={l.item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-medium">
+                      {l.qty}× {l.item.name}
+                    </span>
+                    <span className="text-muted-foreground"> · {spanMinutes / 60} hr</span>
+                  </span>
+                  <span className="text-muted-foreground">{pesos(l.feeCents)}</span>
+                </li>
+              ))}
+              {appliedDiscountCents > 0 && (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+                  <span>Promo discount</span>
+                  <span>−{pesos(appliedDiscountCents)}</span>
+                </li>
+              )}
+              <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-semibold">
+                <span>Total</span>
+                <span>{pesos(grandTotalCents)}</span>
+              </li>
             </ul>
 
             {coaches.length > 0 && (
@@ -252,6 +392,55 @@ export function BookingSheet({
               </div>
             )}
 
+            {equipmentEnabled && equipItems.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Label>Add equipment (optional)</Label>
+                <ul className="flex flex-col divide-y divide-border/60 rounded-md border">
+                  {equipItems.map((item) => {
+                    const qty = equipQty[item.id] ?? 0;
+                    const cap = Math.min(item.available, item.max_per_booking ?? item.available);
+                    const soldOut = item.available <= 0;
+                    return (
+                      <li key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <span className="min-w-0">
+                          <span className="font-medium">{item.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {pesos(equipRate(item))}/hr ·{" "}
+                            {soldOut ? "none free for this time" : `${item.available} available`}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-7"
+                            disabled={qty <= 0}
+                            onClick={() => setQty(item, qty - 1)}
+                            aria-label={`Fewer ${item.name}`}
+                          >
+                            −
+                          </Button>
+                          <span className="w-5 text-center tabular-nums">{qty}</span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-7"
+                            disabled={qty >= cap}
+                            onClick={() => setQty(item, qty + 1)}
+                            aria-label={`More ${item.name}`}
+                          >
+                            +
+                          </Button>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
             {!isLoggedIn && (
               <>
                 <div className="flex flex-col gap-1.5">
@@ -259,13 +448,12 @@ export function BookingSheet({
                   <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="guestPhone">Mobile number</Label>
+                  <Label htmlFor="guestPhone">Mobile number (optional)</Label>
                   <Input
                     id="guestPhone"
                     placeholder="09171234567"
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
-                    required
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -286,11 +474,33 @@ export function BookingSheet({
             )}
 
             <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(grandTotalCents)}</span>
-              {selectedCoach ? ` (courts ${pesos(totalCents)} + coach ${pesos(coachFeeCents)})` : ""}.{" "}
               {isLoggedIn && "Member rates applied if you're an active member. "}
-              Transfer this amount via GCash or bank transfer, then attach proof below (reference number optional).
+              Transfer the total above via GCash or bank transfer, then attach proof below (reference number optional).
             </p>
+
+            {paymentAccounts.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Send payment to
+                </p>
+                {paymentAccounts.map((acct, i) => (
+                  <div key={i} className="text-sm">
+                    <p className="font-medium">{acct.bank_name}</p>
+                    <p className="text-muted-foreground">{acct.account_name}</p>
+                    <CopyableAccountNumber value={acct.account_number} />
+                    {acct.remarks && <p className="text-xs text-muted-foreground">{acct.remarks}</p>}
+                    {acct.qr_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={acct.qr_url}
+                        alt={`${acct.bank_name} payment QR`}
+                        className="mt-2 size-40 rounded-lg border border-border bg-white object-contain p-1"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="paymentReference">Payment reference number (optional)</Label>
