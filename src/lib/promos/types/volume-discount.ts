@@ -17,7 +17,8 @@ const optionalTime = z.preprocess((v) => (v === "" || v == null ? undefined : v)
 const configSchema = z
   .object({
     // Threshold of DISTINCT courts in one booking/cart to qualify (two slots on the same court = 1).
-    minCourts: z.number().int().min(2),
+    // 1 means any booking qualifies — useful with a time window as a plain per-hour discount.
+    minCourts: z.number().int().min(1, "Minimum courts must be at least 1."),
     // Amount taken off each court-slot, per hour, in cents.
     centsOffPerHour: z.number().int().min(1),
     // Optional window ("HH:MM" local); both or neither.
@@ -82,7 +83,7 @@ export const volumeDiscount: PromoType<VolumeDiscountConfig> = {
       label: "Minimum courts",
       kind: "number",
       required: true,
-      help: "Distinct courts in one booking needed to qualify (e.g. 3).",
+      help: "Distinct courts needed to qualify (e.g. 3). Use 1 to apply to any booking.",
     },
     {
       name: "centsOffPerHour",

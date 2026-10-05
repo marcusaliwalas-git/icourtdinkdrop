@@ -56,6 +56,12 @@ describe("volumeDiscount.apply", () => {
     expect(lines.every((l) => l.promotionId === "p1" && l.label === "Multi-court discount")).toBe(true);
   });
 
+  it("minCourts 1 applies to any booking, even a single court", () => {
+    const parsed = volumeDiscount.configSchema.parse({ minCourts: 1, centsOffPerHour: 30000 });
+    const lines = volumeDiscount.apply(ctx([segment("a", 2, 100000)]), parsed, promo());
+    expect(lines.map((l) => l.cents)).toEqual([60000]); // ₱300/hr × 2h
+  });
+
   it("counts distinct courts — the same court twice is one court", () => {
     const c = ctx([segment("a", 1, 100000), segment("a", 1, 100000)]); // same court, 2 slots
     expect(volumeDiscount.apply(c, { minCourts: 2, centsOffPerHour: 5000 }, promo())).toEqual([]);
