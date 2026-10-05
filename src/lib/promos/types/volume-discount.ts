@@ -27,8 +27,10 @@ const configSchema = z
   .refine((c) => !!c.windowStart === !!c.windowEnd, {
     message: "Set both window start and end, or leave both blank.",
   })
-  .refine((c) => !c.windowStart || !c.windowEnd || c.windowEnd > c.windowStart, {
-    message: "Window end must be after start.",
+  // End earlier than start is allowed — it means the window runs overnight (e.g. 05:00–02:00). Only an
+  // identical start and end is meaningless.
+  .refine((c) => !c.windowStart || !c.windowEnd || c.windowEnd !== c.windowStart, {
+    message: "Window start and end can't be the same time.",
   });
 
 export type VolumeDiscountConfig = z.infer<typeof configSchema>;
@@ -45,13 +47,19 @@ export const volumeDiscount: PromoType<VolumeDiscountConfig> = {
   configSchema,
 
   apply(ctx, cfg, promo): DiscountLine[] {
-    // With a window set, a slot qualifies only if it falls entirely inside it (venue-local time).
+    // With a window set, a slot qualifies only if it falls entirely inside it (venue-local time). The
+    // window may run overnight (end < start, e.g. 05:00–02:00), so measure everything relative to the
+    // window start, modulo 24h: the slot fits iff its offset into the window plus its length stays
+    // within the window's length.
     const inWindow = (seg: (typeof ctx.segments)[number]): boolean => {
       if (!cfg.windowStart || !cfg.windowEnd) return true;
+      const ws = toMinutes(cfg.windowStart);
+      const we = toMinutes(cfg.windowEnd);
+      const windowLen = (((we - ws) % 1440) + 1440) % 1440; // 1..1439 (start !== end is enforced)
       const local = toZonedTime(new Date(seg.startsAtIso), ctx.timezone);
       const startMin = local.getHours() * 60 + local.getMinutes();
-      const endMin = startMin + seg.durationMinutes;
-      return startMin >= toMinutes(cfg.windowStart) && endMin <= toMinutes(cfg.windowEnd);
+      const offset = (((startMin - ws) % 1440) + 1440) % 1440;
+      return offset + seg.durationMinutes <= windowLen;
     };
 
     const eligible = ctx.segments.map((seg, i) => ({ seg, i })).filter(({ seg }) => inWindow(seg));
@@ -93,7 +101,7 @@ export const volumeDiscount: PromoType<VolumeDiscountConfig> = {
       name: "windowEnd",
       label: "Window end (optional)",
       kind: "time",
-      help: "e.g. 18:00–21:00 for an evening-only deal.",
+      help: "e.g. 18:00–21:00. An earlier end means overnight — e.g. 05:00–02:00.",
     },
   ],
 };

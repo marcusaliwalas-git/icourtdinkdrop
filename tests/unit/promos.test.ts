@@ -101,6 +101,22 @@ describe("volumeDiscount.apply with a time window", () => {
     const lines = volumeDiscount.apply(ctx([late, eve("b"), eve("c")]), evening, promo());
     expect(lines).toEqual([]); // only 2 in-window courts
   });
+
+  it("supports an overnight window (end earlier than start, e.g. 05:00–02:00)", () => {
+    const overnight = { minCourts: 2, centsOffPerHour: 5000, windowStart: "05:00", windowEnd: "02:00" };
+    // 23:00 Manila = 15:00 UTC; a 2h slot runs 23:00–01:00, inside the 05:00→02:00 window.
+    const night = (court: string) => segAt(court, "2026-10-05T15:00:00.000Z", 2);
+    const lines = volumeDiscount.apply(ctx([night("a"), night("b")]), overnight, promo());
+    expect(lines.map((l) => l.cents)).toEqual([10000, 10000]);
+  });
+
+  it("excludes slots in the overnight gap (02:00–05:00)", () => {
+    const overnight = { minCourts: 2, centsOffPerHour: 5000, windowStart: "05:00", windowEnd: "02:00" };
+    // 03:00 Manila = 19:00 UTC the previous day; 03:00–05:00 is outside 05:00→02:00.
+    const gap = (court: string) => segAt(court, "2026-10-04T19:00:00.000Z", 2);
+    const lines = volumeDiscount.apply(ctx([gap("a"), gap("b")]), overnight, promo());
+    expect(lines).toEqual([]);
+  });
 });
 
 describe("freeHours.apply", () => {
