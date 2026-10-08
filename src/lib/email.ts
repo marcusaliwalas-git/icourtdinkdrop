@@ -529,6 +529,41 @@ export async function sendMembershipRejectedEmail(details: MembershipRejectedDet
   });
 }
 
+export interface MembershipRequestReceivedDetails {
+  to: string;
+  tier: string;
+  amountCents: number;
+  isRenewal: boolean;
+  siteUrl: string;
+  brandName: string;
+  fromEmail: string | null;
+  logoUrl: string | null;
+}
+
+/** Confirms to the member that their membership request + payment was received and is being reviewed. */
+export async function sendMembershipRequestReceivedEmail(details: MembershipRequestReceivedDetails) {
+  const kind = details.isRenewal ? "renewal" : "membership";
+  await safeSend({
+    from: fromAddress(details.brandName, details.fromEmail),
+    to: details.to,
+    subject: `We got your ${kind} request: ${details.tier}`,
+    html: renderEmail({
+      heading: "We got your request 🎾",
+      intro: [
+        `Thanks! We received your ${details.tier} ${kind} request at ${details.brandName} and are reviewing your payment.`,
+        "You'll get another email once it's approved — no action needed for now.",
+      ],
+      detailRows: [
+        { label: "Tier", value: details.tier },
+        { label: "Amount", value: pesos(details.amountCents) },
+      ],
+      logoUrl: details.logoUrl,
+      brandName: details.brandName,
+      button: { label: "View membership", url: membershipUrl(details.siteUrl) },
+    }),
+  });
+}
+
 /** Password reset — sent through the tenant's own sender (Resend) with a link we generate server-side
  * via the admin API, so it matches the venue's branding and works cross-device (token_hash flow). */
 export async function sendPasswordResetEmail(details: {
