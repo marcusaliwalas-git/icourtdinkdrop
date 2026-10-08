@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTenant } from "@/lib/tenant";
 import { getAdminEmails } from "@/lib/admin-recipients";
 import { tenantEmailBrand } from "@/lib/site-url";
-import { sendAdminMembershipRequestEmail } from "@/lib/email";
+import { sendAdminMembershipRequestEmail, sendMembershipRequestReceivedEmail } from "@/lib/email";
 import { parseFieldSpecs, validateMembershipDetails } from "@/lib/memberships/fields";
 
 export type SubmitResult = { success: true } | { success: false; message: string };
@@ -138,9 +138,21 @@ export async function submitMembershipRequest(input: {
           })
         )
       );
+
+      // Confirm to the member that we received their request + payment (best-effort).
+      const memberEmail = profile?.email ?? user.email ?? null;
+      if (memberEmail) {
+        await sendMembershipRequestReceivedEmail({
+          to: memberEmail,
+          tier: request.tier,
+          amountCents: request.amount_cents,
+          isRenewal: (count ?? 0) > 0,
+          ...brand,
+        });
+      }
     }
   } catch (err) {
-    console.error("Failed to send membership request admin email:", err);
+    console.error("Failed to send membership request emails:", err);
   }
 
   revalidatePath("/membership");
