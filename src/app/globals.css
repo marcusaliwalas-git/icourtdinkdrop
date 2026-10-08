@@ -368,6 +368,41 @@
   --radius: 0.75rem;
 }
 
+/* Blue Green Gray — a clean, classy light theme tuned to the D&C Sports Hub crest: deep-navy text and
+   hairlines (the shield outline), a royal-blue primary (the blue panels) for buttons/links/focus, and
+   forest-green accent surfaces (the green panels and "SPORTS HUB" wordmark) for hover/active states, all
+   on crisp white cards over a faint cool-gray canvas. A light theme, so the layout drops the `.dark`
+   class. */
+:root[data-theme="bgg"] {
+  --background: #f6f8fb;
+  --foreground: #152a4f;
+  --card: #ffffff;
+  --card-foreground: #152a4f;
+  --popover: #ffffff;
+  --popover-foreground: #152a4f;
+  --primary: #2456c9;
+  --primary-foreground: #ffffff;
+  --secondary: #e9edf5;
+  --secondary-foreground: #152a4f;
+  --muted: #eef1f6;
+  --muted-foreground: #566076;
+  --accent: #e2f0e5;
+  --accent-foreground: #14532d;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: rgb(21 42 79 / 12%);
+  --input: rgb(21 42 79 / 16%);
+  --ring: #2456c9;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #152a4f;
+  --sidebar-primary: #2456c9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e2f0e5;
+  --sidebar-accent-foreground: #14532d;
+  --sidebar-border: rgb(21 42 79 / 12%);
+  --sidebar-ring: #2456c9;
+  --radius: 0.75rem;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
