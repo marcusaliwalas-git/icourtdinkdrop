@@ -11,6 +11,7 @@ import {
 } from "@/lib/promos/engine";
 import { volumeDiscount } from "@/lib/promos/types/volume-discount";
 import { freeHours } from "@/lib/promos/types/free-hours";
+import { hourBundle } from "@/lib/promos/types/hour-bundle";
 
 const TZ = "Asia/Manila";
 
@@ -173,6 +174,57 @@ describe("freeHours.apply", () => {
       { courtId: "a", startsAtIso: "2026-10-05T15:00:00.000Z", durationMinutes: 240, baseTotalCents: 180000 },
     ]);
     expect(freeHours.apply(late, overnight, fhPromo)).toEqual([]);
+  });
+});
+
+describe("hourBundle.apply", () => {
+  // 16:00 Manila = 08:00 UTC. Base ₱450/hr.
+  function seg(court: string, startUtcIso: string, hours: number): PromoSegment {
+    return { courtId: court, startsAtIso: startUtcIso, durationMinutes: hours * 60, baseTotalCents: hours * 45000 };
+  }
+  const bundle = { windowStart: "16:00", windowEnd: "19:00", bundleHours: 3, bundlePriceCents: 100000 }; // 3h for ₱1,000
+  const bPromo = promo({ type: "hour_bundle", name: "Evening block" });
+
+  it("prices an exact 3-hour booking at the flat bundle price", () => {
+    // base 3×₱450 = ₱1,350; discount brings it to ₱1,000.
+    const lines = hourBundle.apply(ctx([seg("a", "2026-10-05T08:00:00.000Z", 3)]), bundle, bPromo);
+    expect(lines).toHaveLength(1);
+    expect(135000 - lines[0].cents).toBe(100000); // net total = ₱1,000
+  });
+
+  it("charges extra hours beyond the bundle at the normal rate", () => {
+    // 4h booking, base ₱1,800. First 3h = ₱1,000, 4th hour = ₱450 → net ₱1,450.
+    const lines = hourBundle.apply(ctx([seg("a", "2026-10-05T08:00:00.000Z", 4)]), bundle, bPromo);
+    expect(180000 - lines[0].cents).toBe(145000);
+  });
+
+  it("skips a booking shorter than the bundle", () => {
+    expect(hourBundle.apply(ctx([seg("a", "2026-10-05T08:00:00.000Z", 2)]), bundle, bPromo)).toEqual([]);
+  });
+
+  it("skips when the bundle block doesn't fit in the window", () => {
+    // 17:00 start + 3h = 20:00, past the 19:00 window end.
+    expect(hourBundle.apply(ctx([seg("a", "2026-10-05T09:00:00.000Z", 3)]), bundle, bPromo)).toEqual([]);
+  });
+
+  it("doesn't apply when it isn't a saving (block already cheaper than the bundle price)", () => {
+    // A ₱300/hr court → 3h base ₱900, below the ₱1,000 bundle, so no discount.
+    const cheap: PromoSegment = { courtId: "a", startsAtIso: "2026-10-05T08:00:00.000Z", durationMinutes: 180, baseTotalCents: 90000 };
+    expect(hourBundle.apply(ctx([cheap]), bundle, bPromo)).toEqual([]);
+  });
+
+  it("is dynamic — a 4-hour ₱1,200 bundle lands at ₱1,200", () => {
+    const b4 = { windowStart: "16:00", windowEnd: "20:00", bundleHours: 4, bundlePriceCents: 120000 };
+    const lines = hourBundle.apply(ctx([seg("a", "2026-10-05T08:00:00.000Z", 4)]), b4, bPromo);
+    expect(180000 - lines[0].cents).toBe(120000);
+  });
+
+  it("supports an overnight window", () => {
+    // Window 22:00–01:00 (3h); a 22:00 (14:00 UTC) 3-hour booking qualifies.
+    const night = { windowStart: "22:00", windowEnd: "01:00", bundleHours: 3, bundlePriceCents: 100000 };
+    const lines = hourBundle.apply(ctx([seg("a", "2026-10-05T14:00:00.000Z", 3)]), night, bPromo);
+    expect(lines).toHaveLength(1);
+    expect(135000 - lines[0].cents).toBe(100000);
   });
 });
 
