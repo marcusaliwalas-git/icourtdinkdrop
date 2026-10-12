@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createBookings, type CreatedBooking } from "./actions";
+import type { DiscountSummaryLine } from "@/lib/promos/engine";
 import { createClient } from "@/lib/supabase/client";
 import { buildIcs } from "@/lib/ics";
 import { formatInTimezone } from "@/lib/time";
@@ -98,6 +99,7 @@ export function BookingSheet({
   segments,
   totalCents,
   discountCents = 0,
+  discountBreakdown = [],
   coaches,
   paymentAccounts,
   isLoggedIn,
@@ -113,6 +115,8 @@ export function BookingSheet({
   totalCents: number;
   /** Promo discount on the court subtotal (coaching is never discounted). */
   discountCents?: number;
+  /** Per-promo breakdown of that discount, so the summary can name each promo applied. */
+  discountBreakdown?: DiscountSummaryLine[];
   coaches: CoachOption[];
   paymentAccounts: PaymentAccount[];
   isLoggedIn: boolean;
@@ -376,12 +380,25 @@ export function BookingSheet({
                   <span className="text-muted-foreground">{pesos(l.feeCents)}</span>
                 </li>
               ))}
-              {appliedDiscountCents > 0 && (
-                <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
-                  <span>Promo discount</span>
-                  <span>−{pesos(appliedDiscountCents)}</span>
-                </li>
-              )}
+              {appliedDiscountCents > 0 &&
+                (discountBreakdown.length > 0 ? (
+                  discountBreakdown.map((d) => (
+                    <li
+                      key={d.promotionId}
+                      className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground"
+                    >
+                      <span>
+                        Promo discount <span className="text-xs">({d.typeLabel})</span>
+                      </span>
+                      <span>−{pesos(d.cents)}</span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground">
+                    <span>Promo discount</span>
+                    <span>−{pesos(appliedDiscountCents)}</span>
+                  </li>
+                ))}
               <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-semibold">
                 <span>Total</span>
                 <span>{pesos(grandTotalCents)}</span>
