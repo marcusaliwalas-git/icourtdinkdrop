@@ -85,6 +85,7 @@ export default async function AdminLayout({
                 { href: "/admin/homepage", label: "Home page" },
                 { href: "/admin/announcement", label: "Announcement" },
                 { href: "/admin/footer", label: "Footer" },
+                { href: "/admin/help", label: "Help" },
               ]}
             />
           )}
