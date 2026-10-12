@@ -20,6 +20,7 @@ export const percentDiscount: PromoType<PercentDiscountConfig> = {
   key: "percent_discount",
   label: "Percentage off (min hours)",
   scope: "booking", // evaluated per court-slot
+  ownsAudience: true, // audience is chosen via the "Applies to" field, not the shared Eligibility control
   configSchema,
 
   apply(ctx, cfg, promo): DiscountLine[] {

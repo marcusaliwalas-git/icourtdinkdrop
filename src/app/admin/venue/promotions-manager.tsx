@@ -33,7 +33,12 @@ export type Promotion = {
 
 // Lightweight view of the registry for the form (key + label + fields), newest-friendly: a new promo
 // type shows up here automatically.
-const TYPE_OPTIONS = Object.values(PROMO_TYPES).map((t) => ({ key: t.key, label: t.label, formFields: t.formFields }));
+const TYPE_OPTIONS = Object.values(PROMO_TYPES).map((t) => ({
+  key: t.key,
+  label: t.label,
+  formFields: t.formFields,
+  ownsAudience: t.ownsAudience ?? false,
+}));
 
 const ELIGIBILITY_OPTIONS = [
   { value: "all", label: "Everyone" },
@@ -41,6 +46,15 @@ const ELIGIBILITY_OPTIONS = [
   { value: "guests_only", label: "Guests only (not on member rate)" },
 ];
 const ELIGIBILITY_SHORT: Record<string, string> = { all: "Everyone", members_only: "Members", guests_only: "Guests" };
+
+// Short labels for the per-type "Applies to" audience buckets, used in the table's audience column
+// for types that do their own targeting (see PromoType.ownsAudience).
+const AUDIENCE_SHORT: Record<string, string> = { guest: "Guests", signed_in: "Signed-in", member: "Members" };
+function audienceSummary(promo: Promotion): string {
+  const a = promo.config?.audiences;
+  if (!Array.isArray(a) || a.length === 0) return "Everyone";
+  return a.map((v) => AUDIENCE_SHORT[String(v)] ?? String(v)).join(", ");
+}
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const peso = (cents: number) => `₱${(cents / 100).toLocaleString("en-PH", { maximumFractionDigits: 0 })}`;
@@ -133,20 +147,26 @@ function ConfigField({ field, config }: { field: PromoFormField; config?: Record
   );
 }
 
-/** The common (type-independent) fields, shared by the add and edit forms. */
-function CommonFields({ promo }: { promo?: Promotion }) {
+/** The common (type-independent) fields, shared by the add and edit forms. When the chosen type does
+ * its own audience targeting (`hideEligibility`), the shared Eligibility control is replaced by a
+ * hidden "all" so the type's "Applies to" field is the single audience gate. */
+function CommonFields({ promo, hideEligibility }: { promo?: Promotion; hideEligibility?: boolean }) {
   return (
     <>
-      <div className="flex flex-col gap-1.5">
-        <Label>Eligibility</Label>
-        <select name="eligibility" defaultValue={promo?.eligibility ?? "all"} className={selectClass()}>
-          {ELIGIBILITY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      {hideEligibility ? (
+        <input type="hidden" name="eligibility" value="all" />
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          <Label>Eligibility</Label>
+          <select name="eligibility" defaultValue={promo?.eligibility ?? "all"} className={selectClass()}>
+            {ELIGIBILITY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <Label>Priority</Label>
         <Input type="number" name="priority" step={1} defaultValue={promo?.priority ?? 0} />
@@ -176,6 +196,8 @@ function configSummary(promo: Promotion): string {
   const type = PROMO_TYPES[promo.type];
   if (!type) return promo.type;
   const parts = type.formFields.map((f) => {
+    // The audience field is shown in its own column for types that own audience — don't repeat it.
+    if (type.ownsAudience && f.kind === "checkboxes") return null;
     const v = promo.config?.[f.name];
     if (f.kind === "money" && typeof v === "number") return `${f.label}: ${peso(v)}`;
     if (v == null || (Array.isArray(v) && v.length === 0)) return null;
@@ -261,7 +283,7 @@ function PromoDialog({ venueId, promo, trigger }: { venueId: string; promo?: Pro
           {selectedType?.formFields.map((f) => (
             <ConfigField key={f.name} field={f} config={promo?.config} />
           ))}
-          <CommonFields promo={promo} />
+          <CommonFields promo={promo} hideEligibility={selectedType?.ownsAudience} />
 
           {error && <p className="text-sm text-destructive sm:col-span-2">{error}</p>}
 
@@ -314,7 +336,9 @@ export function PromotionsManager({ venueId, promotions }: { venueId: string; pr
                 <TableCell className="max-w-[14rem] truncate text-xs text-muted-foreground" title={configSummary(p)}>
                   {configSummary(p)}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{ELIGIBILITY_SHORT[p.eligibility] ?? p.eligibility}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {type?.ownsAudience ? audienceSummary(p) : ELIGIBILITY_SHORT[p.eligibility] ?? p.eligibility}
+                </TableCell>
                 <TableCell>
                   {p.active ? (
                     <Badge variant="secondary">Active</Badge>

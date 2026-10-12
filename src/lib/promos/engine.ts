@@ -74,6 +74,9 @@ export interface PromoType<C = unknown> {
   apply(ctx: PromoContext, cfg: C, promo: PromoRow): DiscountLine[];
   /** Declarative form spec so the admin UI can be generated instead of hand-built per type. */
   formFields: PromoFormField[];
+  /** This type does its own audience targeting (e.g. a per-booking "Applies to" field), so the
+   * admin form hides the shared Eligibility control to avoid two overlapping audience gates. */
+  ownsAudience?: boolean;
 }
 
 export function eligibilityMatches(p: PromoRow, isMember: boolean): boolean {
