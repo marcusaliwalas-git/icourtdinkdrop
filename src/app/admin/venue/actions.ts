@@ -708,6 +708,7 @@ function buildPromoConfig(
     if (f.kind === "money") raw[f.name] = Math.round(Number(formData.get(f.name)) * 100);
     else if (f.kind === "number") raw[f.name] = Number(formData.get(f.name));
     else if (f.kind === "weekdays") raw[f.name] = formData.getAll(f.name).map(Number);
+    else if (f.kind === "checkboxes") raw[f.name] = formData.getAll(f.name).map(String);
     else raw[f.name] = String(formData.get(f.name) ?? "");
   }
   const parsed = type.configSchema.safeParse(raw);

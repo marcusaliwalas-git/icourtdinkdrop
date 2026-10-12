@@ -138,6 +138,7 @@ export function WalkInSheet({
           venueId,
           timezone,
           isMember: false,
+          isSignedIn: false, // walk-ins have no account
           onDateIso,
           segments: [{ courtId, startsAtIso, durationMinutes, baseTotalCents: base }],
         },

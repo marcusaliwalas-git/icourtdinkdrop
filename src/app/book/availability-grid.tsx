@@ -263,6 +263,7 @@ export function AvailabilityGrid({
         venueId,
         timezone,
         isMember,
+        isSignedIn: isLoggedIn,
         onDateIso,
         segments: segments.map((s) => ({
           courtId: s.courtId,
@@ -274,7 +275,7 @@ export function AvailabilityGrid({
       promotions.map(toPromoRow)
     );
     return totalDiscountCents(lines);
-  }, [promotions, segments, venueId, timezone, isMember]);
+  }, [promotions, segments, venueId, timezone, isMember, isLoggedIn]);
 
   // Per-hour price for every open cell — the court's rate for that hour, honouring time-of-day
   // rate periods and the member rate. Same computation as the cart total and the server, so the

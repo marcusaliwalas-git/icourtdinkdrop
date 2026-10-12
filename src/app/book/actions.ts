@@ -257,6 +257,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
       venueId,
       timezone,
       isMember: created[0].booked_as_member,
+      isSignedIn: created[0].booked_by != null,
       bookings: created.map((b) => ({
         id: b.id,
         court_id: b.court_id,

@@ -168,6 +168,7 @@ export function CalendarViews({
         venueId,
         timezone,
         isMember: false,
+        isSignedIn: false, // multi-walk-in has no account
         onDateIso,
         segments: segments.map((s) => ({
           courtId: s.courtId,
