@@ -315,7 +315,14 @@ export function BookingActionSheet({
               ))}
               {charges.discountCents > 0 && (
                 <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
-                  <span>{charges.discountLabel ?? "Promo discount"}</span>
+                  <span>
+                    Promo discount
+                    {charges.discountTypeLabel
+                      ? ` (${charges.discountTypeLabel})`
+                      : charges.discountLabel
+                        ? ` (${charges.discountLabel})`
+                        : ""}
+                  </span>
                   <span>−{pesos(charges.discountCents)}</span>
                 </li>
               )}
