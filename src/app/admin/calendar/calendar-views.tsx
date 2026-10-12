@@ -180,7 +180,7 @@ export function CalendarViews({
       },
       promoRows
     );
-    return { discountCents: totalDiscountCents(lines), discountBreakdown: summarizeDiscountsByPromo(lines, promoRows) };
+    return { discountCents: totalDiscountCents(lines), discountBreakdown: summarizeDiscountsByPromo(lines) };
   }, [promotions, segments, venueId, timezone]);
   const netTotalCents = totalCents - discountCents;
 

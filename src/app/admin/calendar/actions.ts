@@ -16,7 +16,6 @@ import { getTenant } from "@/lib/tenant";
 import { tenantEmailBrand } from "@/lib/site-url";
 import type { RatePeriod } from "@/lib/pricing";
 import { applyCartPromotions } from "@/lib/promos/apply";
-import { PROMO_TYPES } from "@/lib/promos/registry";
 
 function hhmmToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -355,9 +354,8 @@ export type BookingCharges = {
   coachFeeCents: number;
   equipment: { name: string; quantity: number; feeCents: number }[];
   discountCents: number;
+  /** The applied promo's name, for the discount line. */
   discountLabel: string | null;
-  /** The applied promo's type label (e.g. "Hour bundle (flat price)"), for the discount line. */
-  discountTypeLabel: string | null;
   totalCents: number;
 };
 
@@ -368,16 +366,12 @@ export async function getBookingCharges(bookingId: string): Promise<BookingCharg
   const { data } = await supabase
     .from("bookings")
     .select(
-      "total_cents, discount_cents, discount_label, coach_fee_cents, coaches(name), promotions(type), booking_equipment(quantity, fee_cents, equipment(name))"
+      "total_cents, discount_cents, discount_label, coach_fee_cents, coaches(name), booking_equipment(quantity, fee_cents, equipment(name))"
     )
     .eq("id", bookingId)
     .maybeSingle();
   if (!data) return null;
 
-  const promo = (data.promotions ?? null) as unknown as { type: string } | null;
-  const discountTypeLabel = promo
-    ? (PROMO_TYPES[promo.type as keyof typeof PROMO_TYPES]?.label ?? promo.type)
-    : null;
   const coach = (data.coaches ?? null) as unknown as { name: string } | null;
   const equipment = ((data.booking_equipment ?? []) as unknown as { quantity: number; fee_cents: number; equipment: { name: string } | null }[]).map(
     (e) => ({ name: e.equipment?.name ?? "Equipment", quantity: e.quantity, feeCents: e.fee_cents })
@@ -392,7 +386,6 @@ export async function getBookingCharges(bookingId: string): Promise<BookingCharg
     equipment,
     discountCents: data.discount_cents,
     discountLabel: data.discount_label,
-    discountTypeLabel,
     totalCents: data.total_cents,
   };
 }

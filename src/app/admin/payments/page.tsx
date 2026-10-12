@@ -3,7 +3,6 @@ import { getTenant } from "@/lib/tenant";
 import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
 import { getBookingPaymentProof } from "@/app/admin/calendar/actions";
-import { PROMO_TYPES } from "@/lib/promos/registry";
 import { PaymentGroupCard } from "./payment-group-card";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +20,6 @@ type Row = {
   guest_email: string | null;
   courts: { name: string } | null;
   profiles: { full_name: string | null; email: string | null } | null;
-  promotions: { type: string } | null;
   booking_equipment: { quantity: number; fee_cents: number; equipment: { name: string } | null }[] | null;
 };
 
@@ -34,7 +32,7 @@ export default async function AdminPaymentsPage() {
   const { data } = await supabase
     .from("bookings")
     .select(
-      "id, booking_group_id, time_range, total_cents, discount_cents, discount_label, reference_code, guest_name, guest_phone, guest_email, courts!inner(name, venue_id), profiles(full_name, email), promotions(type), booking_equipment(quantity, fee_cents, equipment(name))"
+      "id, booking_group_id, time_range, total_cents, discount_cents, discount_label, reference_code, guest_name, guest_phone, guest_email, courts!inner(name, venue_id), profiles(full_name, email), booking_equipment(quantity, fee_cents, equipment(name))"
     )
     .eq("courts.venue_id", venue.id)
     .eq("status", "pending")
@@ -83,15 +81,9 @@ export default async function AdminPaymentsPage() {
         }))
       );
       const discountCents = rows.reduce((sum, r) => sum + r.discount_cents, 0);
-      // One promo label when the whole cart used the same one; otherwise a generic line.
-      const discounted = rows.filter((r) => r.discount_cents > 0);
-      const labels = Array.from(new Set(discounted.map((r) => r.discount_label).filter(Boolean)));
-      const typeLabels = Array.from(
-        new Set(
-          discounted
-            .filter((r) => r.promotions)
-            .map((r) => PROMO_TYPES[r.promotions!.type as keyof typeof PROMO_TYPES]?.label ?? r.promotions!.type)
-        )
+      // One promo name when the whole cart used the same one; otherwise a generic line.
+      const labels = Array.from(
+        new Set(rows.filter((r) => r.discount_cents > 0).map((r) => r.discount_label).filter(Boolean))
       );
       return {
         key,
@@ -103,7 +95,6 @@ export default async function AdminPaymentsPage() {
         equipmentLines,
         discountCents,
         discountLabel: labels.length === 1 ? (labels[0] as string) : null,
-        discountTypeLabel: typeLabels.length === 1 ? typeLabels[0] : null,
         totalCents: rows.reduce((sum, r) => sum + r.total_cents, 0),
         referenceCode: first.reference_code,
         paymentReference: proof.paymentReference,

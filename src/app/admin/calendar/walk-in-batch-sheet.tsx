@@ -215,9 +215,7 @@ export function WalkInBatchSheet({
                     key={d.promotionId}
                     className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground"
                   >
-                    <span>
-                      Promo discount ({d.typeLabel})
-                    </span>
+                    <span>Promo discount ({d.name})</span>
                     <span>−{pesos(d.cents)}</span>
                   </li>
                 ))
