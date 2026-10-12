@@ -388,7 +388,7 @@ export function BookingSheet({
                       className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-muted-foreground"
                     >
                       <span>
-                        Promo discount <span className="text-xs">({d.typeLabel})</span>
+                        Promo discount <span className="text-xs">({d.name})</span>
                       </span>
                       <span>−{pesos(d.cents)}</span>
                     </li>

@@ -147,7 +147,7 @@ export function WalkInSheet({
         promoRows
       );
       discount = totalDiscountCents(lines);
-      breakdown = summarizeDiscountsByPromo(lines, promoRows);
+      breakdown = summarizeDiscountsByPromo(lines);
     }
     return { baseCents: base, discountCents: discount, discountBreakdown: breakdown };
   }, [pricing, courtId, startsAtIso, durationHours, timezone, promotions, venueId]);
@@ -305,7 +305,7 @@ export function WalkInSheet({
             <div className="flex flex-col gap-0.5 text-sm text-muted-foreground">
               {discountBreakdown.map((d) => (
                 <p key={d.promotionId} className="flex items-center justify-between gap-2 text-xs">
-                  <span>Promo discount ({d.typeLabel})</span>
+                  <span>Promo discount ({d.name})</span>
                   <span>−{pesos(d.cents)}</span>
                 </p>
               ))}

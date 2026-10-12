@@ -275,7 +275,7 @@ export function AvailabilityGrid({
       },
       promoRows
     );
-    return { discountCents: totalDiscountCents(lines), discountBreakdown: summarizeDiscountsByPromo(lines, promoRows) };
+    return { discountCents: totalDiscountCents(lines), discountBreakdown: summarizeDiscountsByPromo(lines) };
   }, [promotions, segments, venueId, timezone, isMember, isLoggedIn]);
 
   // Per-hour price for every open cell — the court's rate for that hour, honouring time-of-day
