@@ -124,7 +124,7 @@ export default async function AdminVenuePage() {
   const { data: equipment } = equipmentEnabled
     ? await supabase
         .from("equipment")
-        .select("id, name, hourly_rate_cents, member_hourly_rate_cents, stock, max_per_booking, is_active")
+        .select("id, name, hourly_rate_cents, member_hourly_rate_cents, pricing_mode, stock, max_per_booking, is_active")
         .eq("venue_id", venue.id)
         .order("sort_order")
         .order("name")
