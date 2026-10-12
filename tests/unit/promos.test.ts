@@ -245,6 +245,22 @@ describe("percentDiscount.apply", () => {
     expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false }), cfg, pPromo)).toEqual([]);
   });
 
+  it("sums hours across different courts to qualify, discounting every slot", () => {
+    const cfg: PercentDiscountConfig = { minHours: 3, percentOff: 15, audiences: ["guest"] };
+    // Court a, b, c each 1 hour = 3 hours total → qualifies; each ₱1,000 slot gets 15% = ₱150.
+    const lines = percentDiscount.apply(
+      ctx([seg("a", 1), seg("b", 1), seg("c", 1)], { isSignedIn: false }),
+      cfg,
+      pPromo
+    );
+    expect(lines.map((l) => l.cents)).toEqual([15000, 15000, 15000]);
+  });
+
+  it("skips when the combined hours across courts are still below the minimum", () => {
+    const cfg: PercentDiscountConfig = { minHours: 3, percentOff: 15, audiences: ["guest"] };
+    expect(percentDiscount.apply(ctx([seg("a", 1), seg("b", 1)], { isSignedIn: false }), cfg, pPromo)).toEqual([]);
+  });
+
   it("targets guests only — not a signed-in user or member", () => {
     const cfg: PercentDiscountConfig = { minHours: 1, percentOff: 10, audiences: ["guest"] };
     expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false, isMember: false }), cfg, pPromo)).toHaveLength(1);

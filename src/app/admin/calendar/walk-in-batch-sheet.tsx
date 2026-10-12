@@ -24,6 +24,7 @@ import { createWalkInBookings } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 import { formatInTimezone } from "@/lib/time";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+import type { DiscountSummaryLine } from "@/lib/promos/engine";
 import type { WalkInSegment } from "./selection";
 
 // Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
@@ -50,6 +51,7 @@ export function WalkInBatchSheet({
   segments,
   totalCents,
   discountCents = 0,
+  discountBreakdown = [],
   timezone,
   venueId,
   equipmentEnabled,
@@ -61,6 +63,8 @@ export function WalkInBatchSheet({
   totalCents?: number;
   /** Promo discount on the batch (shown so staff collect the right amount). */
   discountCents?: number;
+  /** Per-promo breakdown of that discount, so the summary can name each promo applied. */
+  discountBreakdown?: DiscountSummaryLine[];
   timezone: string;
   venueId: string;
   equipmentEnabled: boolean;
@@ -203,12 +207,26 @@ export function WalkInBatchSheet({
                 <span className="shrink-0 text-muted-foreground">{pesos(l.feeCents)}</span>
               </li>
             ))}
-            {totalCents != null && discountCents > 0 && (
-              <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
-                <span>Promo discount</span>
-                <span>−{pesos(discountCents)}</span>
-              </li>
-            )}
+            {totalCents != null &&
+              discountCents > 0 &&
+              (discountBreakdown.length > 0 ? (
+                discountBreakdown.map((d) => (
+                  <li
+                    key={d.promotionId}
+                    className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground"
+                  >
+                    <span>
+                      Promo discount ({d.typeLabel})
+                    </span>
+                    <span>−{pesos(d.cents)}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+                  <span>Promo discount</span>
+                  <span>−{pesos(discountCents)}</span>
+                </li>
+              ))}
             {totalCents != null && (
               <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-medium">
                 <span>Total</span>

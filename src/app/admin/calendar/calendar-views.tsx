@@ -12,7 +12,7 @@ import { mergeSelection, slotKey, type SelectedSlot } from "./selection";
 import { rateForHour, type RatePeriod } from "@/lib/pricing";
 import { toZonedTime } from "date-fns-tz";
 import { formatInTimezone } from "@/lib/time";
-import { evaluatePromotions, toPromoRow, totalDiscountCents, type PromoRowInput } from "@/lib/promos/engine";
+import { evaluatePromotions, toPromoRow, totalDiscountCents, summarizeDiscountsByPromo, type PromoRowInput } from "@/lib/promos/engine";
 
 export interface CourtPricing {
   baseHourlyRateCents: number;
@@ -160,9 +160,10 @@ export function CalendarViews({
 
   // Promo discount for the batch (walk-ins are never "member" for eligibility). Mirrors the server's
   // authoritative apply so the running total and sheet show what will actually be charged.
-  const discountCents = useMemo(() => {
-    if (promotions.length === 0 || segments.length === 0) return 0;
+  const { discountCents, discountBreakdown } = useMemo(() => {
+    if (promotions.length === 0 || segments.length === 0) return { discountCents: 0, discountBreakdown: [] };
     const onDateIso = formatInTimezone(new Date(segments[0].startsAt), "yyyy-MM-dd", timezone);
+    const promoRows = promotions.map(toPromoRow);
     const lines = evaluatePromotions(
       {
         venueId,
@@ -177,9 +178,9 @@ export function CalendarViews({
           baseTotalCents: s.estimateCents ?? 0,
         })),
       },
-      promotions.map(toPromoRow)
+      promoRows
     );
-    return totalDiscountCents(lines);
+    return { discountCents: totalDiscountCents(lines), discountBreakdown: summarizeDiscountsByPromo(lines, promoRows) };
   }, [promotions, segments, venueId, timezone]);
   const netTotalCents = totalCents - discountCents;
 
@@ -324,6 +325,7 @@ export function CalendarViews({
         segments={segments}
         totalCents={totalCents}
         discountCents={discountCents}
+        discountBreakdown={discountBreakdown}
         timezone={timezone}
         venueId={venueId}
         equipmentEnabled={equipmentEnabled}

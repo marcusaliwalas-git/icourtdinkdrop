@@ -156,6 +156,33 @@ export function totalDiscountCents(lines: DiscountLine[]): number {
   return lines.reduce((t, l) => t + l.cents, 0);
 }
 
+/** One row per applied promo for a cart summary: its name, its type's human label, and the combined
+ * discount across every slot it touched. Order follows first appearance in `lines`. */
+export interface DiscountSummaryLine {
+  promotionId: string;
+  name: string; // the admin-given promo name
+  typeLabel: string; // the promo type's label, e.g. "Hour bundle (flat price)"
+  cents: number;
+}
+
+/** Group discount lines by promotion so the cart can show which promo(s) applied and for how much. */
+export function summarizeDiscountsByPromo(lines: DiscountLine[], promos: PromoRow[]): DiscountSummaryLine[] {
+  const byId = new Map<string, DiscountSummaryLine>();
+  for (const l of lines) {
+    const existing = byId.get(l.promotionId);
+    if (existing) {
+      existing.cents += l.cents;
+      continue;
+    }
+    const promo = promos.find((p) => p.id === l.promotionId);
+    const typeLabel = promo
+      ? (PROMO_TYPES[promo.type as keyof typeof PROMO_TYPES] as PromoType | undefined)?.label ?? promo.type
+      : "";
+    byId.set(l.promotionId, { promotionId: l.promotionId, name: l.label, typeLabel, cents: l.cents });
+  }
+  return [...byId.values()];
+}
+
 /** A `promotions` table row as loaded from the DB (snake_case). The shape `toPromoRow` maps from —
  * exported so UI components can type the promotions they pass around. */
 export interface PromoRowInput {

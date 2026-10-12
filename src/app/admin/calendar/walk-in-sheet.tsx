@@ -26,7 +26,7 @@ import { formatInTimezone } from "@/lib/time";
 import { DURATION_HOURS, durationLabel } from "@/lib/booking-durations";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import { computeBookingTotalCents } from "@/lib/pricing";
-import { evaluatePromotions, toPromoRow, totalDiscountCents, type PromoRowInput } from "@/lib/promos/engine";
+import { evaluatePromotions, toPromoRow, totalDiscountCents, summarizeDiscountsByPromo, type PromoRowInput } from "@/lib/promos/engine";
 import { type CourtPricing } from "./calendar-views";
 
 // Sentinel for "booked now, pays at the venue later" (Radix Select can't use an empty value).
@@ -117,9 +117,9 @@ export function WalkInSheet({
 
   // Price + any promo discount for the chosen duration, so staff collect the right amount. Walk-ins
   // have no booker, so they're never "member" for pricing/eligibility — mirrors the server.
-  const { baseCents, discountCents } = useMemo(() => {
+  const { baseCents, discountCents, discountBreakdown } = useMemo(() => {
     const p = pricing[courtId];
-    if (!p || !startsAtIso) return { baseCents: 0, discountCents: 0 };
+    if (!p || !startsAtIso) return { baseCents: 0, discountCents: 0, discountBreakdown: [] };
     const durationMinutes = Number(durationHours) * 60;
     const base = computeBookingTotalCents({
       startsAtIso,
@@ -131,8 +131,10 @@ export function WalkInSheet({
       isMember: false,
     });
     let discount = 0;
+    let breakdown: ReturnType<typeof summarizeDiscountsByPromo> = [];
     if (promotions.length > 0) {
       const onDateIso = formatInTimezone(new Date(startsAtIso), "yyyy-MM-dd", timezone);
+      const promoRows = promotions.map(toPromoRow);
       const lines = evaluatePromotions(
         {
           venueId,
@@ -142,11 +144,12 @@ export function WalkInSheet({
           onDateIso,
           segments: [{ courtId, startsAtIso, durationMinutes, baseTotalCents: base }],
         },
-        promotions.map(toPromoRow)
+        promoRows
       );
       discount = totalDiscountCents(lines);
+      breakdown = summarizeDiscountsByPromo(lines, promoRows);
     }
-    return { baseCents: base, discountCents: discount };
+    return { baseCents: base, discountCents: discount, discountBreakdown: breakdown };
   }, [pricing, courtId, startsAtIso, durationHours, timezone, promotions, venueId]);
   const netCents = baseCents - discountCents;
 
@@ -299,12 +302,20 @@ export function WalkInSheet({
           )}
 
           {baseCents > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Total: <span className="font-medium text-foreground">{pesos(netCents)}</span>
-              {discountCents > 0 && (
-                <span className="text-xs"> ({pesos(baseCents)} − promo {pesos(discountCents)})</span>
-              )}
-            </p>
+            <div className="flex flex-col gap-0.5 text-sm text-muted-foreground">
+              {discountBreakdown.map((d) => (
+                <p key={d.promotionId} className="flex items-center justify-between gap-2 text-xs">
+                  <span>Promo discount ({d.typeLabel})</span>
+                  <span>−{pesos(d.cents)}</span>
+                </p>
+              ))}
+              <p>
+                Total: <span className="font-medium text-foreground">{pesos(netCents)}</span>
+                {discountCents > 0 && discountBreakdown.length === 0 && (
+                  <span className="text-xs"> ({pesos(baseCents)} − promo {pesos(discountCents)})</span>
+                )}
+              </p>
+            </div>
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}

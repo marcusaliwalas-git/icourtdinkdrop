@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { formatInTimezone } from "@/lib/time";
 import { computeBookingTotalCents, type RatePeriod } from "@/lib/pricing";
-import { evaluatePromotions, toPromoRow, totalDiscountCents } from "@/lib/promos/engine";
+import { evaluatePromotions, toPromoRow, totalDiscountCents, summarizeDiscountsByPromo } from "@/lib/promos/engine";
 import { BookingSheet, type CartSegment, type CoachOption, type PaymentAccount } from "./booking-sheet";
 import type { TimeRow } from "@/lib/availability";
 
@@ -255,9 +255,10 @@ export function AvailabilityGrid({
 
   // Live promo estimate — mirrors the server's authoritative discount so the cart shows the real
   // price before paying. Uses the same real membership status as the base estimate.
-  const discountCents = useMemo(() => {
-    if (promotions.length === 0 || segments.length === 0) return 0;
+  const { discountCents, discountBreakdown } = useMemo(() => {
+    if (promotions.length === 0 || segments.length === 0) return { discountCents: 0, discountBreakdown: [] };
     const onDateIso = formatInTimezone(new Date(segments[0].startsAtIso), "yyyy-MM-dd", timezone);
+    const promoRows = promotions.map(toPromoRow);
     const lines = evaluatePromotions(
       {
         venueId,
@@ -272,9 +273,9 @@ export function AvailabilityGrid({
           baseTotalCents: s.estimateCents,
         })),
       },
-      promotions.map(toPromoRow)
+      promoRows
     );
-    return totalDiscountCents(lines);
+    return { discountCents: totalDiscountCents(lines), discountBreakdown: summarizeDiscountsByPromo(lines, promoRows) };
   }, [promotions, segments, venueId, timezone, isMember, isLoggedIn]);
 
   // Per-hour price for every open cell — the court's rate for that hour, honouring time-of-day
@@ -607,6 +608,7 @@ export function AvailabilityGrid({
         segments={segments}
         totalCents={totalCents}
         discountCents={discountCents}
+        discountBreakdown={discountBreakdown}
         coaches={coaches}
         paymentAccounts={paymentAccounts}
         isLoggedIn={isLoggedIn}
