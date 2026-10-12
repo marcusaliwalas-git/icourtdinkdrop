@@ -12,6 +12,7 @@ import {
 import { volumeDiscount } from "@/lib/promos/types/volume-discount";
 import { freeHours } from "@/lib/promos/types/free-hours";
 import { hourBundle } from "@/lib/promos/types/hour-bundle";
+import { percentDiscount, type PercentDiscountConfig } from "@/lib/promos/types/percent-discount";
 
 const TZ = "Asia/Manila";
 
@@ -25,7 +26,7 @@ function segment(courtId: string, hours: number, baseCents: number): PromoSegmen
 }
 
 function ctx(segments: PromoSegment[], overrides: Partial<PromoContext> = {}): PromoContext {
-  return { venueId: "v1", timezone: TZ, isMember: false, onDateIso: "2026-10-05", segments, ...overrides };
+  return { venueId: "v1", timezone: TZ, isMember: false, isSignedIn: false, onDateIso: "2026-10-05", segments, ...overrides };
 }
 
 function promo(overrides: Partial<PromoRow> = {}): PromoRow {
@@ -225,6 +226,50 @@ describe("hourBundle.apply", () => {
     const lines = hourBundle.apply(ctx([seg("a", "2026-10-05T14:00:00.000Z", 3)]), night, bPromo);
     expect(lines).toHaveLength(1);
     expect(135000 - lines[0].cents).toBe(100000);
+  });
+});
+
+describe("percentDiscount.apply", () => {
+  const pPromo = promo({ type: "percent_discount", name: "Long-session 15%" });
+  // base ₱1,000/segment; 15% = ₱150.
+  const seg = (court: string, hours: number) => segment(court, hours, 100000);
+
+  it("takes the percentage off a qualifying-length booking", () => {
+    const cfg: PercentDiscountConfig = { minHours: 2, percentOff: 15, audiences: ["guest"] };
+    const lines = percentDiscount.apply(ctx([seg("a", 3)], { isSignedIn: false }), cfg, pPromo);
+    expect(lines.map((l) => l.cents)).toEqual([15000]);
+  });
+
+  it("skips a booking below the minimum hours", () => {
+    const cfg: PercentDiscountConfig = { minHours: 3, percentOff: 15, audiences: ["guest"] };
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false }), cfg, pPromo)).toEqual([]);
+  });
+
+  it("targets guests only — not a signed-in user or member", () => {
+    const cfg: PercentDiscountConfig = { minHours: 1, percentOff: 10, audiences: ["guest"] };
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false, isMember: false }), cfg, pPromo)).toHaveLength(1);
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: true, isMember: false }), cfg, pPromo)).toEqual([]);
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: true, isMember: true }), cfg, pPromo)).toEqual([]);
+  });
+
+  it("targets signed-in non-members only", () => {
+    const cfg: PercentDiscountConfig = { minHours: 1, percentOff: 10, audiences: ["signed_in"] };
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: true, isMember: false }), cfg, pPromo)).toHaveLength(1);
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false }), cfg, pPromo)).toEqual([]);
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: true, isMember: true }), cfg, pPromo)).toEqual([]);
+  });
+
+  it("targets members only", () => {
+    const cfg: PercentDiscountConfig = { minHours: 1, percentOff: 10, audiences: ["member"] };
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: true, isMember: true }), cfg, pPromo)).toHaveLength(1);
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false }), cfg, pPromo)).toEqual([]);
+  });
+
+  it("applies to several audiences at once", () => {
+    const cfg: PercentDiscountConfig = { minHours: 1, percentOff: 10, audiences: ["guest", "member"] };
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false }), cfg, pPromo)).toHaveLength(1);
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: true, isMember: true }), cfg, pPromo)).toHaveLength(1);
+    expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: true, isMember: false }), cfg, pPromo)).toEqual([]);
   });
 });
 

@@ -87,6 +87,7 @@ export async function createWalkInBooking(input: unknown): Promise<WalkInResult>
       venueId: tenant.id,
       timezone: tenant.timezone,
       isMember: created[0].booked_as_member,
+      isSignedIn: false, // walk-ins have no account
       bookings: created.map((b) => ({
         id: b.id,
         court_id: b.court_id,
@@ -155,6 +156,7 @@ export async function createWalkInBookings(input: unknown): Promise<WalkInBookin
       venueId: tenant.id,
       timezone: tenant.timezone,
       isMember: created[0].booked_as_member,
+      isSignedIn: false, // walk-ins have no account
       bookings: created.map((b) => ({
         id: b.id,
         court_id: b.court_id,

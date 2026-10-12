@@ -34,8 +34,17 @@ export interface PromoContext {
   venueId: string;
   timezone: string;
   isMember: boolean;
+  // Whether the booker has an account (vs a walk-in/guest). Lets a type target guest / signed-in /
+  // member distinctly (isMember implies isSignedIn). Walk-ins are never signed in.
+  isSignedIn: boolean;
   onDateIso: string; // venue-local date ('YYYY-MM-DD') the booking is for — for the schedule window
   segments: PromoSegment[];
+}
+
+/** The booker's audience bucket, derived from the context — used by types that target audiences. */
+export type PromoAudience = "guest" | "signed_in" | "member";
+export function audienceOf(ctx: { isMember: boolean; isSignedIn: boolean }): PromoAudience {
+  return ctx.isMember ? "member" : ctx.isSignedIn ? "signed_in" : "guest";
 }
 
 /** A discount to subtract from one segment. Always positive and already capped to the segment base. */
@@ -49,9 +58,9 @@ export interface DiscountLine {
 export interface PromoFormField {
   name: string; // config key
   label: string;
-  kind: "number" | "money" | "time" | "select" | "weekdays";
+  kind: "number" | "money" | "time" | "select" | "weekdays" | "checkboxes";
   required?: boolean;
-  options?: { value: string; label: string }[];
+  options?: { value: string; label: string }[]; // for 'select' and 'checkboxes'
   help?: string;
 }
 

@@ -93,6 +93,29 @@ function ConfigField({ field, config }: { field: PromoFormField; config?: Record
       </div>
     );
   }
+  if (field.kind === "checkboxes") {
+    const picked = Array.isArray(current) ? (current as string[]) : [];
+    return (
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label>{field.label}</Label>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          {(field.options ?? []).map((o) => (
+            <label key={o.value} className="flex items-center gap-1.5 text-sm">
+              <input
+                type="checkbox"
+                name={field.name}
+                value={o.value}
+                defaultChecked={picked.includes(o.value)}
+                className="size-4"
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+        {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
+      </div>
+    );
+  }
   // weekdays
   const selected = Array.isArray(current) ? (current as number[]) : [];
   return (
@@ -156,6 +179,10 @@ function configSummary(promo: Promotion): string {
     const v = promo.config?.[f.name];
     if (f.kind === "money" && typeof v === "number") return `${f.label}: ${peso(v)}`;
     if (v == null || (Array.isArray(v) && v.length === 0)) return null;
+    if (f.kind === "checkboxes" && Array.isArray(v)) {
+      const labels = v.map((val) => f.options?.find((o) => o.value === val)?.label ?? String(val));
+      return `${f.label}: ${labels.join(", ")}`;
+    }
     return `${f.label}: ${Array.isArray(v) ? v.map((i) => DAYS[i] ?? i).join("/") : v}`;
   });
   return parts.filter(Boolean).join(" · ");

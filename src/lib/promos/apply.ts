@@ -23,9 +23,9 @@ export interface CreatedBookingRow {
  */
 export async function applyCartPromotions(
   supabase: SupabaseServer,
-  params: { venueId: string; timezone: string; isMember: boolean; bookings: CreatedBookingRow[] }
+  params: { venueId: string; timezone: string; isMember: boolean; isSignedIn: boolean; bookings: CreatedBookingRow[] }
 ): Promise<{ totalDiscountCents: number }> {
-  const { venueId, timezone, isMember, bookings } = params;
+  const { venueId, timezone, isMember, isSignedIn, bookings } = params;
   if (bookings.length === 0) return { totalDiscountCents: 0 };
 
   try {
@@ -49,7 +49,7 @@ export async function applyCartPromotions(
     // Schedule window is checked against the booking's venue-local date.
     const onDateIso = formatInTimezone(new Date(segments[0].startsAtIso), "yyyy-MM-dd", timezone);
     const lines = evaluatePromotions(
-      { venueId, timezone, isMember, onDateIso, segments },
+      { venueId, timezone, isMember, isSignedIn, onDateIso, segments },
       promoRows.map(toPromoRow)
     );
     if (lines.length === 0) return { totalDiscountCents: 0 };
