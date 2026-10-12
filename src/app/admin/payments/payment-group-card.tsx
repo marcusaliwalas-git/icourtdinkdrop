@@ -29,6 +29,7 @@ export function PaymentGroupCard({
   equipmentLines,
   discountCents,
   discountLabel,
+  discountTypeLabel,
   totalCents,
   referenceCode,
   paymentReference,
@@ -42,6 +43,7 @@ export function PaymentGroupCard({
   equipmentLines: EquipmentLine[];
   discountCents: number;
   discountLabel: string | null;
+  discountTypeLabel: string | null;
   totalCents: number;
   referenceCode: string;
   paymentReference: string | null;
@@ -108,7 +110,10 @@ export function PaymentGroupCard({
           ))}
           {discountCents > 0 && (
             <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
-              <span>{discountLabel ?? "Promo discount"}</span>
+              <span>
+                Promo discount
+                {discountTypeLabel ? ` (${discountTypeLabel})` : discountLabel ? ` (${discountLabel})` : ""}
+              </span>
               <span>−{pesos(discountCents)}</span>
             </li>
           )}
