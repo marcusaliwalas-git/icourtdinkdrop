@@ -640,6 +640,7 @@ export type Database = {
           max_per_booking: number | null
           member_hourly_rate_cents: number | null
           name: string
+          pricing_mode: string
           sort_order: number
           stock: number
           venue_id: string
@@ -652,6 +653,7 @@ export type Database = {
           max_per_booking?: number | null
           member_hourly_rate_cents?: number | null
           name: string
+          pricing_mode?: string
           sort_order?: number
           stock: number
           venue_id: string
@@ -664,6 +666,7 @@ export type Database = {
           max_per_booking?: number | null
           member_hourly_rate_cents?: number | null
           name?: string
+          pricing_mode?: string
           sort_order?: number
           stock?: number
           venue_id?: string
@@ -1854,6 +1857,7 @@ export type Database = {
           max_per_booking: number
           member_hourly_rate_cents: number
           name: string
+          pricing_mode: string
         }[]
       }
       equipment_rented_qty: {

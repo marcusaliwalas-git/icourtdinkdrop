@@ -598,6 +598,7 @@ type EquipmentFields = {
   name: string;
   hourlyRateCents: number;
   memberHourlyRateCents: number | null;
+  pricingMode: "hourly" | "flat";
   stock: number;
   maxPerBooking: number | null;
   isActive: boolean;
@@ -608,18 +609,19 @@ function readEquipment(formData: FormData): EquipmentFields | { error: string } 
   const hourlyRateCents = Math.round(Number(formData.get("hourlyRate")) * 100);
   const memberRaw = String(formData.get("memberRate") ?? "").trim();
   const memberHourlyRateCents = memberRaw === "" ? null : Math.round(Number(memberRaw) * 100);
+  const pricingMode = formData.get("pricingMode") === "flat" ? "flat" : "hourly";
   const stock = Number(formData.get("stock"));
   const maxRaw = String(formData.get("maxPerBooking") ?? "").trim();
   const maxPerBooking = maxRaw === "" ? null : Number(maxRaw);
   const isActive = formData.get("isActive") === "on" || formData.get("isActive") === "true";
   if (!name) return { error: "Give the equipment a name." };
-  if (!Number.isFinite(hourlyRateCents) || hourlyRateCents < 0) return { error: "Enter a valid hourly rate." };
+  if (!Number.isFinite(hourlyRateCents) || hourlyRateCents < 0) return { error: "Enter a valid rate." };
   if (memberHourlyRateCents !== null && (!Number.isFinite(memberHourlyRateCents) || memberHourlyRateCents < 0))
     return { error: "Enter a valid member rate, or leave it blank." };
   if (!Number.isInteger(stock) || stock < 0) return { error: "Enter how many units you have." };
   if (maxPerBooking !== null && (!Number.isInteger(maxPerBooking) || maxPerBooking <= 0))
     return { error: "Max per booking must be a positive whole number, or blank." };
-  return { name, hourlyRateCents, memberHourlyRateCents, stock, maxPerBooking, isActive };
+  return { name, hourlyRateCents, memberHourlyRateCents, pricingMode, stock, maxPerBooking, isActive };
 }
 
 export async function addEquipment(formData: FormData): Promise<ActionResult> {
@@ -633,6 +635,7 @@ export async function addEquipment(formData: FormData): Promise<ActionResult> {
       name: parsed.name,
       hourly_rate_cents: parsed.hourlyRateCents,
       member_hourly_rate_cents: parsed.memberHourlyRateCents,
+      pricing_mode: parsed.pricingMode,
       stock: parsed.stock,
       max_per_booking: parsed.maxPerBooking,
       is_active: parsed.isActive,
@@ -659,6 +662,7 @@ export async function updateEquipment(id: string, formData: FormData): Promise<A
       name: parsed.name,
       hourly_rate_cents: parsed.hourlyRateCents,
       member_hourly_rate_cents: parsed.memberHourlyRateCents,
+      pricing_mode: parsed.pricingMode,
       stock: parsed.stock,
       max_per_booking: parsed.maxPerBooking,
       is_active: parsed.isActive,

@@ -44,6 +44,7 @@ interface EquipItem {
   name: string;
   hourly_rate_cents: number;
   member_hourly_rate_cents: number | null;
+  pricing_mode: "hourly" | "flat";
   max_per_booking: number | null;
   available: number;
 }
@@ -181,10 +182,16 @@ export function BookingSheet({
   function equipRate(item: EquipItem): number {
     return isMember && item.member_hourly_rate_cents != null ? item.member_hourly_rate_cents : item.hourly_rate_cents;
   }
+  // Flat-rate items charge once per rental (rate × qty); hourly items are charged over the cart span.
+  function equipFee(item: EquipItem, qty: number): number {
+    return item.pricing_mode === "flat"
+      ? equipRate(item) * qty
+      : Math.round((equipRate(item) * qty * spanMinutes) / 60);
+  }
   const equipLines = equipItems
     .map((item) => ({ item, qty: equipQty[item.id] ?? 0 }))
     .filter((l) => l.qty > 0)
-    .map((l) => ({ ...l, feeCents: Math.round((equipRate(l.item) * l.qty * spanMinutes) / 60) }));
+    .map((l) => ({ ...l, feeCents: equipFee(l.item, l.qty) }));
   const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
 
   // The promo discount applies to the court subtotal only (never the coach or equipment fees), capped
@@ -361,7 +368,10 @@ export function BookingSheet({
                     <span className="font-medium">
                       {l.qty}× {l.item.name}
                     </span>
-                    <span className="text-muted-foreground"> · {spanMinutes / 60} hr</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {l.item.pricing_mode === "flat" ? "flat rate" : `${spanMinutes / 60} hr`}
+                    </span>
                   </span>
                   <span className="text-muted-foreground">{pesos(l.feeCents)}</span>
                 </li>
@@ -405,7 +415,8 @@ export function BookingSheet({
                         <span className="min-w-0">
                           <span className="font-medium">{item.name}</span>
                           <span className="block text-xs text-muted-foreground">
-                            {pesos(equipRate(item))}/hr ·{" "}
+                            {pesos(equipRate(item))}
+                            {item.pricing_mode === "flat" ? " flat" : "/hr"} ·{" "}
                             {soldOut ? "none free for this time" : `${item.available} available`}
                           </span>
                         </span>

@@ -21,10 +21,16 @@ export type Equipment = {
   name: string;
   hourly_rate_cents: number;
   member_hourly_rate_cents: number | null;
+  pricing_mode: "hourly" | "flat";
   stock: number;
   max_per_booking: number | null;
   is_active: boolean;
 };
+
+/** Rate suffix for a pricing mode — "/hr" for hourly, "flat" for a once-per-rental charge. */
+function rateUnit(mode: "hourly" | "flat") {
+  return mode === "flat" ? "flat" : "/hr";
+}
 
 function pesos(cents: number) {
   return `₱${(cents / 100).toLocaleString("en-PH", { maximumFractionDigits: 0 })}`;
@@ -84,7 +90,19 @@ function EquipmentDialog({
             <Input id="eqName" name="name" defaultValue={item?.name} placeholder="e.g. Ball machine" required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="eqRate">Hourly rate (₱)</Label>
+            <Label htmlFor="eqPricing">Charge</Label>
+            <select
+              id="eqPricing"
+              name="pricingMode"
+              defaultValue={item?.pricing_mode ?? "hourly"}
+              className="h-9 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <option value="hourly">Per hour (× booking length)</option>
+              <option value="flat">Flat rate (once per rental)</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="eqRate">Rate (₱)</Label>
             <Input
               id="eqRate"
               name="hourlyRate"
@@ -175,9 +193,19 @@ export function EquipmentManager({ venueId, equipment }: { venueId: string; equi
           {equipment.map((e) => (
             <TableRow key={e.id}>
               <TableCell className="font-medium">{e.name}</TableCell>
-              <TableCell className="text-right">{pesos(e.hourly_rate_cents)}</TableCell>
-              <TableCell className="text-right text-muted-foreground">
-                {e.member_hourly_rate_cents != null ? pesos(e.member_hourly_rate_cents) : "—"}
+              <TableCell className="text-right whitespace-nowrap">
+                {pesos(e.hourly_rate_cents)}
+                <span className="text-xs text-muted-foreground"> {rateUnit(e.pricing_mode)}</span>
+              </TableCell>
+              <TableCell className="text-right whitespace-nowrap text-muted-foreground">
+                {e.member_hourly_rate_cents != null ? (
+                  <>
+                    {pesos(e.member_hourly_rate_cents)}
+                    <span className="text-xs"> {rateUnit(e.pricing_mode)}</span>
+                  </>
+                ) : (
+                  "—"
+                )}
               </TableCell>
               <TableCell className="text-right">{e.stock}</TableCell>
               <TableCell className="text-right text-muted-foreground">{e.max_per_booking ?? "—"}</TableCell>

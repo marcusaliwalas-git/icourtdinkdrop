@@ -37,6 +37,7 @@ interface EquipItem {
   id: string;
   name: string;
   hourly_rate_cents: number;
+  pricing_mode: "hourly" | "flat";
   max_per_booking: number | null;
   available: number;
 }
@@ -99,7 +100,14 @@ export function WalkInSheet({
   const equipLines = equipItems
     .map((item) => ({ item, qty: equipQty[item.id] ?? 0 }))
     .filter((l) => l.qty > 0)
-    .map((l) => ({ ...l, feeCents: Math.round((l.item.hourly_rate_cents * l.qty * durationMinutes) / 60) }));
+    .map((l) => ({
+      ...l,
+      // Flat-rate items charge once per rental; hourly items over the booking's duration.
+      feeCents:
+        l.item.pricing_mode === "flat"
+          ? l.item.hourly_rate_cents * l.qty
+          : Math.round((l.item.hourly_rate_cents * l.qty * durationMinutes) / 60),
+    }));
   const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
 
   function setQty(item: EquipItem, next: number) {
@@ -262,7 +270,8 @@ export function WalkInSheet({
                       <span className="min-w-0">
                         <span className="font-medium">{item.name}</span>
                         <span className="block text-xs text-muted-foreground">
-                          {pesos(item.hourly_rate_cents)}/hr ·{" "}
+                          {pesos(item.hourly_rate_cents)}
+                          {item.pricing_mode === "flat" ? " flat" : "/hr"} ·{" "}
                           {soldOut ? "none free for this time" : `${item.available} available`}
                         </span>
                       </span>

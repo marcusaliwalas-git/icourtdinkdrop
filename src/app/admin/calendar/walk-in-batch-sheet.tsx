@@ -35,6 +35,7 @@ interface EquipItem {
   id: string;
   name: string;
   hourly_rate_cents: number;
+  pricing_mode: "hourly" | "flat";
   max_per_booking: number | null;
   available: number;
 }
@@ -112,7 +113,14 @@ export function WalkInBatchSheet({
   const equipLines = equipItems
     .map((item) => ({ item, qty: equipQty[item.id] ?? 0 }))
     .filter((l) => l.qty > 0)
-    .map((l) => ({ ...l, feeCents: Math.round((l.item.hourly_rate_cents * l.qty * spanMinutes) / 60) }));
+    .map((l) => ({
+      ...l,
+      // Flat-rate items charge once per rental; hourly items over the cart span.
+      feeCents:
+        l.item.pricing_mode === "flat"
+          ? l.item.hourly_rate_cents * l.qty
+          : Math.round((l.item.hourly_rate_cents * l.qty * spanMinutes) / 60),
+    }));
   const equipmentFeeCents = equipLines.reduce((sum, l) => sum + l.feeCents, 0);
   const grandTotalCents = (totalCents ?? 0) + equipmentFeeCents - discountCents;
 
@@ -188,7 +196,9 @@ export function WalkInBatchSheet({
                   <span className="font-medium">
                     {l.qty}× {l.item.name}
                   </span>
-                  <span className="block text-xs text-muted-foreground">{spanMinutes / 60} hr</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {l.item.pricing_mode === "flat" ? "flat rate" : `${spanMinutes / 60} hr`}
+                  </span>
                 </span>
                 <span className="shrink-0 text-muted-foreground">{pesos(l.feeCents)}</span>
               </li>
@@ -220,7 +230,8 @@ export function WalkInBatchSheet({
                       <span className="min-w-0">
                         <span className="font-medium">{item.name}</span>
                         <span className="block text-xs text-muted-foreground">
-                          {pesos(item.hourly_rate_cents)}/hr ·{" "}
+                          {pesos(item.hourly_rate_cents)}
+                          {item.pricing_mode === "flat" ? " flat" : "/hr"} ·{" "}
                           {soldOut ? "none free for this time" : `${item.available} available`}
                         </span>
                       </span>
