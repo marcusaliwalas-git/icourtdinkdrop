@@ -732,6 +732,17 @@ function readPromoCommon(formData: FormData) {
   };
 }
 
+/** Turn a Postgres row-level-security denial into guidance the admin can act on, instead of the raw
+ * "new row violates row-level security policy" text. RLS (can_admin_venue) is the only thing gating
+ * promotion writes, so this fires when the signed-in account isn't recognised as an admin of the
+ * venue — most often a stale login, or an account not linked to this venue. */
+function promoWriteError(error: { code?: string; message: string }): string {
+  if (error.code === "42501" || /row-level security/i.test(error.message)) {
+    return "You don't have permission to manage this venue's promotions. Try signing out and back in — if it keeps happening, your account isn't set as an admin of this venue.";
+  }
+  return error.message;
+}
+
 export async function addPromotion(formData: FormData): Promise<ActionResult> {
   const typeKey = String(formData.get("type") ?? "");
   const type = PROMO_TYPES[typeKey];
@@ -748,7 +759,7 @@ export async function addPromotion(formData: FormData): Promise<ActionResult> {
     .insert({ venue_id: String(formData.get("venueId")), type: typeKey, config: built.config, ...common })
     .select("id")
     .single();
-  if (error) return { error: error.message };
+  if (error) return { error: promoWriteError(error) };
   await auditCurrent(supabase, "promotion_created", "promotion", data.id, {
     name: common.name,
     type: typeKey,
@@ -776,7 +787,7 @@ export async function updatePromotion(id: string, formData: FormData): Promise<A
     .update({ type: typeKey, config: built.config, ...common })
     .eq("id", id)
     .select("id");
-  if (error) return { error: error.message };
+  if (error) return { error: promoWriteError(error) };
   if (!data?.length) return { error: "That promotion isn't for your venue." };
   await auditCurrent(supabase, "promotion_updated", "promotion", id, {
     name: common.name,
@@ -792,7 +803,7 @@ export async function updatePromotion(id: string, formData: FormData): Promise<A
 export async function deletePromotion(id: string): Promise<ActionResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("promotions").delete().eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: promoWriteError(error) };
   await auditCurrent(supabase, "promotion_deleted", "promotion", id, null);
   revalidatePromotions();
   return { success: true };
