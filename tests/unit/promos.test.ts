@@ -261,6 +261,22 @@ describe("percentDiscount.apply", () => {
     expect(percentDiscount.apply(ctx([seg("a", 1), seg("b", 1)], { isSignedIn: false }), cfg, pPromo)).toEqual([]);
   });
 
+  it("per-court mode discounts only the courts that meet the minimum on their own", () => {
+    const cfg: PercentDiscountConfig = { minHours: 2, percentOff: 15, hoursScope: "per_court", audiences: ["guest"] };
+    // Court a is 3h (qualifies), court b is 1h (does not) — only a gets the discount.
+    const lines = percentDiscount.apply(ctx([seg("a", 3), seg("b", 1)], { isSignedIn: false }), cfg, pPromo);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ segmentIndex: 0, cents: 15000 });
+  });
+
+  it("per-court mode does not combine hours across courts", () => {
+    const cfg: PercentDiscountConfig = { minHours: 3, percentOff: 15, hoursScope: "per_court", audiences: ["guest"] };
+    // Three 1-hour courts sum to 3h but no single court reaches the minimum → no discount.
+    expect(
+      percentDiscount.apply(ctx([seg("a", 1), seg("b", 1), seg("c", 1)], { isSignedIn: false }), cfg, pPromo)
+    ).toEqual([]);
+  });
+
   it("targets guests only — not a signed-in user or member", () => {
     const cfg: PercentDiscountConfig = { minHours: 1, percentOff: 10, audiences: ["guest"] };
     expect(percentDiscount.apply(ctx([seg("a", 2)], { isSignedIn: false, isMember: false }), cfg, pPromo)).toHaveLength(1);
