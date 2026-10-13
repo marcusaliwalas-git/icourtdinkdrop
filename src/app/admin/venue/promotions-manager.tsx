@@ -94,16 +94,18 @@ function ConfigField({ field, config }: { field: PromoFormField; config?: Record
     );
   }
   if (field.kind === "select") {
+    const fallback = field.options?.[0]?.value ?? "";
     return (
       <div className="flex flex-col gap-1.5">
         <Label>{field.label}</Label>
-        <select name={field.name} defaultValue={typeof current === "string" ? current : ""} className={selectClass()}>
+        <select name={field.name} defaultValue={typeof current === "string" ? current : fallback} className={selectClass()}>
           {(field.options ?? []).map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
           ))}
         </select>
+        {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
       </div>
     );
   }
@@ -204,6 +206,9 @@ function configSummary(promo: Promotion): string {
     if (f.kind === "checkboxes" && Array.isArray(v)) {
       const labels = v.map((val) => f.options?.find((o) => o.value === val)?.label ?? String(val));
       return `${f.label}: ${labels.join(", ")}`;
+    }
+    if (f.kind === "select") {
+      return `${f.label}: ${f.options?.find((o) => o.value === v)?.label ?? v}`;
     }
     return `${f.label}: ${Array.isArray(v) ? v.map((i) => DAYS[i] ?? i).join("/") : v}`;
   });
