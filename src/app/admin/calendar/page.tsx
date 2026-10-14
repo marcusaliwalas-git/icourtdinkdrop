@@ -3,12 +3,26 @@ import { buildAdminCalendarGrid } from "@/lib/availability";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
 import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
+import { ShareAvailability } from "./share-availability";
 import { getTenant } from "@/lib/tenant";
 import { featureEnabled } from "@/lib/features";
 import { compareCourtName } from "@/lib/courts";
 import type { RatePeriod as CourtRatePeriod } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
+
+/** "08:00:00" → "8 AM" (drops ":00"); keeps the minute when it isn't on the hour. */
+function fmtClock(hhmmss: string): string {
+  const [h, m] = hhmmss.split(":").map(Number);
+  const dt = new Date(Date.UTC(2000, 0, 1, h, m || 0));
+  const opts: Intl.DateTimeFormatOptions = { hour: "numeric", timeZone: "UTC" };
+  if (m) opts.minute = "2-digit";
+  return new Intl.DateTimeFormat("en-US", opts).format(dt);
+}
+
+function peso(cents: number): string {
+  return "₱" + (cents / 100).toLocaleString("en-PH", { maximumFractionDigits: 0 });
+}
 
 export default async function AdminCalendarPage({
   searchParams,
@@ -106,6 +120,37 @@ export default async function AdminCalendarPage({
     closures: closures ?? [],
   });
 
+  // Rate summary for the shareable poster: the distinct time-of-day rate windows across courts, or a
+  // flat rate per distinct base when no rate periods are configured.
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + (m || 0);
+  };
+  const periodMap = new Map<string, { start: string; end: string; cents: number }>();
+  for (const c of courts ?? []) {
+    for (const p of pricing[c.id].ratePeriods) {
+      const k = `${p.start_time}|${p.end_time}|${p.hourly_rate_cents}`;
+      if (!periodMap.has(k)) periodMap.set(k, { start: p.start_time, end: p.end_time, cents: p.hourly_rate_cents });
+    }
+  }
+  const rateLines =
+    periodMap.size > 0
+      ? [...periodMap.values()]
+          .sort((a, b) => toMin(a.start) - toMin(b.start))
+          .map((p) => ({ label: `${fmtClock(p.start)} - ${fmtClock(p.end)}`, price: peso(p.cents) }))
+      : [...new Set((courts ?? []).map((c) => c.hourly_rate_cents))]
+          .sort((a, b) => a - b)
+          .map((cents) => ({ label: "Rate", price: peso(cents) }));
+
+  const venueRec = venue as unknown as { custom_domain?: string | null; slug?: string | null };
+  const siteUrl = venueRec.custom_domain ?? (venueRec.slug ? `${venueRec.slug}.dinkdrop.live` : "");
+
+  // Slim the grid down to what the poster needs: a status per court per hour.
+  const posterRows = grid.rows.map((r) => ({
+    startsAtIso: r.startsAtIso,
+    cells: Object.fromEntries((courts ?? []).map((c) => [c.id, r.cells[c.id]?.status ?? "closed"])),
+  }));
+
   function hrefFor(d: string) {
     return `/admin/calendar?date=${d}`;
   }
@@ -136,6 +181,18 @@ export default async function AdminCalendarPage({
           <a href={`/admin/bookings/export?from=${date}&to=${date}`} className="rounded-md border px-3 py-1.5 text-sm">
             Export day CSV
           </a>
+          {!grid.closedAllDay && (
+            <ShareAvailability
+              venueName={venue.name}
+              dateNumeric={formatInTimezone(new Date(`${date}T12:00:00Z`), "MM / dd / yyyy", venue.timezone)}
+              weekday={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE", venue.timezone)}
+              courts={(courts ?? []).map((c) => ({ id: c.id, name: c.name }))}
+              rows={posterRows}
+              rateLines={rateLines}
+              siteUrl={siteUrl}
+              timezone={venue.timezone}
+            />
+          )}
         </div>
       </div>
 
