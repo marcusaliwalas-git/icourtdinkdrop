@@ -7,18 +7,10 @@ import { ShareAvailability } from "./share-availability";
 import { getTenant } from "@/lib/tenant";
 import { featureEnabled } from "@/lib/features";
 import { compareCourtName } from "@/lib/courts";
-import type { RatePeriod as CourtRatePeriod } from "@/lib/pricing";
+import { rateForHour, type RatePeriod as CourtRatePeriod } from "@/lib/pricing";
+import { toZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
-
-/** "08:00:00" → "8 AM" (drops ":00"); keeps the minute when it isn't on the hour. */
-function fmtClock(hhmmss: string): string {
-  const [h, m] = hhmmss.split(":").map(Number);
-  const dt = new Date(Date.UTC(2000, 0, 1, h, m || 0));
-  const opts: Intl.DateTimeFormatOptions = { hour: "numeric", timeZone: "UTC" };
-  if (m) opts.minute = "2-digit";
-  return new Intl.DateTimeFormat("en-US", opts).format(dt);
-}
 
 function peso(cents: number): string {
   return "₱" + (cents / 100).toLocaleString("en-PH", { maximumFractionDigits: 0 });
@@ -120,27 +112,55 @@ export default async function AdminCalendarPage({
     closures: closures ?? [],
   });
 
-  // Rate summary for the shareable poster: the distinct time-of-day rate windows across courts, or a
-  // flat rate per distinct base when no rate periods are configured.
-  const toMin = (t: string) => {
-    const [h, m] = t.split(":").map(Number);
-    return h * 60 + (m || 0);
-  };
-  const periodMap = new Map<string, { start: string; end: string; cents: number }>();
-  for (const c of courts ?? []) {
-    for (const p of pricing[c.id].ratePeriods) {
-      const k = `${p.start_time}|${p.end_time}|${p.hourly_rate_cents}`;
-      if (!periodMap.has(k)) periodMap.set(k, { start: p.start_time, end: p.end_time, cents: p.hourly_rate_cents });
+  // Rate summary for the shareable poster: the EFFECTIVE price of each operating hour (rate periods
+  // and the court's base rate, resolved the same way the booking engine does), collapsed into time
+  // windows. Deriving from periods alone would miss a window priced at the base rate (e.g. an evening
+  // rate that isn't a configured period). When every court prices the day identically we show those
+  // shared windows; otherwise we fall back to the distinct base rates.
+  const hourMeta = grid.rows.map((r) => {
+    const local = toZonedTime(new Date(r.startsAtIso), venue.timezone);
+    return {
+      startIso: r.startsAtIso,
+      endIso: new Date(new Date(r.startsAtIso).getTime() + 3_600_000).toISOString(),
+      localStartMinutes: local.getHours() * 60 + local.getMinutes(),
+      dayOfWeek: local.getDay(),
+    };
+  });
+  const scheduleFor = (courtId: string) =>
+    hourMeta.map((h) =>
+      rateForHour({
+        localStartMinutes: h.localStartMinutes,
+        dayOfWeek: h.dayOfWeek,
+        ratePeriods: pricing[courtId].ratePeriods,
+        baseHourlyRateCents: pricing[courtId].baseHourlyRateCents,
+        baseMemberRateCents: null,
+        isMember: false,
+      })
+    );
+  const schedules = (courts ?? []).map((c) => scheduleFor(c.id));
+  const uniform =
+    schedules.length > 0 && hourMeta.length > 0 && schedules.every((s) => s.every((v, i) => v === schedules[0][i]));
+  const fmtWindow = (iso: string) => formatInTimezone(new Date(iso), "h:mm a", venue.timezone).replace(":00", "");
+
+  let rateLines: { label: string; price: string }[];
+  if (uniform) {
+    const sched = schedules[0];
+    rateLines = [];
+    let runStart = 0;
+    for (let i = 1; i <= sched.length; i++) {
+      if (i === sched.length || sched[i] !== sched[runStart]) {
+        rateLines.push({
+          label: `${fmtWindow(hourMeta[runStart].startIso)} - ${fmtWindow(hourMeta[i - 1].endIso)}`,
+          price: peso(sched[runStart]),
+        });
+        runStart = i;
+      }
     }
+  } else {
+    rateLines = [...new Set((courts ?? []).map((c) => c.hourly_rate_cents))]
+      .sort((a, b) => a - b)
+      .map((cents) => ({ label: "Rate", price: peso(cents) }));
   }
-  const rateLines =
-    periodMap.size > 0
-      ? [...periodMap.values()]
-          .sort((a, b) => toMin(a.start) - toMin(b.start))
-          .map((p) => ({ label: `${fmtClock(p.start)} - ${fmtClock(p.end)}`, price: peso(p.cents) }))
-      : [...new Set((courts ?? []).map((c) => c.hourly_rate_cents))]
-          .sort((a, b) => a - b)
-          .map((cents) => ({ label: "Rate", price: peso(cents) }));
 
   const venueRec = venue as unknown as { custom_domain?: string | null; slug?: string | null };
   const siteUrl = venueRec.custom_domain ?? (venueRec.slug ? `${venueRec.slug}.dinkdrop.live` : "");
