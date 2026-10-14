@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { formatInTimezone } from "@/lib/time";
 import { CreateTenantForm } from "./create-tenant-form";
 import { DeleteVenueButton } from "./delete-venue-button";
@@ -7,7 +8,7 @@ import { VenueCapabilities } from "./venue-capabilities";
 import { VenueThemeSelect } from "./venue-theme-select";
 import { VenueFontSelect } from "./venue-font-select";
 import { EditVenueHost } from "./edit-venue-host";
-import { AddVenueAdmin } from "./add-venue-admin";
+import { ManageVenueAdmins, type VenueAdmin } from "./manage-venue-admins";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,22 @@ export default async function SuperAdminPage() {
     .from("venues")
     .select("id, name, slug, custom_domain, timezone, created_at, is_active, features, theme, font")
     .order("created_at", { ascending: false });
+
+  // Admins per venue (venue_memberships role=admin). The super-admin's own session can't read other
+  // venues' memberships under RLS, so use the service-role client — safe here because the whole
+  // /superadmin area is gated by requireSuperAdmin in the layout.
+  const admin = createAdminClient();
+  const { data: adminRows } = await admin
+    .from("venue_memberships")
+    .select("venue_id, profile_id, profiles(email, full_name)")
+    .eq("role", "admin");
+  const adminsByVenue = new Map<string, VenueAdmin[]>();
+  for (const r of adminRows ?? []) {
+    const prof = r.profiles as unknown as { email: string | null; full_name: string | null } | null;
+    const list = adminsByVenue.get(r.venue_id) ?? [];
+    list.push({ id: r.profile_id, email: prof?.email ?? null, name: prof?.full_name ?? null });
+    adminsByVenue.set(r.venue_id, list);
+  }
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "dinkdrop.live";
 
@@ -75,7 +92,7 @@ export default async function SuperAdminPage() {
                 </td>
                 <td className="p-3">
                   <div className="flex items-center justify-end gap-1">
-                    <AddVenueAdmin venueId={v.id} venueName={v.name} />
+                    <ManageVenueAdmins venueId={v.id} venueName={v.name} admins={adminsByVenue.get(v.id) ?? []} />
                     <EditVenueHost
                       venueId={v.id}
                       venueName={v.name}

@@ -208,6 +208,33 @@ export async function addVenueAdmin(venueId: string, input: unknown): Promise<Re
   return { success: true };
 }
 
+/** Remove an admin from a venue (deletes their venue_membership). Super-admin only, via the
+ * service-role client like addVenueAdmin. Refuses to remove the venue's last admin so it isn't left
+ * orphaned — add a replacement first. */
+export async function removeVenueAdmin(venueId: string, profileId: string): Promise<Result> {
+  await requireSuperAdmin();
+  const admin = createAdminClient();
+
+  const { count } = await admin
+    .from("venue_memberships")
+    .select("profile_id", { count: "exact", head: true })
+    .eq("venue_id", venueId)
+    .eq("role", "admin");
+  if ((count ?? 0) <= 1) {
+    return { error: "A venue must keep at least one admin. Add another before removing this one." };
+  }
+
+  const { error } = await admin
+    .from("venue_memberships")
+    .delete()
+    .eq("venue_id", venueId)
+    .eq("profile_id", profileId)
+    .eq("role", "admin");
+  if (error) return { error: error.message };
+  revalidatePath("/superadmin");
+  return { success: true };
+}
+
 export async function setVenueActive(venueId: string, active: boolean): Promise<Result> {
   await requireSuperAdmin();
   const admin = createAdminClient();
