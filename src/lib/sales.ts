@@ -1,10 +1,13 @@
 // Pure sales aggregation — no I/O, so the revenue rules live in one tested place. The page
 // fetches bookings and precomputes each row's venue-local weekday, then hands them here.
 
-// A booking counts as realized revenue once it's locked in and the payment is kept: confirmed,
-// completed, or no-show (under the venue's no-refund policy a no-show still paid and isn't
-// refunded, so the money is real). 'pending' is money not yet verified — surfaced separately,
-// never in the realized total. 'cancelled' is excluded entirely (nothing was paid / kept).
+import { isPaid } from "@/lib/payment-methods";
+
+// A booking counts as realized revenue only once it's both locked in (confirmed / completed /
+// no-show — under the venue's no-refund policy a no-show that paid keeps the money) *and* settled
+// (isPaid). A confirmed walk-in still owed at the venue (pay_at_venue) is money not yet collected,
+// so it's surfaced as "awaiting" — never in the realized total — until it's marked paid. 'pending'
+// (online, awaiting verification) is likewise awaiting. 'cancelled' is excluded entirely.
 export const REALIZED_STATUSES = ["confirmed", "completed", "no_show"];
 export const AWAITING_STATUSES = ["pending"];
 
@@ -26,6 +29,9 @@ export interface SalesInputRow {
   courtId: string;
   courtName: string;
   isoWeekday: number; // 1=Mon … 7=Sun, in venue-local time
+  paymentMethod: string | null; // 'cash' | 'online' | 'complimentary' | null (not explicitly set)
+  paymentStatus: string; // used to attribute a booking with no explicit method (e.g. online)
+  bookedAsMember: boolean; // was the member rate applied at booking time
 }
 
 export interface SalesBreakdown {
@@ -39,12 +45,17 @@ export interface SalesSummary {
   realizedCents: number;
   bookingCount: number;
   avgCents: number;
-  /** Pending bookings whose payment isn't verified yet — shown apart from realized revenue. */
+  /** Bookings not yet paid (pending online + confirmed-but-owed) — shown apart from realized revenue. */
   awaitingCents: number;
   awaitingCount: number;
   byCourt: SalesBreakdown[];
   bySource: SalesBreakdown[];
   byWeekday: SalesBreakdown[];
+  /** Realized revenue split by how it was paid (cash / GCash / bank transfer); bookings with no
+   * recorded method — e.g. online slip payments — fall under "Not recorded". */
+  byMethod: SalesBreakdown[];
+  /** Realized revenue split by whether the member rate was applied at booking time. */
+  byMembership: SalesBreakdown[];
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -52,6 +63,22 @@ const SOURCE_LABELS: Record<string, string> = {
   walkin: "Walk-in",
   admin: "Admin",
 };
+
+const METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  online: "Paid online",
+};
+
+/** Which "By payment method" bucket a realized booking belongs to. Prefer the explicitly recorded
+ * method (Cash / Paid online); otherwise attribute by payment status so online customer bookings
+ * (paid_online, no method) count as "Paid online" and in-person ones as "Paid at venue", rather
+ * than all collapsing into "Not recorded". Only genuinely unknown rows stay "Not recorded". */
+function paymentBucket(method: string | null, status: string): { key: string; label: string } {
+  if (method) return { key: method, label: METHOD_LABELS[method] ?? method };
+  if (status === "paid_online") return { key: "online", label: "Paid online" };
+  if (status === "paid_at_venue") return { key: "paid_at_venue", label: "Paid at venue" };
+  return { key: "unrecorded", label: "Not recorded" };
+}
 
 function accumulate(
   map: Map<string, SalesBreakdown>,
@@ -69,8 +96,21 @@ function accumulate(
 }
 
 export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
-  const realized = rows.filter((r) => REALIZED_STATUSES.includes(r.status));
-  const awaiting = rows.filter((r) => AWAITING_STATUSES.includes(r.status));
+  // Complimentary (comped/free) bookings are settled but never revenue — excluded from realized
+  // totals, counts, and every breakdown, so they don't appear on the sales tab at all. Unpaid
+  // bookings (pay_at_venue / awaiting_verification) are likewise excluded from realized until
+  // settled — a booking must be locked in *and* paid to count.
+  const realized = rows.filter(
+    (r) => REALIZED_STATUSES.includes(r.status) && r.paymentMethod !== "complimentary" && isPaid(r.paymentStatus)
+  );
+  // Money expected but not yet collected: pending online bookings plus confirmed/locked-in
+  // bookings still owed at the venue. Complimentary is free, so it's never "awaiting".
+  const awaiting = rows.filter(
+    (r) =>
+      r.paymentMethod !== "complimentary" &&
+      (AWAITING_STATUSES.includes(r.status) ||
+        (REALIZED_STATUSES.includes(r.status) && !isPaid(r.paymentStatus)))
+  );
 
   const realizedCents = realized.reduce((sum, r) => sum + r.totalCents, 0);
   const bookingCount = realized.length;
@@ -78,11 +118,21 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
   const byCourt = new Map<string, SalesBreakdown>();
   const bySource = new Map<string, SalesBreakdown>();
   const byWeekday = new Map<string, SalesBreakdown>();
+  const byMethod = new Map<string, SalesBreakdown>();
+  const byMembership = new Map<string, SalesBreakdown>();
 
   for (const r of realized) {
     accumulate(byCourt, r.courtId, r.courtName, r.totalCents);
     accumulate(bySource, r.source, SOURCE_LABELS[r.source] ?? r.source, r.totalCents);
     accumulate(byWeekday, String(r.isoWeekday), WEEKDAY_LABELS[r.isoWeekday] ?? String(r.isoWeekday), r.totalCents);
+    const bucket = paymentBucket(r.paymentMethod, r.paymentStatus);
+    accumulate(byMethod, bucket.key, bucket.label, r.totalCents);
+    accumulate(
+      byMembership,
+      r.bookedAsMember ? "member" : "nonmember",
+      r.bookedAsMember ? "Member" : "Non-member",
+      r.totalCents
+    );
   }
 
   return {
@@ -95,6 +145,8 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
     bySource: [...bySource.values()].sort((a, b) => b.cents - a.cents),
     // Chronological Mon→Sun, not by revenue, so the week reads naturally.
     byWeekday: [...byWeekday.values()].sort((a, b) => Number(a.key) - Number(b.key)),
+    byMethod: [...byMethod.values()].sort((a, b) => b.cents - a.cents),
+    byMembership: [...byMembership.values()].sort((a, b) => b.cents - a.cents),
   };
 }
 

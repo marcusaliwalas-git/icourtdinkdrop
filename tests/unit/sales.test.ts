@@ -9,6 +9,9 @@ function row(overrides: Partial<SalesInputRow>): SalesInputRow {
     courtId: "court-1",
     courtName: "Court 1",
     isoWeekday: 1,
+    paymentMethod: null,
+    paymentStatus: "paid_at_venue",
+    bookedAsMember: false,
     ...overrides,
   };
 }
@@ -37,6 +40,20 @@ describe("summarizeSales", () => {
     expect(s.awaitingCount).toBe(2);
   });
 
+  it("excludes confirmed-but-unpaid bookings from realized revenue, surfacing them as awaiting", () => {
+    const s = summarizeSales([
+      row({ status: "confirmed", paymentStatus: "paid_at_venue", totalCents: 50000 }), // paid → realized
+      row({ status: "confirmed", paymentStatus: "pay_at_venue", totalCents: 30000 }), // unpaid walk-in
+      row({ status: "no_show", paymentStatus: "pay_at_venue", totalCents: 20000 }), // locked in but never paid
+    ]);
+    expect(s.realizedCents).toBe(50000);
+    expect(s.bookingCount).toBe(1);
+    expect(s.awaitingCents).toBe(50000);
+    expect(s.awaitingCount).toBe(2);
+    // The unpaid rows must not leak into any breakdown either.
+    expect(s.byCourt.reduce((sum, b) => sum + b.cents, 0)).toBe(50000);
+  });
+
   it("breaks realized revenue down by court, sorted by revenue", () => {
     const s = summarizeSales([
       row({ courtId: "c1", courtName: "Court 1", totalCents: 40000 }),
@@ -59,6 +76,49 @@ describe("summarizeSales", () => {
     expect(s.bySource).toEqual([
       { key: "walkin", label: "Walk-in", cents: 60000, count: 2 },
       { key: "online", label: "Online", cents: 50000, count: 1 },
+    ]);
+  });
+
+  it("attributes revenue by method, falling back to payment status for online/venue", () => {
+    const s = summarizeSales([
+      row({ paymentMethod: "cash", paymentStatus: "paid_at_venue", totalCents: 30000 }),
+      row({ paymentMethod: "cash", paymentStatus: "paid_at_venue", totalCents: 20000 }),
+      row({ paymentMethod: "online", paymentStatus: "paid_online", totalCents: 40000 }),
+      // Online customer booking: no explicit method, but paid_online → counts as "Paid online".
+      row({ paymentMethod: null, paymentStatus: "paid_online", totalCents: 15000 }),
+      // Pre-feature in-person booking: no method, settled at venue → "Paid at venue".
+      row({ paymentMethod: null, paymentStatus: "paid_at_venue", totalCents: 5000 }),
+      row({ status: "cancelled", paymentMethod: "cash", paymentStatus: "paid_at_venue", totalCents: 99999 }),
+    ]);
+    expect(s.byMethod).toEqual([
+      { key: "online", label: "Paid online", cents: 55000, count: 2 },
+      { key: "cash", label: "Cash", cents: 50000, count: 2 },
+      { key: "paid_at_venue", label: "Paid at venue", cents: 5000, count: 1 },
+    ]);
+  });
+
+  it("excludes complimentary (free) bookings from revenue, count, and every breakdown", () => {
+    const s = summarizeSales([
+      row({ paymentMethod: "cash", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 50000 }),
+      row({ paymentMethod: "complimentary", totalCents: 30000 }),
+    ]);
+    expect(s.realizedCents).toBe(50000);
+    expect(s.bookingCount).toBe(1);
+    expect(s.byMethod).toEqual([{ key: "cash", label: "Cash", cents: 50000, count: 1 }]);
+    expect(s.byMethod.some((b) => b.key === "complimentary")).toBe(false);
+  });
+
+  it("splits realized revenue by membership (member vs non-member)", () => {
+    const s = summarizeSales([
+      row({ bookedAsMember: true, totalCents: 30000 }),
+      row({ bookedAsMember: true, totalCents: 20000 }),
+      row({ bookedAsMember: false, totalCents: 90000 }),
+      row({ status: "cancelled", bookedAsMember: true, totalCents: 99999 }),
+    ]);
+    expect(s.byMembership).toEqual([
+      { key: "nonmember", label: "Non-member", cents: 90000, count: 1 },
+      { key: "member", label: "Member", cents: 50000, count: 2 },
     ]);
   });
 
