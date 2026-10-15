@@ -67,7 +67,7 @@ export function ShareAvailability({
   timezone: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"orig" | "ratio" | null>(null);
   const posterRef = useRef<HTMLDivElement>(null);
 
   const fmtTime = useMemo(
@@ -93,21 +93,56 @@ export function ShareAvailability({
     return out;
   }, [rows, courts]);
 
-  async function download() {
+  function save(dataUrl: string, suffix: string) {
+    const slug = dateNumeric.replace(/\s|\//g, "-");
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `court-availability-${slug}${suffix}.png`;
+    a.click();
+  }
+
+  // Download the poster at its natural height.
+  async function downloadOriginal() {
     const node = posterRef.current;
     if (!node) return;
-    setBusy(true);
+    setBusy("orig");
     try {
       // Fill transparent areas with the theme's resolved background so the PNG isn't see-through.
       const bg = getComputedStyle(node).backgroundColor;
       const dataUrl = await toPng(node, { pixelRatio: 2, cacheBust: true, backgroundColor: bg });
-      const slug = dateNumeric.replace(/\s|\//g, "-");
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = `court-availability-${slug}.png`;
-      a.click();
+      save(dataUrl, "");
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  }
+
+  // Download at an exact 4:5 portrait (social-friendly). Pad the poster to 4:5 with the theme
+  // background using html-to-image's own output size + a centring margin — same proven render path
+  // as the original export (cloning into a detached frame rendered as a blank/black image).
+  async function downloadRatio() {
+    const node = posterRef.current;
+    if (!node) return;
+    setBusy("ratio");
+    try {
+      const bg = getComputedStyle(node).backgroundColor;
+      const w = node.offsetWidth;
+      const h = node.offsetHeight;
+      const RATIO = 4 / 5;
+      let fw = w;
+      let fh = h;
+      if (w / h > RATIO) fh = Math.round(w / RATIO); // shorter than 4:5 → pad top/bottom
+      else fw = Math.round(h * RATIO); // taller than 4:5 → pad left/right
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        cacheBust: true,
+        backgroundColor: bg,
+        width: fw,
+        height: fh,
+        style: { margin: `${Math.max(0, (fh - h) / 2)}px ${Math.max(0, (fw - w) / 2)}px` },
+      });
+      save(dataUrl, "-4x5");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -250,8 +285,11 @@ export function ShareAvailability({
         </div>
 
         <DialogFooter>
-          <Button onClick={download} disabled={busy}>
-            {busy ? "Preparing…" : "Download image"}
+          <Button variant="outline" onClick={downloadOriginal} disabled={busy !== null}>
+            {busy === "orig" ? "Preparing…" : "Download (original)"}
+          </Button>
+          <Button onClick={downloadRatio} disabled={busy !== null}>
+            {busy === "ratio" ? "Preparing…" : "Download 4:5"}
           </Button>
         </DialogFooter>
       </DialogContent>
