@@ -63,6 +63,30 @@ describe("create_bookings (batch)", () => {
     });
   });
 
+  it("stamps one shared booking_group_id across the whole cart", async () => {
+    await withRollback(async (client) => {
+      const { venueId, courtId } = await createVenueWithCourt(client);
+      const court2 = await addCourt(client, venueId, "Court 2");
+      const member = await createMemberProfile(client);
+
+      await createBookings(
+        client,
+        [
+          { court_id: courtId, starts_at: slot(0), duration_minutes: 60 },
+          { court_id: court2, starts_at: slot(0), duration_minutes: 60 },
+        ],
+        member
+      );
+
+      const { rows } = await client.query(
+        `select distinct booking_group_id from bookings where court_id = any($1::uuid[])`,
+        [[courtId, court2]]
+      );
+      expect(rows).toHaveLength(1); // both slots share one group
+      expect(rows[0].booking_group_id).not.toBeNull();
+    });
+  });
+
   it("books non-contiguous times on the same court as separate bookings", async () => {
     await withRollback(async (client) => {
       const { venueId, courtId } = await createVenueWithCourt(client);

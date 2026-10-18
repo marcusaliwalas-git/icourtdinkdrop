@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createBookingSchema, createBookingsSchema, cancelBookingSchema } from "@/lib/validation/booking";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createBookingSchema, createBookingsSchema } from "@/lib/validation/booking";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
 import {
   sendBookingConfirmationEmail,
   sendBookingPendingEmail,
-  sendBookingCancellationEmail,
   sendAdminBookingRequestEmail,
   sendBookingsPendingEmail,
   sendAdminBookingsRequestEmail,
@@ -17,6 +17,9 @@ import {
   type BookingLineItem,
 } from "@/lib/email";
 import { getAdminEmails } from "@/lib/admin-recipients";
+import { getTenant } from "@/lib/tenant";
+import { tenantEmailBrand } from "@/lib/site-url";
+import { applyCartPromotions } from "@/lib/promos/apply";
 import type { Database } from "@/lib/supabase/database.types";
 
 type BookingRow = Database["public"]["Tables"]["bookings"]["Row"];
@@ -58,7 +61,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
     p_party_size: partySize,
     p_booked_by: user?.id ?? null,
     p_guest_name: user ? null : guestName ?? null,
-    p_guest_phone: user ? null : guestPhone ?? null,
+    p_guest_phone: user ? null : guestPhone || null,
     p_guest_email: user ? null : guestEmail || null,
     p_source: "online",
     p_notes: notes ?? null,
@@ -75,11 +78,17 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
 
   const { data: court } = await supabase
     .from("courts")
-    .select("name, venues(timezone)")
+    .select("name, venue_id, venues(timezone)")
     .eq("id", courtId)
     .single();
   const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
   const { start, end } = parseTstzRange(data.time_range);
+
+  // Tenant-scoped: the link in the email points at this venue's own host, and only this venue's
+  // admins are notified.
+  const tenant = await getTenant();
+  const brand = tenantEmailBrand(tenant);
+  const venueId = tenant?.id ?? court?.venue_id ?? null;
 
   // Members always have an email; guests only get one if they chose to give it (it's optional
   // on the guest form — see lib/validation/booking.ts).
@@ -93,6 +102,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      ...brand,
     };
     // Online bookings start 'pending'; only walk-in/admin-created bookings come back
     // already 'confirmed'.
@@ -106,8 +116,8 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
   // Notify admins of a new booking awaiting review. Only online bookings are ever 'pending'
   // (walk-ins are admin-created and auto-confirmed), so this is exactly the set of bookings
   // that needs a human to verify payment. Sent regardless of whether the booker gave an email.
-  if (data.status === "pending") {
-    const adminEmails = await getAdminEmails();
+  if (data.status === "pending" && venueId) {
+    const adminEmails = await getAdminEmails(venueId);
     await Promise.all(
       adminEmails.map((adminEmail) =>
         sendAdminBookingRequestEmail({
@@ -121,6 +131,7 @@ export async function createBooking(input: unknown): Promise<CreateBookingResult
           bookerName: data.guest_name ?? user?.email ?? "A member",
           bookerContact: data.guest_phone ?? user?.email ?? "—",
           paymentReference: data.payment_reference,
+          ...brand,
         })
       )
     );
@@ -177,6 +188,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
   const {
     segments,
     coachId,
+    equipment,
     partySize,
     guestName,
     guestPhone,
@@ -196,7 +208,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
     p_party_size: partySize,
     p_booked_by: user?.id ?? null,
     p_guest_name: user ? null : guestName ?? null,
-    p_guest_phone: user ? null : guestPhone ?? null,
+    p_guest_phone: user ? null : guestPhone || null,
     p_guest_email: user ? null : guestEmail || null,
     p_source: "online",
     p_notes: notes ?? null,
@@ -205,6 +217,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
     p_payment_reference: paymentReference ?? null,
     p_payment_slip_path: paymentSlipPath ?? null,
     p_coach_id: coachId ?? null,
+    p_equipment: (equipment ?? []).map((e) => ({ equipment_id: e.equipmentId, quantity: e.quantity })),
   });
 
   if (error) {
@@ -226,11 +239,51 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
   const courtIds = Array.from(new Set(created.map((b) => b.court_id)));
   const { data: courtRows } = await supabase
     .from("courts")
-    .select("id, name, venues(timezone)")
+    .select("id, name, venue_id, venues(timezone)")
     .in("id", courtIds);
   const courtNameById = new Map((courtRows ?? []).map((c) => [c.id, c.name]));
   const timezone =
     ((courtRows ?? [])[0]?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
+
+  // Tenant-scoped links + admin recipients (all cart courts belong to the one tenant).
+  const tenant = await getTenant();
+  const brand = tenantEmailBrand(tenant);
+  const venueId = tenant?.id ?? (courtRows ?? [])[0]?.venue_id ?? null;
+
+  // Apply any venue promotions to the cart (e.g. a multi-court discount). Records the discount on the
+  // bookings and reduces the total the booker is asked to pay. Best-effort: never blocks the booking.
+  let discountCents = 0;
+  if (venueId) {
+    const { totalDiscountCents } = await applyCartPromotions(supabase, {
+      venueId,
+      timezone,
+      isMember: created[0].booked_as_member,
+      isSignedIn: created[0].booked_by != null,
+      bookings: created.map((b) => ({
+        id: b.id,
+        court_id: b.court_id,
+        time_range: b.time_range as string,
+        total_cents: b.total_cents,
+        booking_group_id: b.booking_group_id,
+      })),
+    });
+    discountCents = totalDiscountCents;
+  }
+
+  // Deposit: when the customer chose to reserve with a downpayment and the venue offers one, record
+  // each booking's deposit (the venue's percentage of the amount the booker pays). The balance is
+  // collected at the venue. Service-role client — the values are computed here, not user input.
+  // total_cents is ALREADY the net, post-discount amount (apply_group_promotions reduced it), so the
+  // deposit is simply that percentage of total_cents — don't subtract the discount a second time.
+  const depositPercent = (tenant as { deposit_percent?: number | null } | null)?.deposit_percent ?? null;
+  if (parsed.data.deposit && depositPercent) {
+    const admin = createAdminClient();
+    const ids = created.map((b) => b.id);
+    const { data: rows } = await admin.from("bookings").select("id, total_cents").in("id", ids);
+    for (const b of rows ?? []) {
+      await admin.from("bookings").update({ deposit_cents: Math.round((b.total_cents * depositPercent) / 100) }).eq("id", b.id);
+    }
+  }
 
   const lineItems: BookingLineItem[] = created.map((b) => {
     const { start, end } = parseTstzRange(b.time_range as string);
@@ -241,18 +294,20 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
       referenceCode: b.reference_code,
     };
   });
-  const totalCents = created.reduce((sum, b) => sum + b.total_cents, 0);
+  // created[] still holds the pre-discount base totals (returned before the discount was recorded),
+  // so subtract the discount to get what the booker actually pays.
+  const totalCents = created.reduce((sum, b) => sum + b.total_cents, 0) - discountCents;
   const status = created[0].status;
 
   // One combined email to the booker (members always have an email; guests only if they gave one).
   const recipientEmail = user?.email ?? created[0].guest_email;
   if (recipientEmail && status === "pending") {
-    await sendBookingsPendingEmail({ to: recipientEmail, timezone, bookings: lineItems, totalCents });
+    await sendBookingsPendingEmail({ to: recipientEmail, timezone, bookings: lineItems, totalCents, ...brand });
   }
 
   // One combined admin notification (online carts are always 'pending').
-  if (status === "pending") {
-    const adminEmails = await getAdminEmails();
+  if (status === "pending" && venueId) {
+    const adminEmails = await getAdminEmails(venueId);
     await Promise.all(
       adminEmails.map((adminEmail) =>
         sendAdminBookingsRequestEmail({
@@ -263,6 +318,7 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
           bookerName: created[0].guest_name ?? user?.email ?? "A member",
           bookerContact: created[0].guest_phone ?? user?.email ?? "—",
           paymentReference: created[0].payment_reference,
+          ...brand,
         })
       )
     );
@@ -284,51 +340,4 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
     status,
     whatsAppShareLink: buildWhatsAppShareLinkForBookings({ timezone, bookings: lineItems }),
   };
-}
-
-export type CancelBookingResult = { success: true } | { success: false; code: string; message: string };
-
-export async function cancelBooking(input: unknown): Promise<CancelBookingResult> {
-  const parsed = cancelBookingSchema.safeParse(input);
-  if (!parsed.success) {
-    return { success: false, code: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" };
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data, error } = await supabase.rpc("cancel_booking", {
-    p_booking_id: parsed.data.bookingId,
-    p_reference_code: parsed.data.referenceCode ?? null,
-  });
-
-  if (error) {
-    const mapped = mapBookingError(error);
-    return { success: false, ...mapped };
-  }
-
-  const recipientEmail = user?.email ?? data.guest_email;
-  if (recipientEmail) {
-    const { data: court } = await supabase
-      .from("courts")
-      .select("name, venues(timezone)")
-      .eq("id", data.court_id)
-      .single();
-    const timezone = (court?.venues as unknown as { timezone: string } | null)?.timezone ?? "Asia/Manila";
-    const { start, end } = parseTstzRange(data.time_range);
-    await sendBookingCancellationEmail({
-      to: recipientEmail,
-      courtName: court?.name ?? "Court",
-      startsAt: start,
-      endsAt: end,
-      timezone,
-      referenceCode: data.reference_code,
-    });
-  }
-
-  revalidatePath("/book");
-  revalidatePath("/bookings");
-  return { success: true };
 }

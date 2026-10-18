@@ -1,0 +1,266 @@
+# Multi-tenancy production rollout runbook
+
+Turning the live single-tenant deployment into a pooled multi-tenant one: one Supabase database,
+one Vercel deployment, many venues (tenants) resolved by hostname.
+
+**Linked Supabase project:** `prymtkfhkhrnxpinlkww`
+**Existing production host(s):** `www.icourt.dinkdrop.live` (and `icourt.dinkdrop.live`)
+
+> **The one ordering rule that matters:** while the database holds **exactly one** venue, the app
+> serves it for *every* host (the single-venue fallback in `getTenant()`). The moment a **second**
+> venue exists, hostname matching becomes mandatory — so you **must pin the existing venue to its
+> host (Step 3) before creating tenant #2 (Step 6)**, or the current site resolves to "no tenant".
+
+---
+
+## 0. Prerequisites
+
+- [ ] The multi-tenancy code is **merged and deployed** to production (Vercel).
+      On origin, PR #11 is stacked on the booking PR (#10) — merge #10 first, then #11.
+- [ ] You have the linked project's **service-role key** and **DB password** (Supabase dashboard →
+      Project Settings → API / Database).
+- [ ] Vercel env var `SUPABASE_SERVICE_ROLE_KEY` is set in Production (used by the OAuth callback to
+      assign a first-time Google user's venue).
+- [ ] Decide the **root domain** for subdomain tenants (e.g. `dinkdrop.live` → `acme.dinkdrop.live`).
+
+## 1. Back up first
+
+Migrations here are additive (new columns/policies + a backfill), but always snapshot before a
+production schema change:
+
+- Supabase dashboard → **Database → Backups → Create backup** (or `pg_dump` the linked DB).
+
+## 2. Apply the migrations
+
+```bash
+# from the repo root, on the branch that contains the multi-tenancy migrations
+supabase migration list          # confirm the 3 pending: 20260827000000 / 20260827120000 / 20260827130000
+supabase db push                 # applies them to the linked production database
+supabase migration list          # confirm all now show a remote timestamp
+```
+
+What they do:
+- `20260827000000_multitenancy_foundation` — `venues.slug` + `custom_domain`, `profiles.venue_id`
+  (existing rows backfilled to the single venue, slug set to `default`), `current_user_venue()`.
+- `20260827120000_multitenancy_rls` — scopes every private table + admin write to the caller's venue.
+- `20260827130000_multitenancy_rpc_guards` — venue checks inside the admin booking RPCs.
+
+Quick sanity (Supabase SQL editor):
+
+```sql
+select name, slug, custom_domain from venues;                 -- one row, slug = 'default'
+select count(*) filter (where venue_id is null) as unassigned from profiles;  -- expect 0
+```
+
+## 3. Pin the existing venue to its host  ⚠️ do this BEFORE Step 6
+
+Give the current production venue a stable identity so it keeps resolving once a second tenant
+exists. Pick the **canonical** prod host and make the other variant redirect to it in Vercel.
+
+```sql
+-- Example: canonical host is www.icourt.dinkdrop.live
+update venues
+   set slug = 'icourt',
+       custom_domain = 'www.icourt.dinkdrop.live'
+ where slug = 'default';
+```
+
+- `getTenant()` checks `custom_domain` first, then a subdomain `slug` under the root domain. Setting
+  both covers `www.icourt.dinkdrop.live` (custom_domain) **and** `icourt.dinkdrop.live` (slug
+  `icourt`, if your root domain is `dinkdrop.live`).
+- Ensure Vercel redirects the non-canonical variant (e.g. `icourt.dinkdrop.live` → `www.icourt…`) so
+  there's one canonical host.
+
+## 4. Configure the deployment for tenants
+
+**Vercel → Project → Settings → Environment Variables (Production):**
+
+```
+NEXT_PUBLIC_ROOT_DOMAIN = dinkdrop.live      # subdomain tenants become <slug>.dinkdrop.live
+```
+
+Redeploy so the new env var takes effect.
+
+**Vercel → Project → Domains:**
+- Add the **wildcard** `*.dinkdrop.live` (this routes every `<slug>.dinkdrop.live` to this one
+  deployment).
+- Keep the existing prod domain(s) attached — unchanged.
+- For each future **custom-domain** tenant, add their domain here too (e.g. `acmepickleball.com`).
+
+**DNS (at your DNS provider for `dinkdrop.live`):**
+- `*.dinkdrop.live` → `CNAME cname.vercel-dns.com` (or the A/ALIAS target Vercel shows).
+
+### Auth redirect URLs (OAuth / magic-link / password reset) — required for multi-tenant sign-in
+
+**Symptom if you skip this:** signing in with Google (or a magic link / reset link) from a tenant's
+host **always bounces back to the default host** (e.g. `icourt.dinkdrop.live`) instead of the tenant
+they started on — and a first-time Google user gets pinned to the **wrong** venue (the default),
+because the OAuth callback runs on the default host.
+
+**Why:** the app already asks Supabase to return to the current host
+(`redirectTo = <current-origin>/auth/callback`). But Supabase only honors a `redirectTo` that
+matches its **allowed Redirect URLs**; if it doesn't match, Supabase falls back to the **Site URL**.
+So every tenant host must be in the allowlist.
+
+**Supabase → Authentication → URL Configuration:**
+
+- **Redirect URLs** — add a wildcard for every tenant host (`*` = one subdomain label, `**` = any path):
+  ```
+  https://*.dinkdrop.live/**          # all subdomain tenants (<slug>.dinkdrop.live)
+  https://dinkdrop.live/**            # the apex (if a tenant uses it as custom_domain)
+  https://www.icourt.dinkdrop.live/** # the existing prod host
+  # …plus each custom-domain tenant you add, e.g. https://acmepickleball.com/**
+  ```
+- **Site URL** — keep as your canonical default (e.g. `https://dinkdrop.live`). It's only the
+  fallback now that the allowlist matches real tenant hosts.
+
+**Google Cloud Console: no per-tenant change.** Google's authorized redirect URI stays the fixed
+Supabase one (`https://<project-ref>.supabase.co/auth/v1/callback`). Per-tenant routing happens at
+Supabase's `redirectTo` step, not Google's — never add tenant URLs to Google.
+
+**Cleaning up users mis-pinned before the fix:** a Google user who signed in while the allowlist was
+wrong got `venue_id` = the default venue. The callback only sets `venue_id` when it's null, so this
+does **not** self-correct. Reassign them:
+```sql
+-- Google users and the venue they're on:
+select u.email, v.name as venue
+from auth.users u join profiles p on p.id = u.id
+left join venues v on v.id = p.venue_id
+where u.raw_app_meta_data->>'provider' = 'google';
+
+-- move one to the right venue:
+update profiles set venue_id = (select id from venues where slug = 'acme')
+where id = (select id from auth.users where email = 'them@gmail.com');
+```
+
+## 5. Verify the existing site still works
+
+Before adding any tenant, confirm the current site is unaffected:
+- Visit `https://www.icourt.dinkdrop.live` → loads normally.
+- Sign in as an existing admin → `/admin` shows the same (default) venue's data.
+
+## 6. Create the first real tenant
+
+> **Now do this in the app instead:** onboard tenants from **Admin → Platform → "Onboard a new
+> tenant"** (see [Onboarding a tenant](#onboarding-a-tenant--no-new-deployment) below). The CLI below
+> is the original path, kept for scripted onboarding.
+
+Run the onboarding script **against production**. Put the prod URL + service-role key in a local,
+**git-ignored** env file (never commit it):
+
+```bash
+# .env.prod  (DO NOT COMMIT)
+# NEXT_PUBLIC_SUPABASE_URL=https://prymtkfhkhrnxpinlkww.supabase.co
+# SUPABASE_SERVICE_ROLE_KEY=<prod service-role key>
+
+npx tsx --env-file=.env.prod supabase/create-tenant.ts \
+  --name "Acme Pickleball" \
+  --slug acme \
+  --admin-email owner@acme.com \
+  --admin-password '<a strong password>' \
+  --timezone Asia/Manila
+  # add --domain acmepickleball.com for a custom-domain tenant
+```
+
+This creates: the venue (with `slug`/`custom_domain`), full-week 06:00–22:00 hours, a starter
+"Court 1", and the venue's first admin (pinned to the venue). It prints the hostname to point.
+
+Then:
+- **Subdomain tenant:** `acme.dinkdrop.live` already works (wildcard). Give the owner that URL.
+- **Custom-domain tenant:** add `acmepickleball.com` in Vercel Domains and have the tenant CNAME it
+  to Vercel; `create-tenant.ts --domain` already set `venues.custom_domain`.
+
+## 7. Smoke-test isolation
+
+- On the new tenant's host: sign in as `owner@acme.com` → `/admin` shows **only Acme's** courts,
+  coaches, bookings, members. The venue/courts/coaches pages are Acme's.
+- On the existing prod host: still shows **only the default venue's** data.
+- Make a test booking on each host; confirm neither appears on the other.
+- (Optional) Confirm an Acme admin can't act on a default-venue booking: any admin action is
+  venue-scoped by RLS and the RPC guards.
+
+## Onboarding a tenant — no new deployment
+
+> **One Vercel deployment and one Supabase database serve every tenant.** You do **not** create a new
+> Vercel project (or a new database) per venue/court. The running deployment already serves all
+> tenants; a tenant is just a `venues` row plus a hostname pointed at that deployment.
+
+A tenant boundary is a **venue** (one customer/organization), not a single court — a venue holds its
+own courts, coaches, members, and bookings.
+
+### 1. Create the venue + first admin — in the app (no CLI, no deploy)
+
+Sign in as a **super admin** and go to **Admin → Platform → "Onboard a new tenant"**. Enter the venue
+name, timezone, the first admin's email + password, and (optionally) a custom domain; the **slug
+auto-derives from the name** if you leave it blank. This creates the venue, a full week of hours, a
+starter court, and the venue's first admin (as a `venue_memberships` admin row) — all in the shared
+database. The admin can sign in immediately at their host.
+
+> The old `supabase/create-tenant.ts` CLI still works for scripted onboarding, but the Platform UI is
+> the normal path and needs no local env file or service-role key.
+
+### 2. Point a hostname at the existing deployment
+
+| Tenant uses… | Vercel → Project → Domains | Supabase → Auth → Redirect URLs |
+| --- | --- | --- |
+| **Subdomain** `beta.dinkdrop.live` | Nothing — the `*.dinkdrop.live` wildcard already routes it. | Nothing — covered by `https://*.dinkdrop.live/**`. |
+| **Custom domain** `betapadel.com` | Add the domain, then have the tenant add the DNS records Vercel shows at their registrar (apex → `A 76.76.21.21`; `www`/subdomain → `CNAME cname.vercel-dns.com`). Wait for verify + auto-SSL. Set the venue's **Custom domain** field in the Platform form. | Add `https://betapadel.com/**`, or Google / magic-link / password-reset sign-in from that domain bounces to the default host. |
+
+**No Google Cloud change ever** — Google's authorized redirect URI stays the fixed Supabase callback;
+per-tenant routing happens at Supabase's `redirectTo` step, never Google's.
+
+### 3. (Optional) The tenant's own email sender — Resend
+
+By default a tenant's **booking** emails go out under the venue's name from the shared platform
+address (`RESEND_FROM_EMAIL`) — **nothing to do**. For a tenant's **own** sender
+(`bookings@betapadel.com`): add + verify that domain in **Resend** (add its DKIM/SPF/DMARC records at
+the tenant's registrar), then set **Admin → Venue → Sender email** (`venues.email_from`).
+
+> ⚠️ **Password-reset / auth emails** always come from Supabase's **global** SMTP sender — this is
+> not per-tenant. `email_from` only affects **booking** emails.
+
+### 4. (Optional) Theme & capabilities — super admin
+
+On the **Platform** page each venue row has a **Theme** picker (Midnight Lime / Ocean / Sunset /
+Grape / Daylight) and a **Capabilities** toggle (Coaches, Analytics). Both are super-admin-only and
+locked by a DB trigger — a venue admin can't change them. Everything else is the venue admin's own:
+home page, footer, announcement banner, courts, rates, payment accounts, and sender email.
+
+Then smoke-test isolation on the new host (Step 7). Shipping a fix or feature is a single deploy that
+reaches **every** tenant at once — never one deploy per tenant.
+
+Everything that differs between tenants lives on the `venues` row — `slug`, `custom_domain`, `name`,
+`email_from`, `theme`, `features`, timezone, rates, and the announcement/footer/home content — **not**
+in Vercel env vars (those are one shared set: `NEXT_PUBLIC_ROOT_DOMAIN`, the Supabase URL/keys,
+`RESEND_*`).
+
+**When a separate deployment *would* make sense:** only if a customer genuinely needs isolated
+infrastructure — their own database or a forked codebase (e.g. a strict enterprise/compliance
+requirement). That reintroduces the per-tenant database this whole setup avoids, so it's the rare
+exception, not the norm.
+
+## Rollback
+
+- **Code:** revert the deploy. With the multi-tenancy code gone, `getTenant` isn't used and the app
+  behaves single-tenant again; the extra columns/policies are harmless if left in place.
+- **RLS only** (if isolation misbehaves but you want to keep the code): re-apply the pre-multitenancy
+  policies via a down migration (ask and I'll generate one that restores the global-admin policies).
+- The additive columns (`venues.slug`, `venues.custom_domain`, `profiles.venue_id`) can safely stay.
+
+## Notes & gotchas
+
+- **Shared auth + multi-venue membership:** one Supabase project = one auth system, so an **email
+  exists only once** — one account per person. With the `venue_memberships` join table, that single
+  account can belong to **several** venues and hold a different role at each (e.g. player at one,
+  admin at another). Signing in on any tenant host uses the same account; each venue's bookings,
+  membership, and admin access are scoped separately (RLS + the app's per-host `where` filters). A
+  signup with an already-used email signs into the existing account rather than creating a second one.
+- **Service-role key** is used server-side only (the OAuth callback and the Platform onboarding
+  action, plus the legacy `create-tenant.ts`). Never expose it to the browser or commit it.
+- **First admin login:** onboarding (the Platform form or `create-tenant.ts`) sets the admin's
+  password directly and confirms the email, so they can sign in immediately at their tenant host.
+- **Super-admin-only fields:** `venues.theme` and `venues.features` can be changed only by a super
+  admin — the `set_venue_theme` / `set_venue_feature` RPCs plus a guard trigger reject writes (even a
+  venue admin's, and even direct SQL without a super-admin `auth.uid()`).
+- **Storage** (payment slips, coach photos) is shared across tenants but keyed by random UUID paths;
+  slips are a private bucket (admin-only via signed URLs), photos are public images.
