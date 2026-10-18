@@ -98,6 +98,7 @@ export function AvailabilityGrid({
   defaultView,
   venueId,
   promotions,
+  depositPercent,
 }: {
   timezone: string;
   courts: Court[];
@@ -116,6 +117,8 @@ export function AvailabilityGrid({
   defaultView: string;
   venueId: string;
   promotions: PromotionRow[];
+  /** The venue's deposit percentage when the downpayment option is on; null = full payment only. */
+  depositPercent: number | null;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -616,6 +619,7 @@ export function AvailabilityGrid({
         venueId={venueId}
         isMember={isMember}
         equipmentEnabled={equipmentEnabled}
+        depositPercent={depositPercent}
       />
     </>
   );

@@ -53,6 +53,12 @@ interface SummaryResult {
   /** Equipment-rental revenue (already part of realized revenue), broken down by item. */
   equipmentBreakdown: SalesBreakdown[];
   equipmentCents: number;
+  /** Retail / concession revenue (non-court sales) in the range — its own stream, separate from
+   * booking revenue. Top sellers and the cash/online split; 0 for venues without the Store feature. */
+  retailCents: number;
+  retailCount: number;
+  retailBreakdown: SalesBreakdown[];
+  retailByMethod: SalesBreakdown[];
 }
 
 async function summarizeRange(
@@ -60,7 +66,8 @@ async function summarizeRange(
   venueId: string,
   timezone: string,
   from: string,
-  to: string
+  to: string,
+  storeEnabled: boolean
 ): Promise<SummaryResult> {
   const rangeStart = startOfLocalDayUtc(from, timezone);
   const rangeEnd = endOfLocalDayUtc(to, timezone);
@@ -70,7 +77,7 @@ async function summarizeRange(
   // venue's sales pooled together on whichever host they're on.
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("status, total_cents, source, court_id, time_range, payment_method, payment_status, booked_as_member, courts!inner(name, venue_id)")
+    .select("status, total_cents, deposit_cents, balance_payment_method, source, court_id, time_range, payment_method, payment_status, booked_as_member, courts!inner(name, venue_id)")
     .eq("courts.venue_id", venueId)
     .filter("time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
     .limit(10000);
@@ -80,6 +87,8 @@ async function summarizeRange(
     return {
       status: b.status,
       totalCents: b.total_cents,
+      depositCents: b.deposit_cents,
+      balancePaymentMethod: b.balance_payment_method,
       source: b.source,
       courtId: b.court_id,
       courtName: (b.courts as unknown as { name: string } | null)?.name ?? "—",
@@ -116,7 +125,72 @@ async function summarizeRange(
   const equipmentBreakdown = [...equipMap.values()].sort((a, b) => b.cents - a.cents);
   const equipmentCents = equipmentBreakdown.reduce((sum, e) => sum + e.cents, 0);
 
-  return { summary: summarizeSales(rows), totalBookings: rows.length, equipmentBreakdown, equipmentCents };
+  // Retail / concession sales in the range (by sale time). A sale is realized when rung up, so there's
+  // no pending/awaiting state — every recorded sale counts. Top sellers group the line items by their
+  // snapshotted name; the method split reconciles cash vs online takings.
+  let retailCents = 0;
+  let retailCount = 0;
+  let retailBreakdown: SalesBreakdown[] = [];
+  let retailByMethod: SalesBreakdown[] = [];
+  if (storeEnabled) {
+    const [{ data: saleRows }, { data: itemRows }] = await Promise.all([
+      supabase
+        .from("product_sales")
+        .select("total_cents, payment_method")
+        .eq("venue_id", venueId)
+        .gte("sold_at", rangeStart.toISOString())
+        .lte("sold_at", rangeEnd.toISOString())
+        .limit(10000),
+      supabase
+        .from("product_sale_items")
+        .select("name_snapshot, quantity, line_total_cents, product_sales!inner(venue_id, sold_at)")
+        .eq("product_sales.venue_id", venueId)
+        .gte("product_sales.sold_at", rangeStart.toISOString())
+        .lte("product_sales.sold_at", rangeEnd.toISOString())
+        .limit(10000),
+    ]);
+
+    retailCount = (saleRows ?? []).length;
+    retailCents = (saleRows ?? []).reduce((sum, r) => sum + r.total_cents, 0);
+
+    const methodMap = new Map<string, SalesBreakdown>();
+    for (const r of saleRows ?? []) {
+      const key = r.payment_method === "online" ? "online" : "cash";
+      const label = key === "online" ? "Online" : "Cash";
+      const existing = methodMap.get(key);
+      if (existing) {
+        existing.cents += r.total_cents;
+        existing.count++;
+      } else {
+        methodMap.set(key, { key, label, cents: r.total_cents, count: 1 });
+      }
+    }
+    retailByMethod = [...methodMap.values()].sort((a, b) => b.cents - a.cents);
+
+    const itemMap = new Map<string, SalesBreakdown>();
+    for (const r of itemRows ?? []) {
+      const name = r.name_snapshot;
+      const existing = itemMap.get(name);
+      if (existing) {
+        existing.cents += r.line_total_cents;
+        existing.count += r.quantity;
+      } else {
+        itemMap.set(name, { key: name, label: name, cents: r.line_total_cents, count: r.quantity });
+      }
+    }
+    retailBreakdown = [...itemMap.values()].sort((a, b) => b.cents - a.cents);
+  }
+
+  return {
+    summary: summarizeSales(rows),
+    totalBookings: rows.length,
+    equipmentBreakdown,
+    equipmentCents,
+    retailCents,
+    retailCount,
+    retailBreakdown,
+    retailByMethod,
+  };
 }
 
 export default async function AdminSalesPage({
@@ -134,6 +208,7 @@ export default async function AdminSalesPage({
     return <p className="text-muted-foreground">Set up your venue first.</p>;
   }
   if (!featureEnabled(venue.features, "analytics")) notFound();
+  const storeEnabled = featureEnabled(venue.features, "store");
 
   const period: CalendarPeriod | "custom" = PERIOD_OPTIONS.some((p) => p.value === params.period)
     ? (params.period as CalendarPeriod | "custom")
@@ -165,12 +240,12 @@ export default async function AdminSalesPage({
   const yearPrev = periodBounds("year", shiftAnchor("year", anchor, -1));
 
   const [current, previous, mNow, mPrev, yNow, yPrev] = await Promise.all([
-    summarizeRange(supabase, venue.id, venue.timezone, from, to),
-    summarizeRange(supabase, venue.id, venue.timezone, prev.from, prev.to),
-    summarizeRange(supabase, venue.id, venue.timezone, monthNow.from, monthNow.to),
-    summarizeRange(supabase, venue.id, venue.timezone, monthPrev.from, monthPrev.to),
-    summarizeRange(supabase, venue.id, venue.timezone, yearNow.from, yearNow.to),
-    summarizeRange(supabase, venue.id, venue.timezone, yearPrev.from, yearPrev.to),
+    summarizeRange(supabase, venue.id, venue.timezone, from, to, storeEnabled),
+    summarizeRange(supabase, venue.id, venue.timezone, prev.from, prev.to, storeEnabled),
+    summarizeRange(supabase, venue.id, venue.timezone, monthNow.from, monthNow.to, storeEnabled),
+    summarizeRange(supabase, venue.id, venue.timezone, monthPrev.from, monthPrev.to, storeEnabled),
+    summarizeRange(supabase, venue.id, venue.timezone, yearNow.from, yearNow.to, storeEnabled),
+    summarizeRange(supabase, venue.id, venue.timezone, yearPrev.from, yearPrev.to, storeEnabled),
   ]);
 
   const s = current.summary;
@@ -189,7 +264,8 @@ export default async function AdminSalesPage({
         .limit(5000)
     : { data: null };
   const expenses = summarizeExpenses((expenseRows ?? []).map((e) => ({ amountCents: e.amount_cents, category: e.category })));
-  const netCents = netProfitCents(s.realizedCents, expenses.totalCents);
+  // Net profit counts every income stream (court bookings + retail) against expenses.
+  const netCents = netProfitCents(s.realizedCents + current.retailCents, expenses.totalCents);
 
   // Membership revenue = subscriptions approved within the range (by review date). Separate from
   // booking revenue; only when the official-members capability is on.
@@ -338,10 +414,24 @@ export default async function AdminSalesPage({
             {s.awaitingCount} unpaid — not yet counted
           </span>
         </StatCard>
+        {s.outstandingCents > 0 && (
+          <StatCard label="Outstanding balances" value={pesos(s.outstandingCents)}>
+            <span className="text-muted-foreground">
+              {s.outstandingCount} deposit{s.outstandingCount === 1 ? "" : "s"} — balance due at the venue
+            </span>
+          </StatCard>
+        )}
         {officialMembersEnabled && (
           <StatCard label="Membership revenue" value={pesos(membershipRevenueCents)}>
             <span className="text-muted-foreground">
               {membershipCount} subscription{membershipCount === 1 ? "" : "s"} approved this range
+            </span>
+          </StatCard>
+        )}
+        {storeEnabled && (
+          <StatCard label="Retail revenue" value={pesos(current.retailCents)}>
+            <span className="text-muted-foreground">
+              {current.retailCount} sale{current.retailCount === 1 ? "" : "s"} — water, food &amp; merch
             </span>
           </StatCard>
         )}
@@ -363,8 +453,10 @@ export default async function AdminSalesPage({
       <p className="text-xs text-muted-foreground">
         Realized revenue counts confirmed, completed, and no-show bookings that are paid (payment kept — no
         refunds). Unpaid bookings — pending online payments and walk-ins still owed at the venue — are shown
-        separately under Awaiting payment and excluded until settled; cancelled bookings count as zero. Avg daily
-        sales divides realized revenue by the number of days elapsed in the range.
+        separately under Awaiting payment and excluded until settled; cancelled bookings count as zero. For deposit
+        bookings, realized counts the deposit collected and the rest appears under Outstanding balances until it&apos;s
+        collected at the venue. Avg daily sales divides realized revenue by the number of days elapsed in the range.
+        {storeEnabled && " Retail revenue (non-court sales) is tracked separately and included in net profit."}
       </p>
 
       {/* Revenue trends — realized revenue for the selected month/year vs the prior one. */}
@@ -392,6 +484,20 @@ export default async function AdminSalesPage({
             title={`Equipment rental — ${pesos(current.equipmentCents)}`}
             rows={current.equipmentBreakdown}
             total={current.equipmentCents}
+          />
+        )}
+        {storeEnabled && current.retailBreakdown.length > 0 && (
+          <BreakdownCard
+            title={`Retail top sellers — ${pesos(current.retailCents)}`}
+            rows={current.retailBreakdown}
+            total={current.retailCents}
+          />
+        )}
+        {storeEnabled && current.retailByMethod.length > 0 && (
+          <BreakdownCard
+            title="Retail by payment"
+            rows={current.retailByMethod}
+            total={current.retailCents}
           />
         )}
         {expensesEnabled && expenses.count > 0 && (

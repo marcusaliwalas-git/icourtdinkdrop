@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { VENUE_FEATURES, featureEnabled } from "@/lib/features";
+import { VENUE_FEATURES, featureEnabled, isOptInFeature } from "@/lib/features";
 import { setVenueFeature } from "./actions";
 
 /** Super-admin control: enable/disable each capability for one venue. A capability is on unless
@@ -15,7 +15,11 @@ export function VenueCapabilities({ venueId, features }: { venueId: string; feat
   const [error, setError] = useState<string | null>(null);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
 
-  const disabledCount = VENUE_FEATURES.filter((f) => !featureEnabled(features, f.key)).length;
+  // Count only normally-on capabilities that have been switched off — an opt-in capability sitting at
+  // its default-off isn't "disabled", so it shouldn't inflate the badge.
+  const disabledCount = VENUE_FEATURES.filter(
+    (f) => !isOptInFeature(f.key) && !featureEnabled(features, f.key)
+  ).length;
 
   function toggle(key: string, enabled: boolean) {
     setError(null);

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createBookingSchema, createBookingsSchema } from "@/lib/validation/booking";
 import { mapBookingError } from "@/lib/booking-errors";
 import { parseTstzRange } from "@/lib/availability";
@@ -267,6 +268,20 @@ export async function createBookings(input: unknown): Promise<CreateBookingsResu
       })),
     });
     discountCents = totalDiscountCents;
+  }
+
+  // Deposit: when the customer chose to reserve with a downpayment and the venue offers one, record
+  // each booking's deposit (the venue's percentage of its net, post-discount total). The balance is
+  // collected at the venue. Service-role client — the values are computed here, not user input.
+  const depositPercent = (tenant as { deposit_percent?: number | null } | null)?.deposit_percent ?? null;
+  if (parsed.data.deposit && depositPercent) {
+    const admin = createAdminClient();
+    const ids = created.map((b) => b.id);
+    const { data: rows } = await admin.from("bookings").select("id, total_cents, discount_cents").in("id", ids);
+    for (const b of rows ?? []) {
+      const net = b.total_cents - (b.discount_cents ?? 0);
+      await admin.from("bookings").update({ deposit_cents: Math.round((net * depositPercent) / 100) }).eq("id", b.id);
+    }
   }
 
   const lineItems: BookingLineItem[] = created.map((b) => {

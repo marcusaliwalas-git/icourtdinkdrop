@@ -54,6 +54,42 @@ describe("summarizeSales", () => {
     expect(s.byCourt.reduce((sum, b) => sum + b.cents, 0)).toBe(50000);
   });
 
+  it("counts only the deposit as realized for a deposit booking, with the balance outstanding", () => {
+    const s = summarizeSales([
+      row({ status: "confirmed", paymentStatus: "paid_online", totalCents: 90000, depositCents: 45000 }),
+    ]);
+    expect(s.realizedCents).toBe(45000);
+    expect(s.outstandingCents).toBe(45000);
+    expect(s.outstandingCount).toBe(1);
+    // Breakdowns use the collected amount, so they still sum to realized.
+    expect(s.byCourt.reduce((sum, b) => sum + b.cents, 0)).toBe(45000);
+  });
+
+  it("counts a settled deposit fully once the balance is collected, with nothing outstanding", () => {
+    const s = summarizeSales([
+      row({ status: "confirmed", paymentStatus: "paid_online", totalCents: 90000, depositCents: 45000, balancePaymentMethod: "cash" }),
+    ]);
+    expect(s.realizedCents).toBe(90000);
+    expect(s.outstandingCents).toBe(0);
+    expect(s.outstandingCount).toBe(0);
+  });
+
+  it("splits a deposit booking by channel — the deposit as online, the balance by its own method", () => {
+    const s = summarizeSales([
+      row({ status: "confirmed", paymentStatus: "paid_online", totalCents: 90000, depositCents: 45000, balancePaymentMethod: "cash" }),
+    ]);
+    const online = s.byMethod.find((m) => m.key === "online");
+    const cash = s.byMethod.find((m) => m.key === "cash");
+    expect(online?.cents).toBe(45000); // the online deposit
+    expect(cash?.cents).toBe(45000); // the cash balance
+  });
+
+  it("leaves non-deposit revenue unchanged (outstanding is zero)", () => {
+    const s = summarizeSales([row({ status: "confirmed", paymentStatus: "paid_online", totalCents: 70000 })]);
+    expect(s.realizedCents).toBe(70000);
+    expect(s.outstandingCents).toBe(0);
+  });
+
   it("breaks realized revenue down by court, sorted by revenue", () => {
     const s = summarizeSales([
       row({ courtId: "c1", courtName: "Court 1", totalCents: 40000 }),

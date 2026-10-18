@@ -93,6 +93,8 @@ export const createBookingsSchema = z
     idempotencyKey: z.string().trim().min(1).max(200).optional(),
     paymentReference: z.string().trim().min(1).max(100).optional(),
     paymentSlipPath: z.string().trim().min(1).max(300).optional(),
+    // The customer chose to reserve with the venue's deposit instead of paying in full.
+    deposit: z.boolean().optional(),
   })
   // A guest's mobile is optional; a name is required (enforced in create_booking). Phone without a
   // name is the only invalid combination.

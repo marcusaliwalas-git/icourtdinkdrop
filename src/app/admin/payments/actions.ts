@@ -27,7 +27,7 @@ export async function adminConfirmBookingGroup(groupId: string): Promise<Result>
   // One email for the whole cart. profiles.email backfills a member with no guest_email.
   const { data: rows } = await supabase
     .from("bookings")
-    .select("time_range, reference_code, total_cents, guest_email, courts(name, venues(timezone)), profiles(email)")
+    .select("time_range, reference_code, total_cents, deposit_cents, guest_email, courts(name, venues(timezone)), profiles(email)")
     .eq("booking_group_id", groupId)
     .order("time_range");
 
@@ -47,7 +47,13 @@ export async function adminConfirmBookingGroup(groupId: string): Promise<Result>
         const { start, end } = parseTstzRange(row.time_range);
         return { courtName: row.courts?.name ?? "Court", startsAt: start, endsAt: end };
       });
-      const totalCents = list.reduce((sum, b) => sum + (b as unknown as { total_cents: number }).total_cents, 0);
+      const depositRows = list as unknown as { total_cents: number; deposit_cents: number | null }[];
+      const totalCents = depositRows.reduce((sum, b) => sum + b.total_cents, 0);
+      // Balance still due at the venue when the cart was reserved with a deposit.
+      const balanceDueCents = depositRows.reduce(
+        (sum, b) => sum + (b.deposit_cents != null ? Math.max(0, b.total_cents - b.deposit_cents) : 0),
+        0
+      );
       const tenant = await getTenant();
       await sendBookingGroupConfirmationEmail({
         to,
@@ -55,6 +61,7 @@ export async function adminConfirmBookingGroup(groupId: string): Promise<Result>
         timezone,
         referenceCode: first.reference_code,
         totalCents,
+        balanceDueCents,
         guidelines: guidelineLines(tenant?.guidelines),
         ...tenantEmailBrand(tenant),
       });

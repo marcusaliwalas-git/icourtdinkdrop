@@ -275,6 +275,24 @@ function revalidatePaymentAccounts() {
   revalidatePath("/book");
 }
 
+/** Turn the deposit (downpayment) option on or off for this venue. On stores a fixed 50%; off clears
+ * it so customers pay in full. Venue-admin controlled via RLS, like the other venue settings. */
+export async function setDepositPolicy(venueId: string, enabled: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const nextPercent = enabled ? 50 : null;
+  const { data, error } = await supabase
+    .from("venues")
+    .update({ deposit_percent: nextPercent })
+    .eq("id", venueId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Couldn't update the deposit setting." };
+  await auditCurrent(supabase, "deposit_policy_updated", "venue", venueId, { deposit_percent: nextPercent });
+  revalidatePath("/admin/venue");
+  revalidatePath("/book");
+  return { success: true };
+}
+
 export async function addPaymentAccount(formData: FormData): Promise<ActionResult> {
   const parsed = paymentAccountSchema.safeParse({
     venueId: formData.get("venueId"),
@@ -691,6 +709,119 @@ export async function deleteEquipment(id: string): Promise<ActionResult> {
   }
   await auditCurrent(supabase, "equipment_deleted", "equipment", id, null);
   revalidateEquipment();
+  return { success: true };
+}
+
+// ── Store / retail catalog (flat-priced items: water, food, merch) ───────────────
+function revalidateProducts() {
+  revalidatePath("/admin/venue");
+  revalidatePath("/admin/front-desk");
+}
+
+type ProductFields = {
+  name: string;
+  priceCents: number;
+  category: string | null;
+  isActive: boolean;
+  trackStock: boolean;
+  stock: number | null;
+  available: boolean;
+};
+
+function readProduct(formData: FormData): ProductFields | { error: string } {
+  const name = String(formData.get("name") ?? "").trim();
+  const priceCents = Math.round(Number(formData.get("price")) * 100);
+  const categoryRaw = String(formData.get("category") ?? "").trim();
+  const category = categoryRaw === "" ? null : categoryRaw;
+  const isActive = formData.get("isActive") === "on" || formData.get("isActive") === "true";
+  const trackStock = formData.get("trackStock") === "on" || formData.get("trackStock") === "true";
+  const available = formData.get("available") === "on" || formData.get("available") === "true";
+  // Stock only matters when counting; store null otherwise so untracked items stay "unlimited".
+  const stockRaw = String(formData.get("stock") ?? "").trim();
+  const stock = trackStock ? (stockRaw === "" ? 0 : Math.trunc(Number(stockRaw))) : null;
+  if (!name) return { error: "Give the item a name." };
+  if (!Number.isFinite(priceCents) || priceCents < 0) return { error: "Enter a valid price." };
+  if (trackStock && (stock === null || !Number.isFinite(stock) || stock < 0))
+    return { error: "Enter a valid stock count (0 or more)." };
+  return { name, priceCents, category, isActive, trackStock, stock, available };
+}
+
+export async function addProduct(formData: FormData): Promise<ActionResult> {
+  const parsed = readProduct(formData);
+  if ("error" in parsed) return parsed;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .insert({
+      venue_id: String(formData.get("venueId")),
+      name: parsed.name,
+      price_cents: parsed.priceCents,
+      category: parsed.category,
+      is_active: parsed.isActive,
+      track_stock: parsed.trackStock,
+      stock: parsed.stock,
+      available: parsed.available,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "product_created", "product", data.id, {
+    name: parsed.name,
+    price_cents: parsed.priceCents,
+  });
+  revalidateProducts();
+  return { success: true };
+}
+
+export async function updateProduct(id: string, formData: FormData): Promise<ActionResult> {
+  const parsed = readProduct(formData);
+  if ("error" in parsed) return parsed;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .update({
+      name: parsed.name,
+      price_cents: parsed.priceCents,
+      category: parsed.category,
+      is_active: parsed.isActive,
+      track_stock: parsed.trackStock,
+      stock: parsed.stock,
+      available: parsed.available,
+    })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "That item isn't for your venue." };
+  await auditCurrent(supabase, "product_updated", "product", id, {
+    name: parsed.name,
+    price_cents: parsed.priceCents,
+  });
+  revalidateProducts();
+  return { success: true };
+}
+
+export async function deleteProduct(id: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  // Past receipts keep the item (their lines snapshot the name and null out product_id on delete),
+  // so deleting is always safe and never rewrites sales history.
+  if (error) return { error: error.message };
+  await auditCurrent(supabase, "product_deleted", "product", id, null);
+  revalidateProducts();
+  return { success: true };
+}
+
+/** Flip a product's sold-out ("86") switch. Goes through the staff-gated RPC so front desk can use it
+ * mid-shift without catalog (admin) access. */
+export async function setProductAvailability(id: string, available: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_product_availability", { p_product: id, p_available: available });
+  if (error) {
+    return { error: error.code === "42501" ? "You don't have access to change this item." : error.message };
+  }
+  await auditCurrent(supabase, "product_availability_set", "product", id, { available });
+  revalidateProducts();
+  revalidatePath("/admin/front-desk");
   return { success: true };
 }
 

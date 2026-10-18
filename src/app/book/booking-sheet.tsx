@@ -107,6 +107,7 @@ export function BookingSheet({
   venueId,
   isMember,
   equipmentEnabled,
+  depositPercent = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -125,6 +126,8 @@ export function BookingSheet({
   /** Active membership here — equipment is shown/charged at the member rate when true. */
   isMember: boolean;
   equipmentEnabled: boolean;
+  /** When set, the venue lets customers reserve by paying this % online (balance at the venue). */
+  depositPercent?: number | null;
 }) {
   const router = useRouter();
   const [coachId, setCoachId] = useState("");
@@ -133,6 +136,8 @@ export function BookingSheet({
   const [guestEmail, setGuestEmail] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentSlipFile, setPaymentSlipFile] = useState<File | null>(null);
+  // When the venue offers a deposit, the customer can pay the deposit now instead of the full amount.
+  const [payDeposit, setPayDeposit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
     bookings: CreatedBooking[];
@@ -203,6 +208,13 @@ export function BookingSheet({
   const appliedDiscountCents = Math.min(discountCents, totalCents);
   const grandTotalCents = totalCents + coachFeeCents + equipmentFeeCents - appliedDiscountCents;
 
+  // Deposit option: pay a percentage online now, the rest at the venue.
+  const depositEnabled = depositPercent != null && depositPercent > 0 && grandTotalCents > 0;
+  const depositCents = depositEnabled ? Math.round((grandTotalCents * depositPercent!) / 100) : 0;
+  const payingDeposit = payDeposit && depositEnabled;
+  const amountDueNow = payingDeposit ? depositCents : grandTotalCents;
+  const balanceAtVenue = payingDeposit ? grandTotalCents - depositCents : 0;
+
   function setQty(item: EquipItem, next: number) {
     const cap = Math.min(item.available, item.max_per_booking ?? item.available);
     const clamped = Math.max(0, Math.min(next, cap));
@@ -260,6 +272,7 @@ export function BookingSheet({
         paymentReference: paymentReference.trim() || undefined,
         paymentSlipPath: path,
         idempotencyKey,
+        deposit: payingDeposit,
       });
 
       if (!result.success) {
@@ -501,9 +514,46 @@ export function BookingSheet({
               </>
             )}
 
+            {depositEnabled && (
+              <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
+                <p className="text-sm font-medium">How would you like to pay?</p>
+                <label className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="payChoice"
+                      className="size-4"
+                      checked={!payDeposit}
+                      onChange={() => setPayDeposit(false)}
+                    />
+                    Pay in full
+                  </span>
+                  <span className="font-medium">{pesos(grandTotalCents)}</span>
+                </label>
+                <label className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="payChoice"
+                      className="size-4"
+                      checked={payDeposit}
+                      onChange={() => setPayDeposit(true)}
+                    />
+                    Reserve with {depositPercent}% deposit
+                  </span>
+                  <span className="font-medium">{pesos(depositCents)}</span>
+                </label>
+                {payingDeposit && (
+                  <p className="text-xs text-muted-foreground">{pesos(balanceAtVenue)} balance due at the venue.</p>
+                )}
+              </div>
+            )}
+
             <p className="text-sm text-muted-foreground">
               {isLoggedIn && "Member rates applied if you're an active member. "}
-              Transfer the total above via GCash or bank transfer, then attach proof below (reference number optional).
+              {payingDeposit
+                ? `Transfer the ${depositPercent}% deposit of ${pesos(amountDueNow)} via GCash or bank transfer, then attach proof below (reference number optional).`
+                : "Transfer the total above via GCash or bank transfer, then attach proof below (reference number optional)."}
             </p>
 
             {paymentAccounts.length > 0 && (

@@ -48,6 +48,8 @@ interface BookingEmailDetails {
   logoUrl: string | null;
   /** Court guidelines shown on confirmation only (one rule per entry). */
   guidelines?: string[] | null;
+  /** Balance still due at the venue for a deposit booking (confirmation email only); 0/undefined = paid in full. */
+  balanceDueCents?: number;
 }
 
 function pesos(cents: number) {
@@ -102,6 +104,8 @@ interface BookingGroupEmailDetails {
   logoUrl: string | null;
   /** Court guidelines shown on confirmation only (one rule per entry). */
   guidelines?: string[] | null;
+  /** Balance still due at the venue for a deposit cart; 0/undefined = paid in full. */
+  balanceDueCents?: number;
 }
 
 /** One confirmation email for a multi-slot cart — lists every slot, one reference, one total. */
@@ -121,11 +125,21 @@ export async function sendBookingGroupConfirmationEmail(details: BookingGroupEma
     subject: `Booking confirmed: ${n} slot${n === 1 ? "" : "s"}`,
     html: renderEmail({
       heading: "Your booking is confirmed 🎉",
-      intro: ["The venue has verified your payment — your courts are reserved. Show your reference code at check-in."],
+      intro: [
+        (details.balanceDueCents ?? 0) > 0
+          ? "The venue has verified your deposit — your courts are reserved. Settle the balance at the venue and show your reference code at check-in."
+          : "The venue has verified your payment — your courts are reserved. Show your reference code at check-in.",
+      ],
       detailRows: [
         ...slotRows,
         { label: "Reference", value: details.referenceCode, mono: true },
-        { label: "Total paid", value: pesos(details.totalCents) },
+        ...((details.balanceDueCents ?? 0) > 0
+          ? [
+              { label: "Deposit paid", value: pesos(details.totalCents - details.balanceDueCents!) },
+              { label: "Balance due at venue", value: pesos(details.balanceDueCents!) },
+              { label: "Total", value: pesos(details.totalCents) },
+            ]
+          : [{ label: "Total paid", value: pesos(details.totalCents) }]),
       ],
       guidelines: details.guidelines ?? undefined,
       logoUrl: details.logoUrl,
@@ -184,12 +198,22 @@ export async function sendBookingConfirmationEmail(details: BookingEmailDetails)
     subject: `Booking confirmed: ${details.courtName}, ${when}`,
     html: renderEmail({
       heading: "Your booking is confirmed 🎉",
-      intro: ["The venue has verified your payment — your court is reserved. Show your reference code at check-in."],
+      intro: [
+        (details.balanceDueCents ?? 0) > 0
+          ? "The venue has verified your deposit — your court is reserved. Settle the balance at the venue and show your reference code at check-in."
+          : "The venue has verified your payment — your court is reserved. Show your reference code at check-in.",
+      ],
       detailRows: [
         { label: "Court", value: details.courtName },
         { label: "When", value: `${when} – ${until}` },
         { label: "Reference", value: details.referenceCode, mono: true },
-        { label: "Total paid", value: pesos(details.totalCents) },
+        ...((details.balanceDueCents ?? 0) > 0
+          ? [
+              { label: "Deposit paid", value: pesos(details.totalCents - details.balanceDueCents!) },
+              { label: "Balance due at venue", value: pesos(details.balanceDueCents!) },
+              { label: "Total", value: pesos(details.totalCents) },
+            ]
+          : [{ label: "Total paid", value: pesos(details.totalCents) }]),
       ],
       guidelines: details.guidelines ?? undefined,
       logoUrl: details.logoUrl,
