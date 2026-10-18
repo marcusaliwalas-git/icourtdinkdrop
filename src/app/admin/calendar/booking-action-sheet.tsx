@@ -26,10 +26,12 @@ import {
   getBookingPaymentProof,
   getBookingCharges,
   setBookingPayment,
+  collectBookingBalance,
   type BookingCharges,
 } from "./actions";
 import { adminConfirmBookingGroup, getBookingGroupPending } from "@/app/admin/payments/actions";
 import { RescheduleForm } from "./reschedule-sheet";
+import { CollectBalanceControl } from "./collect-balance-control";
 import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
@@ -148,6 +150,19 @@ export function BookingActionSheet({
         return;
       }
       onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  function onCollectBalance(method: "cash" | "online", remarks: string | null) {
+    setError(null);
+    startTransition(async () => {
+      const result = await collectBookingBalance(bookingId, method, remarks);
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+      getBookingCharges(bookingId).then(setCharges);
       router.refresh();
     });
   }
@@ -327,6 +342,22 @@ export function BookingActionSheet({
                 <span>{pesos(charges.totalCents)}</span>
               </li>
             </ul>
+          )}
+
+          {charges && charges.balanceDueCents > 0 && (
+            <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
+              <span className="font-medium text-amber-700 dark:text-amber-400">
+                Balance due at venue
+                <span className="ml-1.5 font-semibold text-foreground">{pesos(charges.balanceDueCents)}</span>
+              </span>
+              <CollectBalanceControl disabled={isPending} onCollect={onCollectBalance} />
+            </div>
+          )}
+          {charges && charges.balanceDueCents === 0 && charges.balancePaymentMethod && (
+            <p className="px-1 text-xs text-muted-foreground">
+              Balance collected · {charges.balancePaymentMethod === "cash" ? "Cash" : "Online"}
+              {charges.balancePaymentRemarks ? ` · ${charges.balancePaymentRemarks}` : ""}
+            </p>
           )}
 
           {proof && (proof.paymentReference || proof.slipUrl) && (

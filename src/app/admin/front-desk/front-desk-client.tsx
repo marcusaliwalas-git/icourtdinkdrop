@@ -16,7 +16,9 @@ import {
   adminSetCheckedIn,
   getBookingPaymentProof,
   setBookingPayment,
+  collectBookingBalance,
 } from "@/app/admin/calendar/actions";
+import { CollectBalanceControl } from "@/app/admin/calendar/collect-balance-control";
 
 export type DeskBooking = {
   id: string;
@@ -30,6 +32,8 @@ export type DeskBooking = {
   phone: string | null;
   partySize: number;
   totalCents: number;
+  /** Outstanding deposit balance to collect at the venue; 0 when none / fully paid. */
+  balanceDueCents: number;
   paymentStatus: string;
   referenceCode: string;
   isOnline: boolean;
@@ -187,8 +191,11 @@ export function FrontDesk({
                 key={b.id}
                 className={cn(
                   "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border-2 p-3 sm:flex-nowrap",
-                  // Green outline once paid, red while payment is still owed — a glanceable status.
-                  isPaid(b.paymentStatus) ? "border-emerald-500/70" : "border-destructive/70"
+                  // Green outline only when fully settled; red while any payment is still owed —
+                  // including a deposit booking whose balance is still due at the venue.
+                  isPaid(b.paymentStatus) && b.balanceDueCents === 0
+                    ? "border-emerald-500/70"
+                    : "border-destructive/70"
                 )}
               >
                 <div className="w-28 shrink-0">
@@ -204,6 +211,17 @@ export function FrontDesk({
                     <span className="font-mono">{b.referenceCode}</span>
                     {b.phone ? ` · ${b.phone}` : ""} · {pesos(b.totalCents)}
                   </p>
+                  {b.balanceDueCents > 0 && (
+                    <p className="mt-1 flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">
+                        Balance due {pesos(b.balanceDueCents)}
+                      </span>
+                      <CollectBalanceControl
+                        disabled={isPending}
+                        onCollect={(method, remarks) => run(() => collectBookingBalance(b.id, method, remarks))}
+                      />
+                    </p>
+                  )}
                   {b.equipment.length > 0 && (
                     <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">

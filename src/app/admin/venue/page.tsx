@@ -5,9 +5,11 @@ import { CourtsManager } from "./courts-manager";
 import { HoursManager } from "./hours-manager";
 import { ClosuresManager } from "./closures-manager";
 import { PaymentAccountsManager } from "./payment-accounts-manager";
+import { DepositPolicy } from "./deposit-policy";
 import { MembershipPlansManager } from "./membership-plans-manager";
 import { parseFieldSpecs } from "@/lib/memberships/fields";
 import { EquipmentManager, type Equipment } from "./equipment-manager";
+import { ProductsManager, type Product } from "./products-manager";
 import { PromotionsManager, type Promotion } from "./promotions-manager";
 import { getTenant } from "@/lib/tenant";
 import { compareCourtName } from "@/lib/courts";
@@ -130,6 +132,16 @@ export default async function AdminVenuePage() {
         .order("name")
     : { data: [] as Equipment[] };
 
+  const storeEnabled = featureEnabled(venue.features, "store");
+  const { data: products } = storeEnabled
+    ? await supabase
+        .from("products")
+        .select("id, name, price_cents, category, is_active, track_stock, stock, available")
+        .eq("venue_id", venue.id)
+        .order("sort_order")
+        .order("name")
+    : { data: [] as Product[] };
+
   const { data: promotions } = await supabase
     .from("promotions")
     .select("id, name, type, config, eligibility, stackable, priority, active, starts_on, ends_on")
@@ -149,6 +161,7 @@ export default async function AdminVenuePage() {
           <TabsTrigger value="payment">Payment</TabsTrigger>
           {officialMembersEnabled && <TabsTrigger value="membership">Membership</TabsTrigger>}
           {equipmentEnabled && <TabsTrigger value="equipment">Equipment</TabsTrigger>}
+          {storeEnabled && <TabsTrigger value="store">Store</TabsTrigger>}
           <TabsTrigger value="promotions">Promotions</TabsTrigger>
           <TabsTrigger value="closures">Closures</TabsTrigger>
         </TabsList>
@@ -165,8 +178,9 @@ export default async function AdminVenuePage() {
         <TabsContent value="hours">
           <HoursManager venueId={venue.id} hours={hours ?? []} />
         </TabsContent>
-        <TabsContent value="payment">
+        <TabsContent value="payment" className="flex flex-col gap-6">
           <PaymentAccountsManager venueId={venue.id} accounts={paymentAccounts ?? []} />
+          <DepositPolicy venueId={venue.id} enabled={venue.deposit_percent != null} percent={venue.deposit_percent ?? 50} />
         </TabsContent>
         {officialMembersEnabled && (
           <TabsContent value="membership">
@@ -184,6 +198,11 @@ export default async function AdminVenuePage() {
         {equipmentEnabled && (
           <TabsContent value="equipment">
             <EquipmentManager venueId={venue.id} equipment={(equipment ?? []) as Equipment[]} />
+          </TabsContent>
+        )}
+        {storeEnabled && (
+          <TabsContent value="store">
+            <ProductsManager venueId={venue.id} products={(products ?? []) as Product[]} />
           </TabsContent>
         )}
         <TabsContent value="promotions">

@@ -29,6 +29,7 @@ export function PaymentGroupCard({
   equipmentLines,
   discountCents,
   discountLabel,
+  depositCents,
   totalCents,
   referenceCode,
   paymentReference,
@@ -42,6 +43,8 @@ export function PaymentGroupCard({
   equipmentLines: EquipmentLine[];
   discountCents: number;
   discountLabel: string | null;
+  /** Deposit collected online when this cart was reserved with a downpayment; null = full payment. */
+  depositCents: number | null;
   totalCents: number;
   referenceCode: string;
   paymentReference: string | null;
@@ -115,9 +118,15 @@ export function PaymentGroupCard({
               <span>−{pesos(discountCents)}</span>
             </li>
           )}
+          {depositCents != null && depositCents < totalCents && (
+            <li className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+              <span>Balance due at venue</span>
+              <span>{pesos(totalCents - depositCents)}</span>
+            </li>
+          )}
           <li className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 font-semibold">
-            <span>Total to verify</span>
-            <span>{pesos(totalCents)}</span>
+            <span>{depositCents != null && depositCents < totalCents ? "Deposit to verify" : "Total to verify"}</span>
+            <span>{pesos(depositCents != null && depositCents < totalCents ? depositCents : totalCents)}</span>
           </li>
         </ul>
 

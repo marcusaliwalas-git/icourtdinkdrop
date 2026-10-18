@@ -32,6 +32,11 @@ export interface SalesInputRow {
   paymentMethod: string | null; // 'cash' | 'online' | 'complimentary' | null (not explicitly set)
   paymentStatus: string; // used to attribute a booking with no explicit method (e.g. online)
   bookedAsMember: boolean; // was the member rate applied at booking time
+  /** The online deposit on a deposit booking; null/undefined = normal full-payment booking. Realized
+   * revenue counts the deposit (paid online) plus the balance once it's collected. */
+  depositCents?: number | null;
+  /** How a deposit booking's balance was collected ('cash' | 'online'); null = not yet collected. */
+  balancePaymentMethod?: string | null;
 }
 
 export interface SalesBreakdown {
@@ -48,6 +53,10 @@ export interface SalesSummary {
   /** Bookings not yet paid (pending online + confirmed-but-owed) — shown apart from realized revenue. */
   awaitingCents: number;
   awaitingCount: number;
+  /** Deposit-booking balances already reserved but still to be collected at the venue. 0 for venues
+   * without the deposit option. */
+  outstandingCents: number;
+  outstandingCount: number;
   byCourt: SalesBreakdown[];
   bySource: SalesBreakdown[];
   byWeekday: SalesBreakdown[];
@@ -112,8 +121,19 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
         (REALIZED_STATUSES.includes(r.status) && !isPaid(r.paymentStatus)))
   );
 
-  const realizedCents = realized.reduce((sum, r) => sum + r.totalCents, 0);
+  // A deposit booking has collected its deposit (online) plus, once settled, the balance. Until the
+  // balance is collected it's outstanding. Null deposit = a normal booking → just totalCents (numbers
+  // unchanged for most venues). "Settled" = the balance method is recorded.
+  const isDeposit = (r: SalesInputRow) => r.depositCents != null;
+  const settled = (r: SalesInputRow) => !!r.balancePaymentMethod;
+  const collected = (r: SalesInputRow) => (isDeposit(r) ? (settled(r) ? r.totalCents : r.depositCents!) : r.totalCents);
+
+  const realizedCents = realized.reduce((sum, r) => sum + collected(r), 0);
   const bookingCount = realized.length;
+
+  // Balances reserved (deposit paid) but still to be collected at the venue.
+  const outstandingRows = realized.filter((r) => isDeposit(r) && !settled(r));
+  const outstandingCents = outstandingRows.reduce((sum, r) => sum + (r.totalCents - (r.depositCents ?? 0)), 0);
 
   const byCourt = new Map<string, SalesBreakdown>();
   const bySource = new Map<string, SalesBreakdown>();
@@ -122,25 +142,33 @@ export function summarizeSales(rows: SalesInputRow[]): SalesSummary {
   const byMembership = new Map<string, SalesBreakdown>();
 
   for (const r of realized) {
-    accumulate(byCourt, r.courtId, r.courtName, r.totalCents);
-    accumulate(bySource, r.source, SOURCE_LABELS[r.source] ?? r.source, r.totalCents);
-    accumulate(byWeekday, String(r.isoWeekday), WEEKDAY_LABELS[r.isoWeekday] ?? String(r.isoWeekday), r.totalCents);
-    const bucket = paymentBucket(r.paymentMethod, r.paymentStatus);
-    accumulate(byMethod, bucket.key, bucket.label, r.totalCents);
-    accumulate(
-      byMembership,
-      r.bookedAsMember ? "member" : "nonmember",
-      r.bookedAsMember ? "Member" : "Non-member",
-      r.totalCents
-    );
+    const amt = collected(r);
+    accumulate(byCourt, r.courtId, r.courtName, amt);
+    accumulate(bySource, r.source, SOURCE_LABELS[r.source] ?? r.source, amt);
+    accumulate(byWeekday, String(r.isoWeekday), WEEKDAY_LABELS[r.isoWeekday] ?? String(r.isoWeekday), amt);
+    // By payment method: a deposit booking splits across channels — the deposit was paid online, and
+    // the balance (once collected) by its own method (cash or online).
+    if (isDeposit(r)) {
+      accumulate(byMethod, "online", "Paid online", r.depositCents!);
+      if (settled(r)) {
+        const bb = paymentBucket(r.balancePaymentMethod!, "");
+        accumulate(byMethod, bb.key, bb.label, r.totalCents - r.depositCents!);
+      }
+    } else {
+      const bucket = paymentBucket(r.paymentMethod, r.paymentStatus);
+      accumulate(byMethod, bucket.key, bucket.label, r.totalCents);
+    }
+    accumulate(byMembership, r.bookedAsMember ? "member" : "nonmember", r.bookedAsMember ? "Member" : "Non-member", amt);
   }
 
   return {
     realizedCents,
     bookingCount,
     avgCents: bookingCount ? Math.round(realizedCents / bookingCount) : 0,
-    awaitingCents: awaiting.reduce((sum, r) => sum + r.totalCents, 0),
+    awaitingCents: awaiting.reduce((sum, r) => sum + collected(r), 0),
     awaitingCount: awaiting.length,
+    outstandingCents,
+    outstandingCount: outstandingRows.length,
     byCourt: [...byCourt.values()].sort((a, b) => b.cents - a.cents),
     bySource: [...bySource.values()].sort((a, b) => b.cents - a.cents),
     // Chronological Mon→Sun, not by revenue, so the week reads naturally.

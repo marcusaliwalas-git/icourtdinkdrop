@@ -14,6 +14,7 @@ type Row = {
   total_cents: number;
   discount_cents: number;
   discount_label: string | null;
+  deposit_cents: number | null;
   reference_code: string;
   guest_name: string | null;
   guest_phone: string | null;
@@ -32,7 +33,7 @@ export default async function AdminPaymentsPage() {
   const { data } = await supabase
     .from("bookings")
     .select(
-      "id, booking_group_id, time_range, total_cents, discount_cents, discount_label, reference_code, guest_name, guest_phone, guest_email, courts!inner(name, venue_id), profiles(full_name, email), booking_equipment(quantity, fee_cents, equipment(name))"
+      "id, booking_group_id, time_range, total_cents, discount_cents, discount_label, deposit_cents, reference_code, guest_name, guest_phone, guest_email, courts!inner(name, venue_id), profiles(full_name, email), booking_equipment(quantity, fee_cents, equipment(name))"
     )
     .eq("courts.venue_id", venue.id)
     .eq("status", "pending")
@@ -85,6 +86,11 @@ export default async function AdminPaymentsPage() {
       const labels = Array.from(
         new Set(rows.filter((r) => r.discount_cents > 0).map((r) => r.discount_label).filter(Boolean))
       );
+      // Deposit: when the cart was reserved with a downpayment, the amount to verify is the deposit,
+      // and the balance is collected at the venue. null = a full-payment cart.
+      const depositCents = rows.some((r) => r.deposit_cents != null)
+        ? rows.reduce((sum, r) => sum + (r.deposit_cents ?? 0), 0)
+        : null;
       return {
         key,
         groupId: first.booking_group_id,
@@ -95,6 +101,7 @@ export default async function AdminPaymentsPage() {
         equipmentLines,
         discountCents,
         discountLabel: labels.length === 1 ? (labels[0] as string) : null,
+        depositCents,
         totalCents: rows.reduce((sum, r) => sum + r.total_cents, 0),
         referenceCode: first.reference_code,
         paymentReference: proof.paymentReference,

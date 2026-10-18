@@ -275,6 +275,8 @@ export async function adminConfirmBooking(bookingId: string): Promise<WalkInResu
       timezone,
       referenceCode: data.reference_code,
       totalCents: data.total_cents,
+      balanceDueCents:
+        data.deposit_cents != null ? Math.max(0, data.total_cents - data.deposit_cents) : 0,
       guidelines: guidelineLines(tenant?.guidelines),
       ...tenantEmailBrand(tenant),
     });
@@ -356,6 +358,12 @@ export type BookingCharges = {
   discountCents: number;
   /** The applied promo's name, for the discount line. */
   discountLabel: string | null;
+  /** Balance still owed at the venue for a deposit booking (0 when none / fully paid). */
+  balanceDueCents: number;
+  /** How a settled deposit balance was collected ('cash' | 'online'); null when not applicable. */
+  balancePaymentMethod: string | null;
+  /** Bank & reference note for a balance collected online; null otherwise. */
+  balancePaymentRemarks: string | null;
   totalCents: number;
 };
 
@@ -366,12 +374,17 @@ export async function getBookingCharges(bookingId: string): Promise<BookingCharg
   const { data } = await supabase
     .from("bookings")
     .select(
-      "total_cents, discount_cents, discount_label, coach_fee_cents, coaches(name), booking_equipment(quantity, fee_cents, equipment(name))"
+      "total_cents, discount_cents, discount_label, deposit_cents, balance_payment_method, balance_payment_remarks, coach_fee_cents, coaches(name), booking_equipment(quantity, fee_cents, equipment(name))"
     )
     .eq("id", bookingId)
     .maybeSingle();
   if (!data) return null;
 
+  // A deposit booking (deposit_cents set) owes the rest at the venue until the balance method is set.
+  const depositCents = (data as { deposit_cents: number | null }).deposit_cents;
+  const balancePaymentMethod = (data as { balance_payment_method: string | null }).balance_payment_method;
+  const balanceDueCents =
+    depositCents != null && balancePaymentMethod == null ? Math.max(0, data.total_cents - depositCents) : 0;
   const coach = (data.coaches ?? null) as unknown as { name: string } | null;
   const equipment = ((data.booking_equipment ?? []) as unknown as { quantity: number; fee_cents: number; equipment: { name: string } | null }[]).map(
     (e) => ({ name: e.equipment?.name ?? "Equipment", quantity: e.quantity, feeCents: e.fee_cents })
@@ -386,8 +399,47 @@ export async function getBookingCharges(bookingId: string): Promise<BookingCharg
     equipment,
     discountCents: data.discount_cents,
     discountLabel: data.discount_label,
+    balanceDueCents,
+    balancePaymentMethod,
+    balancePaymentRemarks: (data as { balance_payment_remarks: string | null }).balance_payment_remarks,
     totalCents: data.total_cents,
   };
+}
+
+/** Collect the remaining balance for a deposit booking at the venue, recording how it was paid (cash
+ * or online). Marks the whole cart fully paid by setting each booking's deposit_cents to its total and
+ * its balance_payment_method. Staff-only; service-role, as the booking write paths are guarded. */
+export async function collectBookingBalance(
+  bookingId: string,
+  method: "cash" | "online",
+  remarks?: string | null
+): Promise<{ success: true } | { success: false; message: string }> {
+  await requireStaff();
+  if (method !== "cash" && method !== "online") return { success: false, message: "Pick how the balance was paid." };
+  // Only an online balance carries a bank & reference note.
+  const balanceRemarks = method === "online" ? remarks?.trim() || null : null;
+  const admin = createAdminClient();
+  const { data: booking } = await admin
+    .from("bookings")
+    .select("id, booking_group_id, deposit_cents, balance_payment_method")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!booking) return { success: false, message: "Booking not found." };
+  if (booking.deposit_cents == null) return { success: false, message: "This booking has no deposit balance." };
+
+  // Mark the balance collected by recording its method — the deposit amount is kept so reports can
+  // still split the deposit (online) from the balance (cash/online). Settles the whole cart.
+  const { data: rows } = booking.booking_group_id
+    ? await admin.from("bookings").select("id, deposit_cents, balance_payment_method").eq("booking_group_id", booking.booking_group_id)
+    : { data: [booking] };
+  for (const r of rows ?? []) {
+    if (r.deposit_cents != null && r.balance_payment_method == null) {
+      await admin.from("bookings").update({ balance_payment_method: method, balance_payment_remarks: balanceRemarks }).eq("id", r.id);
+    }
+  }
+  revalidatePath("/admin/calendar");
+  revalidatePath("/admin/bookings");
+  return { success: true };
 }
 
 /**

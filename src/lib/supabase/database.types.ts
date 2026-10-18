@@ -207,6 +207,8 @@ export type Database = {
       }
       bookings: {
         Row: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -215,6 +217,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -238,6 +241,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          balance_payment_method?: string | null
+          balance_payment_remarks?: string | null
           booked_as_member?: boolean
           booked_by?: string | null
           booking_group_id?: string | null
@@ -246,6 +251,7 @@ export type Database = {
           coach_id?: string | null
           court_id: string
           created_at?: string
+          deposit_cents?: number | null
           discount_cents?: number
           discount_label?: string | null
           guest_email?: string | null
@@ -269,6 +275,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          balance_payment_method?: string | null
+          balance_payment_remarks?: string | null
           booked_as_member?: boolean
           booked_by?: string | null
           booking_group_id?: string | null
@@ -277,6 +285,7 @@ export type Database = {
           coach_id?: string | null
           court_id?: string
           created_at?: string
+          deposit_cents?: number | null
           discount_cents?: number
           discount_label?: string | null
           guest_email?: string | null
@@ -677,6 +686,162 @@ export type Database = {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          available: boolean
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          stock: number | null
+          track_stock: boolean
+          venue_id: string
+        }
+        Insert: {
+          available?: boolean
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          price_cents: number
+          sort_order?: number
+          stock?: number | null
+          track_stock?: boolean
+          venue_id: string
+        }
+        Update: {
+          available?: boolean
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          stock?: number | null
+          track_stock?: boolean
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_sales: {
+        Row: {
+          booking_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          payment_method: string
+          payment_remarks: string | null
+          sold_at: string
+          sold_by: string | null
+          total_cents: number
+          venue_id: string
+        }
+        Insert: {
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          payment_method: string
+          payment_remarks?: string | null
+          sold_at?: string
+          sold_by?: string | null
+          total_cents?: number
+          venue_id: string
+        }
+        Update: {
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          payment_method?: string
+          payment_remarks?: string | null
+          sold_at?: string
+          sold_by?: string | null
+          total_cents?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_sales_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_sales_sold_by_fkey"
+            columns: ["sold_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_sales_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_sale_items: {
+        Row: {
+          id: string
+          line_total_cents: number
+          name_snapshot: string
+          product_id: string | null
+          quantity: number
+          sale_id: string
+          unit_price_cents: number
+        }
+        Insert: {
+          id?: string
+          line_total_cents: number
+          name_snapshot: string
+          product_id?: string | null
+          quantity: number
+          sale_id: string
+          unit_price_cents: number
+        }
+        Update: {
+          id?: string
+          line_total_cents?: number
+          name_snapshot?: string
+          product_id?: string | null
+          quantity?: number
+          sale_id?: string
+          unit_price_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "product_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -1368,6 +1533,7 @@ export type Database = {
           contact: string | null
           created_at: string
           custom_domain: string | null
+          deposit_percent: number | null
           email_from: string | null
           features: Json
           font: string
@@ -1415,6 +1581,7 @@ export type Database = {
           contact?: string | null
           created_at?: string
           custom_domain?: string | null
+          deposit_percent?: number | null
           email_from?: string | null
           features?: Json
           font?: string
@@ -1462,6 +1629,7 @@ export type Database = {
           contact?: string | null
           created_at?: string
           custom_domain?: string | null
+          deposit_percent?: number | null
           email_from?: string | null
           features?: Json
           font?: string
@@ -1574,6 +1742,8 @@ export type Database = {
       cancel_booking: {
         Args: { p_booking_id: string; p_reference_code?: string }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1582,6 +1752,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -1614,6 +1785,8 @@ export type Database = {
       cancel_booking_group: {
         Args: { p_group_id: string }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1622,6 +1795,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -1655,6 +1829,8 @@ export type Database = {
       confirm_booking: {
         Args: { p_booking_id: string }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1663,6 +1839,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -1695,6 +1872,8 @@ export type Database = {
       confirm_booking_group: {
         Args: { p_group_id: string }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1703,6 +1882,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -1753,6 +1933,8 @@ export type Database = {
           p_starts_at: string
         }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1761,6 +1943,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -1810,6 +1993,8 @@ export type Database = {
           p_source?: string
         }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1818,6 +2003,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -1845,6 +2031,45 @@ export type Database = {
           to: "bookings"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      create_product_sale: {
+        Args: {
+          p_booking_id?: string
+          p_items: Json
+          p_note?: string
+          p_payment_method: string
+          p_payment_remarks?: string
+          p_sold_at?: string
+          p_venue: string
+        }
+        Returns: {
+          booking_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          payment_method: string
+          payment_remarks: string | null
+          sold_at: string
+          sold_by: string | null
+          total_cents: number
+          venue_id: string
+        }
+      }
+      set_product_availability: {
+        Args: { p_available: boolean; p_product: string }
+        Returns: {
+          available: boolean
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          stock: number | null
+          track_stock: boolean
+          venue_id: string
         }
       }
       current_user_venue: { Args: never; Returns: string }
@@ -1896,6 +2121,8 @@ export type Database = {
       mark_no_show: {
         Args: { p_booking_id: string }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1904,6 +2131,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -1941,6 +2169,8 @@ export type Database = {
           p_new_starts_at: string
         }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -1949,6 +2179,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -2008,6 +2239,8 @@ export type Database = {
       set_booking_checked_in: {
         Args: { p_booking_id: string; p_checked_in: boolean }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -2016,6 +2249,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null
@@ -2115,6 +2349,8 @@ export type Database = {
       void_booking: {
         Args: { p_booking_id: string; p_reason: string }
         Returns: {
+          balance_payment_method: string | null
+          balance_payment_remarks: string | null
           booked_as_member: boolean
           booked_by: string | null
           booking_group_id: string | null
@@ -2123,6 +2359,7 @@ export type Database = {
           coach_id: string | null
           court_id: string
           created_at: string
+          deposit_cents: number | null
           discount_cents: number
           discount_label: string | null
           guest_email: string | null

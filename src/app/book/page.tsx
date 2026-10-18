@@ -223,6 +223,7 @@ export default async function BookPage({
           defaultView={venue.calendar_default_view ?? "grid"}
           venueId={venue.id}
           promotions={promotions ?? []}
+          depositPercent={venue.deposit_percent}
         />
       )}
 
