@@ -62,6 +62,7 @@ export default async function AdminLayout({
   ];
   const reportsItems = [
     ...(analyticsEnabled ? [{ href: "/admin/sales", label: "Sales" }] : []),
+    ...(analyticsEnabled ? [{ href: "/admin/utilization", label: "Utilization" }] : []),
     ...(storeEnabled ? [{ href: "/admin/store", label: "Store sales" }] : []),
     ...(expensesEnabled ? [{ href: "/admin/expenses", label: "Expenses" }] : []),
     { href: "/admin/audit", label: "Audit Log" },
