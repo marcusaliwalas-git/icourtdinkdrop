@@ -14,6 +14,7 @@ export const VENUE_THEMES = [
   { key: "hardcourt", label: "Hardcourt", swatch: "#2f90d0" },
   { key: "teal", label: "Clean Teal", swatch: "#0d9488" },
   { key: "bgg", label: "Blue Green Gray", swatch: "#3b82f6" },
+  { key: "azure", label: "Vivid Azure", swatch: "#0a4c86" },
 ] as const;
 
 export type VenueThemeKey = (typeof VENUE_THEMES)[number]["key"];

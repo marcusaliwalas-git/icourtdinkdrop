@@ -406,6 +406,37 @@
   --radius: 0.75rem;
 }
 
+/* Vivid Azure — a bold blue theme: vivid azure (#0a4c86) surfaces throughout, crisp white ink, and
+   light-gray (#d9d9d9) secondary text, with white call-to-action buttons (azure label) for contrast.
+   A dark theme, so the layout keeps the `.dark` class. */
+.dark[data-theme="azure"] {
+  --background: #0a4c86;
+  --foreground: #ffffff;
+  --card: #0c568f;
+  --card-foreground: #ffffff;
+  --popover: #0c568f;
+  --popover-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #0a4c86;
+  --secondary: #12619c;
+  --secondary-foreground: #ffffff;
+  --muted: #0b5290;
+  --muted-foreground: #d9d9d9;
+  --accent: #12619c;
+  --accent-foreground: #ffffff;
+  --border: oklch(1 0 0 / 16%);
+  --input: oklch(1 0 0 / 20%);
+  --ring: #a8cdec;
+  --sidebar: #0c568f;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #0a4c86;
+  --sidebar-accent: #12619c;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: oklch(1 0 0 / 16%);
+  --sidebar-ring: #a8cdec;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
