@@ -32,6 +32,10 @@ const STATUS_TEXT: Record<Exclude<Status, "past">, string> = {
   closed: "CLOSED",
 };
 
+// Past the text layout's comfortable column count, switch to a compact color-tile board: the status
+// words no longer fit, so each cell becomes a solid tile and a legend explains the colours.
+const COMPACT_THRESHOLD = 6;
+
 // The poster takes its colours from the venue's active theme (the same CSS variables the app uses),
 // so it matches the venue's branding — a dark theme gives a dark poster, a light one a light poster.
 const C = {
@@ -40,13 +44,24 @@ const C = {
   accent: "var(--primary)",
   muted: "var(--muted-foreground)",
   panel: "color-mix(in srgb, var(--foreground) 7%, transparent)",
+  bookedFill: "color-mix(in srgb, var(--muted-foreground) 50%, transparent)",
   hairline: "color-mix(in srgb, var(--primary) 45%, transparent)",
   hairlineSoft: "color-mix(in srgb, var(--primary) 30%, transparent)",
 };
 
+// Tile background for the compact board. Available is the brand accent; booked a solid muted fill;
+// closed/past a faint outlined tile (drawn with a border at the call site).
+function tileBg(s: Status): string {
+  return s === "available" ? C.accent : s === "booked" ? C.bookedFill : C.panel;
+}
+
 /** A shareable "Court Available" poster built from the day's calendar grid, styled in the venue's
  * theme. Consecutive hours whose every-court status is identical collapse into one range row (so a
- * mostly-open day reads as a few clean bands). Rendered to a PNG the admin can post. */
+ * mostly-open day reads as a few clean bands). Rendered to a PNG the admin can post.
+ *
+ * Up to COMPACT_THRESHOLD courts it uses word cells (AVAILABLE / BOOKED / CLOSED). Beyond that the
+ * words stop fitting, so it renders a compact color-tile board with a legend and widens itself to
+ * keep every court column legible. */
 export function ShareAvailability({
   venueName,
   dateNumeric,
@@ -146,10 +161,23 @@ export function ShareAvailability({
     }
   }
 
-  const cellColor = (s: Status) => (s === "available" ? C.accent : s === "booked" ? C.muted : C.muted);
+  const compact = courts.length > COMPACT_THRESHOLD;
 
-  // Column template: a wide time column, then one equal column per court.
-  const gridCols = `1.35fr ${courts.map(() => "1fr").join(" ")}`;
+  // Layout. Small venues keep the proven fixed-width word layout; larger ones switch to fixed-pixel
+  // columns and a poster width that grows with the court count, so tiles never get squeezed.
+  const GAP = 6;
+  const PAD_X = 30;
+  const timeColW = 96;
+  const courtColW = 42;
+  const posterW = compact ? PAD_X * 2 + timeColW + courts.length * (courtColW + GAP) : BASE_W;
+  const gridCols = compact
+    ? `${timeColW}px ${courts.map(() => `${courtColW}px`).join(" ")}`
+    : `1.35fr ${courts.map(() => "1fr").join(" ")}`;
+
+  // Scale the on-screen preview down to fit the dialog (export always uses the full-size poster).
+  const previewScale = Math.min(0.82, PREVIEW_MAX_W / posterW);
+
+  const cellColor = (s: Status) => (s === "available" ? C.accent : C.muted);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -168,13 +196,15 @@ export function ShareAvailability({
           status across courts are grouped into bands.
         </p>
 
-        {/* Preview — scaled to fit the dialog; the poster itself renders at full size for the export. */}
-        <div className="flex justify-center overflow-hidden rounded-lg border border-border p-3">
-          <div style={{ width: POSTER_W, transform: "scale(0.82)", transformOrigin: "top center" }}>
+        {/* Preview — scaled to fit the dialog; the poster itself renders at full size for the export.
+            `zoom` (not transform) shrinks the layout box too, so the frame hugs the poster with no
+            leftover whitespace at any width. */}
+        <div className="flex justify-center overflow-x-auto rounded-lg border border-border p-3">
+          <div style={{ zoom: previewScale }}>
             <div
               ref={posterRef}
               style={{
-                width: POSTER_W,
+                width: posterW,
                 background: C.bg,
                 color: C.text,
                 fontFamily: "Arial, Helvetica, sans-serif",
@@ -206,11 +236,22 @@ export function ShareAvailability({
                 </div>
               </div>
 
+              {/* Legend — only needed on the compact tile board, where cells carry no words. */}
+              {compact && (
+                <div style={{ display: "flex", justifyContent: "center", gap: 20, marginBottom: 16 }}>
+                  <LegendItem swatch={C.accent} label="AVAILABLE" />
+                  <LegendItem swatch={C.bookedFill} label="BOOKED" />
+                  <LegendItem swatch={C.panel} outline label="CLOSED" />
+                </div>
+              )}
+
               {/* Grid header */}
-              <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 6, marginBottom: 6 }}>
-                <Cell head>TIME</Cell>
+              <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: GAP, marginBottom: GAP }}>
+                <Cell head compact={compact}>
+                  TIME
+                </Cell>
                 {courts.map((c) => (
-                  <Cell head key={c.id}>
+                  <Cell head compact={compact} key={c.id}>
                     {c.name.toUpperCase()}
                   </Cell>
                 ))}
@@ -231,12 +272,27 @@ export function ShareAvailability({
                 </div>
               ) : (
                 groups.map((g, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: gridCols, gap: 6, marginBottom: 6 }}>
-                    <Cell time>
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: gridCols, gap: GAP, marginBottom: GAP }}>
+                    <Cell time compact={compact}>
                       {fmtTime(g.startIso)} – {fmtTime(g.endIso)}
                     </Cell>
                     {courts.map((c) => {
                       const s = (g.cells[c.id] ?? "closed") as Status;
+                      if (compact) {
+                        const closed = s === "closed" || s === "past";
+                        return (
+                          <div
+                            key={c.id}
+                            title={STATUS_TEXT[s === "past" ? "closed" : s]}
+                            style={{
+                              background: tileBg(s),
+                              border: closed ? `1px solid ${C.hairlineSoft}` : "none",
+                              borderRadius: 4,
+                              minHeight: 28,
+                            }}
+                          />
+                        );
+                      }
                       return (
                         <Cell key={c.id} color={cellColor(s)}>
                           {STATUS_TEXT[s === "past" ? "closed" : s]}
@@ -253,6 +309,7 @@ export function ShareAvailability({
                   style={{
                     display: "flex",
                     justifyContent: "center",
+                    flexWrap: "wrap",
                     marginTop: 26,
                     borderTop: `1px solid ${C.hairlineSoft}`,
                     paddingTop: 20,
@@ -297,33 +354,58 @@ export function ShareAvailability({
   );
 }
 
-const POSTER_W = 540;
+const BASE_W = 540;
+// Widest the preview renders before `zoom` scales it down to fit the dialog.
+const PREVIEW_MAX_W = 520;
+
+function LegendItem({ swatch, label, outline }: { swatch: string; label: string; outline?: boolean }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+      <span
+        style={{
+          width: 13,
+          height: 13,
+          borderRadius: 3,
+          background: swatch,
+          border: outline ? `1px solid ${C.hairlineSoft}` : "none",
+          display: "inline-block",
+        }}
+      />
+      <span style={{ fontSize: 10.5, letterSpacing: 1.5, fontWeight: 700, color: C.muted }}>{label}</span>
+    </div>
+  );
+}
 
 function Cell({
   children,
   head,
   time,
   color,
+  compact,
 }: {
   children: React.ReactNode;
   head?: boolean;
   time?: boolean;
   color?: string;
+  compact?: boolean;
 }) {
   return (
     <div
       style={{
         background: C.panel,
         borderRadius: 6,
-        minWidth: 0, // let 1fr columns shrink so the grid never overflows the poster width
-        overflowWrap: "anywhere",
+        minWidth: 0, // let narrow columns shrink so the grid never overflows the poster width
+        // Compact columns are narrow, so break at spaces first ("COURT" / "7") and only split a word
+        // when it genuinely can't fit; the roomier word layout can break anywhere.
+        overflowWrap: compact ? "break-word" : "anywhere",
+        wordBreak: compact ? "normal" : undefined,
         display: "flex",
         alignItems: "center",
         justifyContent: head || time ? "flex-start" : "center",
-        padding: head ? "12px 10px" : "15px 10px",
-        fontSize: head ? 11 : 11.5,
+        padding: compact ? (head ? "9px 5px" : "8px 5px") : head ? "12px 10px" : "15px 10px",
+        fontSize: compact ? (head ? 9.5 : 10) : head ? 11 : 11.5,
         fontWeight: head ? 700 : 600,
-        letterSpacing: head ? 1.5 : time ? 0.5 : 0.8,
+        letterSpacing: compact ? (head ? 0.5 : 0.3) : head ? 1.5 : time ? 0.5 : 0.8,
         color: head ? C.muted : time ? C.text : color ?? C.text,
         textAlign: head || time ? "left" : "center",
         lineHeight: 1.25,
