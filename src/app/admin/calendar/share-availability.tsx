@@ -168,7 +168,9 @@ export function ShareAvailability({
   const GAP = 6;
   const PAD_X = 30;
   const timeColW = 96;
-  const courtColW = 42;
+  // Wide enough that a typical single-word court label ("OUTDOOR", "CENTER") fits on one line; longer
+  // words still wrap within the column. Narrower than this and words like "OUTDOOR" spilled over.
+  const courtColW = 72;
   const posterW = compact ? PAD_X * 2 + timeColW + courts.length * (courtColW + GAP) : BASE_W;
   const gridCols = compact
     ? `${timeColW}px ${courts.map(() => `${courtColW}px`).join(" ")}`
@@ -395,17 +397,21 @@ function Cell({
         background: C.panel,
         borderRadius: 6,
         minWidth: 0, // let narrow columns shrink so the grid never overflows the poster width
-        // Compact columns are narrow, so break at spaces first ("COURT" / "7") and only split a word
-        // when it genuinely can't fit; the roomier word layout can break anywhere.
-        overflowWrap: compact ? "break-word" : "anywhere",
-        wordBreak: compact ? "normal" : undefined,
+        // Wrapping, by cell kind:
+        //  • Compact fixed-width columns use "anywhere" — a word longer than the column (e.g. a very
+        //    long court name) is force-broken instead of spilling into the next column; names that fit
+        //    still break only at spaces ("COURT" / "4 (INDOOR)").
+        //  • The non-compact header uses "break-word" so fr tracks don't collapse to one character and
+        //    split a name mid-word ("COUR" / "T 1"); its status words keep "anywhere" to fit a label.
+        overflowWrap: head === compact ? "anywhere" : "break-word",
+        wordBreak: "normal",
         display: "flex",
         alignItems: "center",
         justifyContent: head || time ? "flex-start" : "center",
-        padding: compact ? (head ? "9px 5px" : "8px 5px") : head ? "12px 10px" : "15px 10px",
+        padding: compact ? (head ? "9px 4px" : "8px 5px") : head ? "12px 10px" : "15px 10px",
         fontSize: compact ? (head ? 9.5 : 10) : head ? 11 : 11.5,
         fontWeight: head ? 700 : 600,
-        letterSpacing: compact ? (head ? 0.5 : 0.3) : head ? 1.5 : time ? 0.5 : 0.8,
+        letterSpacing: compact ? (head ? 0.2 : 0.3) : head ? 1.5 : time ? 0.5 : 0.8,
         color: head ? C.muted : time ? C.text : color ?? C.text,
         textAlign: head || time ? "left" : "center",
         lineHeight: 1.25,
