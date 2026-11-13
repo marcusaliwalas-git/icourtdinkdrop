@@ -74,82 +74,89 @@ export function RatePeriodsManager({
   const sorted = [...ratePeriods].sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <Label className="text-sm font-medium">Time-based rates</Label>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h3 className="font-heading text-sm font-medium">Time-based rates</h3>
         <p className="text-xs text-muted-foreground">
-          Override the rate above for specific hours, e.g. 7:00 AM–2:00 PM at one rate and 2:00 PM
-          onwards at another. Hours with no override use the rate above. For a period that ends at
-          midnight, set the end to 12:00 AM. Pick days to make a rate apply only then (e.g. a weekend
-          rate) — leave all days unchecked to apply every day. A day-specific rate wins over an
-          all-days one on the days they overlap.
+          Charge different rates at different hours. Any hour without an override uses the flat rate above.
         </p>
+        <details className="group mt-1 text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none text-foreground/80 hover:text-foreground">
+            How overrides work
+          </summary>
+          <p className="mt-1.5 leading-relaxed">
+            Set each period&apos;s start and end, e.g. 7:00 AM–2:00 PM at one rate and 2:00 PM onwards at
+            another. For a period that ends at midnight, set the end to 12:00 AM. Pick days to make a rate
+            apply only then (e.g. a weekend rate) — leave every day unchecked to apply all week. A
+            day-specific rate wins over an all-days one on the days they overlap.
+          </p>
+        </details>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>From</TableHead>
-            <TableHead>To</TableHead>
-            <TableHead>Days</TableHead>
-            <TableHead>Rate</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sorted.map((p) => (
-            <TableRow key={p.id}>
-              <TableCell>{to12Hour(p.start_time)}</TableCell>
-              <TableCell>{to12Hour(p.end_time)}</TableCell>
-              <TableCell>{daysLabel(p.days_of_week)}</TableCell>
-              <TableCell>
-                ₱{centsToPesos(p.hourly_rate_cents)}/hr
-                {p.member_rate_cents != null && (
-                  <span className="text-muted-foreground"> (₱{centsToPesos(p.member_rate_cents)} member)</span>
-                )}
-              </TableCell>
-              <TableCell>
-                <Button size="sm" variant="ghost" disabled={isPending} onClick={() => onDelete(p.id)}>
-                  Remove
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
-          {sorted.length === 0 && (
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
-                No time-based rates — this court charges the flat rate above all day.
-              </TableCell>
+              <TableHead>From</TableHead>
+              <TableHead>To</TableHead>
+              <TableHead>Days</TableHead>
+              <TableHead>Rate</TableHead>
+              <TableHead className="w-0" />
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {sorted.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell className="whitespace-nowrap">{to12Hour(p.start_time)}</TableCell>
+                <TableCell className="whitespace-nowrap">{to12Hour(p.end_time)}</TableCell>
+                <TableCell className="whitespace-nowrap">{daysLabel(p.days_of_week)}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  ₱{centsToPesos(p.hourly_rate_cents)}/hr
+                  {p.member_rate_cents != null && (
+                    <span className="text-muted-foreground"> (₱{centsToPesos(p.member_rate_cents)} member)</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button size="sm" variant="ghost" disabled={isPending} onClick={() => onDelete(p.id)}>
+                    Remove
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {sorted.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
+                  No time-based rates — this court charges the flat rate above all day.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-      <form action={onAdd} className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-end gap-3">
+      <form action={onAdd} className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-3">
+        <p className="text-xs font-medium text-muted-foreground">Add a time-based rate</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`start-${courtId}`}>From</Label>
-            <Input id={`start-${courtId}`} name="startTime" type="time" defaultValue="07:00" required className="w-28" />
+            <Input id={`start-${courtId}`} name="startTime" type="time" defaultValue="07:00" required />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`end-${courtId}`}>To</Label>
-            <Input id={`end-${courtId}`} name="endTime" type="time" defaultValue="14:00" required className="w-28" />
+            <Input id={`end-${courtId}`} name="endTime" type="time" defaultValue="14:00" required />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`rate-${courtId}`}>Rate (PHP)</Label>
-            <Input id={`rate-${courtId}`} name="hourlyRate" type="number" step="0.01" min={0} required className="w-28" />
+            <Input id={`rate-${courtId}`} name="hourlyRate" type="number" step="0.01" min={0} required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor={`member-rate-${courtId}`}>Member (PHP, optional)</Label>
-            <Input id={`member-rate-${courtId}`} name="memberRate" type="number" step="0.01" min={0} className="w-32" />
+            <Label htmlFor={`member-rate-${courtId}`}>Member (PHP)</Label>
+            <Input id={`member-rate-${courtId}`} name="memberRate" type="number" step="0.01" min={0} placeholder="Optional" />
           </div>
-          <Button type="submit" size="sm" disabled={isPending}>
-            Add
-          </Button>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">Days (leave empty for every day)</Label>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
             {DAYS.map((d) => (
               <label key={d.value} className="flex items-center gap-1.5 text-sm">
                 <input type="checkbox" name="daysOfWeek" value={d.value} className="h-4 w-4 accent-primary" />
@@ -157,6 +164,11 @@ export function RatePeriodsManager({
               </label>
             ))}
           </div>
+        </div>
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" disabled={isPending}>
+            {isPending ? "Adding…" : "Add rate"}
+          </Button>
         </div>
       </form>
     </div>
