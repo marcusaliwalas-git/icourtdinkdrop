@@ -293,6 +293,21 @@ export async function setDepositPolicy(venueId: string, enabled: boolean): Promi
   return { success: true };
 }
 
+export async function setCourtTypeFilter(venueId: string, enabled: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("venues")
+    .update({ court_type_filter: enabled })
+    .eq("id", venueId)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: "Couldn't update the court-type filter setting." };
+  await auditCurrent(supabase, "court_type_filter_updated", "venue", venueId, { court_type_filter: enabled });
+  revalidatePath("/admin/venue");
+  revalidatePath("/book");
+  return { success: true };
+}
+
 export async function addPaymentAccount(formData: FormData): Promise<ActionResult> {
   const parsed = paymentAccountSchema.safeParse({
     venueId: formData.get("venueId"),

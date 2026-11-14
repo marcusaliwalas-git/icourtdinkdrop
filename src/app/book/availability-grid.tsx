@@ -14,6 +14,7 @@ import type { TimeRow } from "@/lib/availability";
 interface Court {
   id: string;
   name: string;
+  surface: string | null;
   hourly_rate_cents: number;
   member_rate_cents: number | null;
 }
@@ -29,6 +30,12 @@ interface PromotionRow {
   priority: number;
   starts_on: string | null;
   ends_on: string | null;
+}
+
+// A court with no surface/type label set groups under this placeholder in the customer type filter.
+const COURT_TYPE_NONE = "—";
+function courtTypeOf(c: Court): string {
+  return c.surface?.trim() || COURT_TYPE_NONE;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -86,7 +93,7 @@ const TL_COURT_W = 132; // px for the sticky court column
 
 export function AvailabilityGrid({
   timezone,
-  courts,
+  courts: allCourts,
   rows,
   courtIds,
   ratePeriodsByCourtId,
@@ -99,6 +106,7 @@ export function AvailabilityGrid({
   venueId,
   promotions,
   depositPercent,
+  courtTypeFilterEnabled,
 }: {
   timezone: string;
   courts: Court[];
@@ -119,11 +127,31 @@ export function AvailabilityGrid({
   promotions: PromotionRow[];
   /** The venue's deposit percentage when the downpayment option is on; null = full payment only. */
   depositPercent: number | null;
+  /** When on, show chips (from each court's surface/type label) so customers can filter the grid. */
+  courtTypeFilterEnabled: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sheetOpen, setSheetOpen] = useState(false);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
+
+  // Customer-facing court-type filter. The venue tags each court's type via its surface label; when
+  // the venue has turned the filter on and there's more than one type, customers get chips to narrow
+  // the grid to a single type. Everything downstream reads `courts`, so filtering here is all it takes.
+  const courtTypes = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of allCourts) set.add(courtTypeOf(c));
+    return [...set].sort((a, b) =>
+      a === COURT_TYPE_NONE ? 1 : b === COURT_TYPE_NONE ? -1 : a.localeCompare(b)
+    );
+  }, [allCourts]);
+  const showCourtTypeFilter = courtTypeFilterEnabled && courtTypes.length > 1;
+  const [courtType, setCourtType] = useState<string | null>(null);
+  const courts = useMemo(
+    () =>
+      showCourtTypeFilter && courtType ? allCourts.filter((c) => courtTypeOf(c) === courtType) : allCourts,
+    [allCourts, courtType, showCourtTypeFilter]
+  );
 
   // View switcher (grid / timeline / find a time). Starts on the venue default (matches SSR), then
   // adopts this browser's remembered choice once mounted.
@@ -397,6 +425,41 @@ export function AvailabilityGrid({
           </button>
         ))}
       </div>
+
+      {showCourtTypeFilter && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Court type</span>
+          <button
+            type="button"
+            onClick={() => setCourtType(null)}
+            aria-pressed={courtType === null}
+            className={cn(
+              "rounded-full px-3 py-1 text-sm transition-colors",
+              courtType === null
+                ? "bg-primary font-medium text-primary-foreground"
+                : "border border-input text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All
+          </button>
+          {courtTypes.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setCourtType(t)}
+              aria-pressed={courtType === t}
+              className={cn(
+                "rounded-full px-3 py-1 text-sm transition-colors",
+                courtType === t
+                  ? "bg-primary font-medium text-primary-foreground"
+                  : "border border-input text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t === COURT_TYPE_NONE ? "Other" : t}
+            </button>
+          ))}
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground">
         {view === "find"

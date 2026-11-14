@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { upsertCourt } from "./actions";
+import { upsertCourt, setCourtTypeFilter } from "./actions";
 import { RatePeriodsManager } from "./rate-periods-manager";
 
 type Court = {
@@ -142,15 +143,95 @@ export function CourtsManager({
   venueId,
   courts,
   ratePeriodsByCourtId,
+  courtTypeFilter,
 }: {
   venueId: string;
   courts: Court[];
   ratePeriodsByCourtId: Record<string, RatePeriod[]>;
+  /** Whether the customer-facing type filter is shown on the booking page. */
+  courtTypeFilter: boolean;
 }) {
+  const router = useRouter();
   const [openId, setOpenId] = useState<string | "new" | null>(null);
+  const [showToCustomers, setShowToCustomers] = useState(courtTypeFilter);
+  const [filterPending, startFilterTransition] = useTransition();
+  const [filterError, setFilterError] = useState<string | null>(null);
+
+  function toggleCustomerFilter(next: boolean) {
+    setFilterError(null);
+    setShowToCustomers(next);
+    startFilterTransition(async () => {
+      const result = await setCourtTypeFilter(venueId, next);
+      if (result.error) {
+        setFilterError(result.error);
+        setShowToCustomers(!next);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  // Filter the list by surface — the venue uses this column to label court type (e.g. Pickleball,
+  // Tennis). Each type is an independent on/off toggle; with none selected, every court shows.
+  const NO_TYPE = "—";
+  const surfaceOf = (c: Court) => c.surface?.trim() || NO_TYPE;
+  const surfaces = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of courts) set.add(surfaceOf(c));
+    return [...set].sort((a, b) => (a === NO_TYPE ? 1 : b === NO_TYPE ? -1 : a.localeCompare(b)));
+  }, [courts]);
+  const [active, setActive] = useState<Set<string>>(new Set());
+
+  function toggleSurface(s: string) {
+    setActive((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  }
+
+  const filtered = active.size === 0 ? courts : courts.filter((c) => active.has(surfaceOf(c)));
+  const pill = (on: boolean) =>
+    on
+      ? "rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground"
+      : "rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground";
 
   return (
     <div className="flex flex-col gap-4">
+      {surfaces.length > 1 && (
+        <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Filter by type</span>
+            <button type="button" onClick={() => setActive(new Set())} className={pill(active.size === 0)}>
+              All
+            </button>
+            {surfaces.map((s) => (
+              <button key={s} type="button" onClick={() => toggleSurface(s)} className={pill(active.has(s))}>
+                {s === NO_TYPE ? "No type" : s}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-start gap-2.5 border-t pt-3 text-sm">
+            <input
+              type="checkbox"
+              checked={showToCustomers}
+              disabled={filterPending}
+              onChange={(e) => toggleCustomerFilter(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary"
+            />
+            <span className="min-w-0">
+              <span className="block font-medium">Show this filter to customers</span>
+              <span className="block text-xs text-muted-foreground">
+                Customers can filter the booking grid by court type (from each court&apos;s surface label).
+                Off hides it. Appears only when courts have more than one type.
+              </span>
+              {filterError && <span className="mt-1 block text-xs text-destructive">{filterError}</span>}
+            </span>
+          </label>
+        </div>
+      )}
+
       <div className="flex justify-end">
         <Dialog open={openId === "new"} onOpenChange={(o) => setOpenId(o ? "new" : null)}>
           <DialogTrigger asChild>
@@ -176,7 +257,7 @@ export function CourtsManager({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {courts.map((court) => (
+          {filtered.map((court) => (
             <TableRow key={court.id}>
               <TableCell>{court.name}{court.is_indoor ? " (indoor)" : ""}</TableCell>
               <TableCell>{court.surface ?? "-"}</TableCell>
@@ -214,10 +295,10 @@ export function CourtsManager({
               </TableCell>
             </TableRow>
           ))}
-          {courts.length === 0 && (
+          {filtered.length === 0 && (
             <TableRow>
               <TableCell colSpan={5} className="text-center text-muted-foreground">
-                No courts yet.
+                {courts.length === 0 ? "No courts yet." : "No courts match this filter."}
               </TableCell>
             </TableRow>
           )}

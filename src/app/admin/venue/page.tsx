@@ -173,6 +173,7 @@ export default async function AdminVenuePage() {
             venueId={venue.id}
             courts={courts ?? []}
             ratePeriodsByCourtId={ratePeriodsByCourtId}
+            courtTypeFilter={venue.court_type_filter}
           />
         </TabsContent>
         <TabsContent value="hours">
