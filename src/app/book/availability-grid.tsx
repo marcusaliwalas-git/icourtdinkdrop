@@ -409,87 +409,72 @@ export function AvailabilityGrid({
 
   return (
     <>
-      <div className="inline-flex w-fit gap-1 rounded-full border border-input bg-background p-1">
-        {GUEST_VIEWS.map((v) => (
-          <button
-            key={v.key}
-            type="button"
-            onClick={() => chooseView(v.key)}
-            aria-pressed={view === v.key}
-            className={cn(
-              "rounded-full px-3 py-1 text-sm transition-colors",
-              view === v.key ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-
-      {showCourtTypeFilter && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Court type</span>
-          <button
-            type="button"
-            onClick={() => setCourtType(null)}
-            aria-pressed={courtType === null}
-            className={cn(
-              "rounded-full px-3 py-1 text-sm transition-colors",
-              courtType === null
-                ? "bg-primary font-medium text-primary-foreground"
-                : "border border-input text-muted-foreground hover:text-foreground"
-            )}
-          >
-            All
-          </button>
-          {courtTypes.map((t) => (
+      {/* Court-type filter (left) and view switcher (right) share one row; below sm: they stack
+          (view mode on top, court type below). The guidance + legend now live below the table. */}
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2">
+        {showCourtTypeFilter && (
+          <div className="order-2 flex flex-wrap items-center gap-2 sm:order-1">
+            <span className="text-xs font-medium text-muted-foreground">Court type</span>
             <button
-              key={t}
               type="button"
-              onClick={() => setCourtType(t)}
-              aria-pressed={courtType === t}
+              onClick={() => setCourtType(null)}
+              aria-pressed={courtType === null}
               className={cn(
                 "rounded-full px-3 py-1 text-sm transition-colors",
-                courtType === t
+                courtType === null
                   ? "bg-primary font-medium text-primary-foreground"
                   : "border border-input text-muted-foreground hover:text-foreground"
               )}
             >
-              {t === COURT_TYPE_NONE ? "Other" : t}
+              All
             </button>
-          ))}
-        </div>
-      )}
+            {courtTypes.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setCourtType(t)}
+                aria-pressed={courtType === t}
+                className={cn(
+                  "rounded-full px-3 py-1 text-sm transition-colors",
+                  courtType === t
+                    ? "bg-primary font-medium text-primary-foreground"
+                    : "border border-input text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t === COURT_TYPE_NONE ? "Other" : t}
+              </button>
+            ))}
+          </div>
+        )}
 
-      <p className="text-xs text-muted-foreground">
-        {view === "find"
-          ? "Pick a start time and how long you want to play — we'll show the open courts and their price."
-          : `Each open slot shows its price per hour${isMember ? " (your member rate where it applies)" : ""}. Tap any slots — across courts and times — then review and book them together.`}
-      </p>
-
-      {distinctRates.length > 1 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>Rate:</span>
-          {distinctRates.map((rate) => (
-            <span key={rate} className="flex items-center gap-1.5">
-              <span className={cn("h-2.5 w-2.5 rounded-sm", RATE_TIER_SWATCH[rateTierIndex(rate, minRate, maxRate)])} />
-              {pesosCompact(rate)}/hr
-            </span>
-          ))}
+        <div
+          className={cn(
+            "order-1 flex items-center gap-2 sm:order-2",
+            showCourtTypeFilter && "sm:ml-auto"
+          )}
+        >
+          <span className="text-xs font-medium text-muted-foreground">View</span>
+          <div className="inline-flex w-fit gap-1 rounded-full border border-input bg-background p-1">
+            {GUEST_VIEWS.map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                onClick={() => chooseView(v.key)}
+                aria-pressed={view === v.key}
+                className={cn(
+                  "rounded-full px-3 py-1 text-sm transition-colors",
+                  view === v.key ? "bg-primary font-medium text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
-
-      {view !== "find" && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-primary/50 bg-primary/30" /> Selected</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-muted" /> Booked</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-amber-50 dark:bg-amber-500/20" /> Closed</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-dashed border-border" /> Past</span>
-        </div>
-      )}
+      </div>
 
       {view === "grid" && (
-      <div className={cn("overflow-x-auto rounded-md border", segments.length > 0 && "mb-24")}>
+      <div className="overflow-x-auto rounded-md border">
         <table className="w-full min-w-max border-collapse text-sm">
           <thead>
             <tr>
@@ -540,7 +525,7 @@ export function AvailabilityGrid({
       )}
 
       {view === "timeline" && (
-        <div className={cn("overflow-auto rounded-md border", segments.length > 0 && "mb-24")} style={{ maxHeight: "70vh" }}>
+        <div className="overflow-auto rounded-md border" style={{ maxHeight: "70vh" }}>
           <div style={{ width: TL_COURT_W + rows.length * TL_HOUR_W, position: "relative" }}>
             <div className="sticky top-0 z-20 flex bg-background">
               <div className="sticky left-0 z-10 flex shrink-0 items-center border-r border-b bg-background px-3 text-xs font-medium text-muted-foreground" style={{ width: TL_COURT_W, height: 36 }}>
@@ -574,7 +559,7 @@ export function AvailabilityGrid({
       )}
 
       {view === "find" && (
-        <div className={cn("flex flex-col gap-4", segments.length > 0 && "mb-24")}>
+        <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-end gap-3 rounded-md border p-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="bfStart" className="text-sm font-medium">Start time</label>
@@ -639,6 +624,37 @@ export function AvailabilityGrid({
           </div>
         </div>
       )}
+
+      {/* Guidance + legend, below the calendar. */}
+      <p className="text-xs text-muted-foreground">
+        {view === "find"
+          ? "Pick a start time and how long you want to play — we'll show the open courts and their price."
+          : `Each open slot shows its price per hour${isMember ? " (your member rate where it applies)" : ""}. Tap any slots — across courts and times — then review and book them together.`}
+      </p>
+
+      {distinctRates.length > 1 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>Rate:</span>
+          {distinctRates.map((rate) => (
+            <span key={rate} className="flex items-center gap-1.5">
+              <span className={cn("h-2.5 w-2.5 rounded-sm", RATE_TIER_SWATCH[rateTierIndex(rate, minRate, maxRate)])} />
+              {pesosCompact(rate)}/hr
+            </span>
+          ))}
+        </div>
+      )}
+
+      {view !== "find" && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-primary/50 bg-primary/30" /> Selected</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-muted" /> Booked</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm bg-amber-50 dark:bg-amber-500/20" /> Closed</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm border border-dashed border-border" /> Past</span>
+        </div>
+      )}
+
+      {/* Spacer so the legend above clears the fixed cart bar when it's showing. */}
+      {segments.length > 0 && <div aria-hidden className="h-24" />}
 
       {segments.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 backdrop-blur">
