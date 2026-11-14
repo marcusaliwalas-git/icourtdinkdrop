@@ -11,7 +11,13 @@ import {
 } from "@/components/ui/table";
 import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
+import { getTenant } from "@/lib/tenant";
 import { MemberActions } from "./member-actions";
+import { OfficialMemberActions, type MembershipTier } from "./official-member-actions";
+import { MemberDetailsForm } from "./member-details-form";
+import { requireAdmin } from "@/lib/auth";
+import { featureEnabled } from "@/lib/features";
+import { parseFieldSpecs, parseCapturedDetails } from "@/lib/memberships/fields";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +34,7 @@ export default async function MemberDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdmin();
   const { id } = await params;
   const supabase = await createClient();
 
@@ -39,21 +46,69 @@ export default async function MemberDetailPage({
 
   if (!profile) notFound();
 
-  const [{ data: memberships }, { data: bookings }] = await Promise.all([
-    supabase
-      .from("memberships")
-      .select("id, tier, status, starts_on, ends_on")
-      .eq("profile_id", id)
-      .order("starts_on", { ascending: false }),
-    supabase
-      .from("bookings")
-      .select("id, status, party_size, total_cents, payment_status, time_range, courts(name)")
-      .eq("booked_by", id)
-      .order("time_range", { ascending: false })
-      .limit(50),
-  ]);
+  // Scope this member's booking history to the current venue — otherwise a multi-venue admin sees
+  // the member's bookings at their other venues too.
+  const venue = await getTenant();
+  let bookingsQuery = supabase
+    .from("bookings")
+    .select("id, status, party_size, total_cents, payment_status, time_range, courts!inner(name, venue_id)")
+    .eq("booked_by", id)
+    .order("time_range", { ascending: false })
+    .limit(50);
+  if (venue) bookingsQuery = bookingsQuery.eq("courts.venue_id", venue.id);
+
+  let membershipsQuery = supabase
+    .from("memberships")
+    .select("id, tier, status, starts_on, ends_on, details")
+    .eq("profile_id", id)
+    .order("starts_on", { ascending: false });
+  if (venue) membershipsQuery = membershipsQuery.eq("venue_id", venue.id);
+
+  const [{ data: memberships }, { data: bookings }] = await Promise.all([membershipsQuery, bookingsQuery]);
 
   const restricted = profile.booking_restricted_until && new Date(profile.booking_restricted_until) > new Date();
+
+  // The current active membership at this venue (drives the official-member controls). "Active"
+  // means status active and today is within its date window.
+  const officialMembersEnabled = venue ? featureEnabled(venue.features, "official_members") : false;
+  // "Today" in the venue's timezone — a membership's starts_on/ends_on are venue-local dates, so a UTC
+  // "today" can be a day off and make a just-started membership look inactive (and hide its details).
+  const todayStr = venue
+    ? formatInTimezone(new Date(), "yyyy-MM-dd", venue.timezone)
+    : new Date().toISOString().slice(0, 10);
+  const activeMembership = (memberships ?? []).find(
+    (m) => m.status === "active" && m.starts_on <= todayStr && (!m.ends_on || m.ends_on >= todayStr)
+  );
+
+  // Tiers the admin can tag this member with — the venue's active membership plans (same list members
+  // subscribe to), so manual tagging mirrors self-serve subscriptions.
+  const { data: tiers } =
+    officialMembersEnabled && venue
+      ? await supabase
+          .from("membership_plans")
+          .select("id, name, price_cents, sale_price_cents, duration_days")
+          .eq("venue_id", venue.id)
+          .eq("is_active", true)
+          .order("sort_order")
+      : { data: [] as MembershipTier[] };
+
+  // Custom fields defined by the member's active tier + the values already on file, for the admin
+  // on-behalf editor (backfill / counter capture). Look the tier's plan up by name regardless of active
+  // state, so details stay editable even if the plan was later deactivated.
+  let activeTierFields: ReturnType<typeof parseFieldSpecs> = [];
+  if (officialMembersEnabled && venue && activeMembership) {
+    const { data: tierPlan } = await supabase
+      .from("membership_plans")
+      .select("fields")
+      .eq("venue_id", venue.id)
+      .eq("name", activeMembership.tier)
+      .order("is_active", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    activeTierFields = parseFieldSpecs(tierPlan?.fields);
+  }
+  const activeDetailsList = parseCapturedDetails(activeMembership?.details);
+  const activeDetailValues: Record<string, string> = Object.fromEntries(activeDetailsList.map((d) => [d.key, d.value]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,6 +133,51 @@ export default async function MemberDetailPage({
         noShowCount={profile.no_show_count}
         restrictedUntil={profile.booking_restricted_until}
       />
+
+      {officialMembersEnabled && (
+        <OfficialMemberActions
+          profileId={profile.id}
+          activeUntil={activeMembership?.ends_on ?? null}
+          activeTier={activeMembership?.tier ?? null}
+          tiers={(tiers ?? []) as MembershipTier[]}
+        />
+      )}
+
+      {officialMembersEnabled && activeMembership && (
+        activeTierFields.length > 0 ? (
+          <MemberDetailsForm
+            profileId={profile.id}
+            tier={activeMembership.tier}
+            fields={activeTierFields}
+            initial={activeDetailValues}
+          />
+        ) : activeDetailsList.length > 0 ? (
+          // The tier no longer defines fields (deleted/renamed), but earlier-captured details remain —
+          // keep them visible read-only so nothing is lost.
+          <div className="flex max-w-lg flex-col gap-2 rounded-xl border border-white/[0.08] bg-card p-4">
+            <div>
+              <p className="text-sm font-medium">Membership details — {activeMembership.tier}</p>
+              <p className="text-xs text-muted-foreground">
+                This tier no longer defines fields; these were captured earlier. Re-add fields under{" "}
+                <span className="font-medium text-foreground">Venue &amp; Courts → Membership</span> to edit them.
+              </p>
+            </div>
+            <dl className="grid grid-cols-[10rem_1fr] gap-x-3 gap-y-1 text-sm">
+              {activeDetailsList.map((d) => (
+                <div key={d.key} className="contents">
+                  <dt className="text-muted-foreground">{d.label}</dt>
+                  <dd className="break-words whitespace-pre-wrap">{d.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : (
+          <p className="max-w-lg rounded-xl border border-white/[0.08] bg-card p-4 text-sm text-muted-foreground">
+            The <span className="font-medium text-foreground capitalize">{activeMembership.tier}</span> tier collects no
+            extra details. Add fields to it under <span className="font-medium text-foreground">Venue &amp; Courts → Membership</span> to capture them here.
+          </p>
+        )
+      )}
 
       <div>
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Memberships</h2>
@@ -117,7 +217,6 @@ export default async function MemberDetailPage({
             <TableRow>
               <TableHead>Court</TableHead>
               <TableHead>When</TableHead>
-              <TableHead>Party</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
@@ -130,7 +229,6 @@ export default async function MemberDetailPage({
                 <TableRow key={b.id}>
                   <TableCell>{courtName}</TableCell>
                   <TableCell>{formatInTimezone(start, "MMM d, yyyy h:mm a")}</TableCell>
-                  <TableCell>{b.party_size}</TableCell>
                   <TableCell>{(b.total_cents / 100).toLocaleString("en-PH", { style: "currency", currency: "PHP" })}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[b.status] ?? "secondary"}>{b.status}</Badge>

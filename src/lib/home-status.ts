@@ -33,24 +33,36 @@ export function minutesToLabel(total: number): string {
 }
 
 /** Live, real-data court status for the home page's status board — no decorative placeholders. */
+type HoursRow = { open_time: string; close_time: string; closes_next_day?: boolean | null };
+
 export function computeLiveStatus(params: {
   now: Date;
   timezone: string;
-  dayHours: { open_time: string; close_time: string }[];
+  dayHours: HoursRow[];
+  /** Yesterday's hours, so an overnight session (e.g. closes 2 AM) still reads as open after
+   * midnight — the early-morning tail belongs to the previous day's row. */
+  prevDayHours?: HoursRow[];
   courts: { id: string; name: string; is_indoor: boolean }[];
   bookedSlots: { court_id: string; time_range: string }[];
 }): LiveStatusResult {
-  const { now, timezone, dayHours, courts, bookedSlots } = params;
+  const { now, timezone, dayHours, prevDayHours = [], courts, bookedSlots } = params;
 
   const localNow = toZonedTime(now, timezone);
   const nowMinutes = localNow.getHours() * 60 + localNow.getMinutes();
 
   const hourWindows = dayHours.map((h) => ({
     open: timeToMinutes(h.open_time),
-    close: timeToMinutes(h.close_time),
+    // A row that closes the next day extends past midnight, so its close in "today" minutes is
+    // 24h+; nowMinutes (< 1440) is always before it once open has passed.
+    close: timeToMinutes(h.close_time) + (h.closes_next_day ? 1440 : 0),
   }));
 
-  const isOpenNow = hourWindows.some((w) => w.open <= nowMinutes && nowMinutes < w.close);
+  // Open now if inside one of today's windows, or still inside yesterday's overnight tail.
+  const inTodayWindow = hourWindows.some((w) => w.open <= nowMinutes && nowMinutes < w.close);
+  const inPrevOvernight = prevDayHours.some(
+    (h) => h.closes_next_day && nowMinutes < timeToMinutes(h.close_time)
+  );
+  const isOpenNow = inTodayWindow || inPrevOvernight;
 
   let nextOpenLabel: string | null = null;
   if (!isOpenNow) {

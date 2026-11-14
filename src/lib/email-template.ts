@@ -24,8 +24,15 @@ export interface EmailTemplate {
   button: { label: string; url: string };
   /** Optional paragraphs shown below the button. */
   outro?: string[];
+  /** Optional court guidelines / etiquette — one rule per entry, shown as a labelled list above
+   * the button. Used on confirmation emails so the customer sees the house rules before they play. */
+  guidelines?: string[];
   /** Accent bar / button colour. Green for normal flows, red for cancellations. */
   accent?: "green" | "red";
+  /** Tenant branding for the header/footer: an absolute logo URL, and the venue name used as the
+   * text wordmark when there's no logo and in the footer. */
+  logoUrl?: string | null;
+  brandName?: string;
 }
 
 export function renderEmail(t: EmailTemplate): string {
@@ -56,6 +63,26 @@ export function renderEmail(t: EmailTemplate): string {
     )
     .join("");
 
+  const guidelines = t.guidelines ?? [];
+  const guidelinesHtml = guidelines.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+         <tr>
+           <td style="padding:16px 20px;background-color:#fafafa;border:1px solid #e4e4e7;border-radius:10px;">
+             <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#18181b;">Good to know before you play</p>
+             <ul style="margin:0;padding-left:18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.7;color:#3f3f46;">
+               ${guidelines.map((g) => `<li>${escapeHtml(g)}</li>`).join("")}
+             </ul>
+           </td>
+         </tr>
+       </table>`
+    : "";
+
+  const brand = t.brandName?.trim() || "Bookings";
+  // The tenant's logo if it has one, else its name as a text wordmark.
+  const headerBrandHtml = t.logoUrl
+    ? `<img src="${escapeHtml(t.logoUrl)}" alt="${escapeHtml(brand)}" style="max-height:40px;max-width:220px;display:inline-block;" />`
+    : `<span style="font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:bold;color:#ffffff;letter-spacing:-0.5px;">${escapeHtml(brand)}</span>`;
+
   return `<!doctype html>
 <html>
   <body style="margin:0;padding:0;background-color:#f4f4f5;-webkit-text-size-adjust:100%;">
@@ -66,7 +93,7 @@ export function renderEmail(t: EmailTemplate): string {
             <!-- header -->
             <tr>
               <td style="background-color:#0a0a0a;padding:26px 32px;text-align:center;">
-                <span style="font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:bold;color:#ffffff;letter-spacing:-0.5px;">iCourt<span style="color:${accentColor};">&middot;</span>Social</span>
+                ${headerBrandHtml}
               </td>
             </tr>
             <!-- accent bar -->
@@ -85,6 +112,7 @@ export function renderEmail(t: EmailTemplate): string {
                     </td>
                   </tr>
                 </table>
+                ${guidelinesHtml}
                 <table role="presentation" cellpadding="0" cellspacing="0">
                   <tr>
                     <td style="border-radius:10px;background-color:${accentColor};">
@@ -99,7 +127,7 @@ export function renderEmail(t: EmailTemplate): string {
             <tr>
               <td style="padding:20px 32px;background-color:#fafafa;border-top:1px solid #eee;text-align:center;">
                 <p style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#a1a1aa;margin:0;">
-                  iCourt Social Pickleball Court<br/>
+                  ${escapeHtml(brand)}<br/>
                   This is an automated message — no need to reply.
                 </p>
               </td>

@@ -1,10 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildAdminCalendarGrid } from "@/lib/availability";
-import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
-import { CalendarGrid } from "./calendar-grid";
+import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc, nextLocalDate } from "@/lib/time";
+import { CalendarViews } from "./calendar-views";
 import { CalendarDatePicker } from "./date-picker";
+import { ShareAvailability } from "./share-availability";
+import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
+import { compareCourtName } from "@/lib/courts";
+import { rateForHour, type RatePeriod as CourtRatePeriod } from "@/lib/pricing";
+import { toZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
+
+function peso(cents: number): string {
+  return "₱" + (cents / 100).toLocaleString("en-PH", { maximumFractionDigits: 0 });
+}
 
 export default async function AdminCalendarPage({
   searchParams,
@@ -14,12 +24,7 @@ export default async function AdminCalendarPage({
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;
@@ -35,15 +40,25 @@ export default async function AdminCalendarPage({
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
+  courts?.sort(compareCourtName); // natural order: Court 2 before Court 10
+
+  // Active promotions so the walk-in sheets show the same discount the booking will record.
+  const { data: promotions } = await supabase
+    .from("promotions")
+    .select("id, name, type, config, eligibility, stackable, priority, starts_on, ends_on")
+    .eq("venue_id", venue.id)
+    .eq("active", true);
 
   const courtIds = (courts ?? []).map((c) => c.id);
   const dayStart = startOfLocalDayUtc(date, venue.timezone);
-  const dayEnd = endOfLocalDayUtc(date, venue.timezone);
+  // Extend the booking/closure window into the next calendar day so an overnight session's
+  // early-morning slots (which render on this day's grid) still pull their bookings.
+  const dayEnd = endOfLocalDayUtc(nextLocalDate(date), venue.timezone);
 
-  const [{ data: dayHours }, { data: bookings }, { data: closures }] = await Promise.all([
+  const [{ data: dayHours }, { data: bookings }, { data: closures }, { data: ratePeriods }] = await Promise.all([
     supabase
       .from("operating_hours")
-      .select("open_time, close_time")
+      .select("open_time, close_time, closes_next_day")
       .eq("venue_id", venue.id)
       .eq("day_of_week", dayOfWeek),
     courtIds.length
@@ -60,7 +75,30 @@ export default async function AdminCalendarPage({
       .eq("venue_id", venue.id)
       .lt("starts_at", dayEnd.toISOString())
       .gt("ends_at", dayStart.toISOString()),
+    courtIds.length
+      ? supabase
+          .from("court_rate_periods")
+          .select("court_id, start_time, end_time, hourly_rate_cents, member_rate_cents, days_of_week")
+          .in("court_id", courtIds)
+      : Promise.resolve({ data: [] as never[] }),
   ]);
+
+  // Per-court pricing for the multi-select running total (walk-ins price at the non-member rate).
+  const pricing: Record<string, { baseHourlyRateCents: number; ratePeriods: CourtRatePeriod[] }> = {};
+  for (const c of courts ?? []) {
+    pricing[c.id] = {
+      baseHourlyRateCents: c.hourly_rate_cents,
+      ratePeriods: (ratePeriods ?? [])
+        .filter((p) => p.court_id === c.id)
+        .map((p) => ({
+          start_time: p.start_time,
+          end_time: p.end_time,
+          hourly_rate_cents: p.hourly_rate_cents,
+          member_rate_cents: p.member_rate_cents,
+          days_of_week: p.days_of_week,
+        })),
+    };
+  }
 
   const grid = buildAdminCalendarGrid({
     date,
@@ -73,6 +111,65 @@ export default async function AdminCalendarPage({
     bookings: (bookings ?? []) as never,
     closures: closures ?? [],
   });
+
+  // Rate summary for the shareable poster: the EFFECTIVE price of each operating hour (rate periods
+  // and the court's base rate, resolved the same way the booking engine does), collapsed into time
+  // windows. Deriving from periods alone would miss a window priced at the base rate (e.g. an evening
+  // rate that isn't a configured period). When every court prices the day identically we show those
+  // shared windows; otherwise we fall back to the distinct base rates.
+  const hourMeta = grid.rows.map((r) => {
+    const local = toZonedTime(new Date(r.startsAtIso), venue.timezone);
+    return {
+      startIso: r.startsAtIso,
+      endIso: new Date(new Date(r.startsAtIso).getTime() + 3_600_000).toISOString(),
+      localStartMinutes: local.getHours() * 60 + local.getMinutes(),
+      dayOfWeek: local.getDay(),
+    };
+  });
+  const scheduleFor = (courtId: string) =>
+    hourMeta.map((h) =>
+      rateForHour({
+        localStartMinutes: h.localStartMinutes,
+        dayOfWeek: h.dayOfWeek,
+        ratePeriods: pricing[courtId].ratePeriods,
+        baseHourlyRateCents: pricing[courtId].baseHourlyRateCents,
+        baseMemberRateCents: null,
+        isMember: false,
+      })
+    );
+  const schedules = (courts ?? []).map((c) => scheduleFor(c.id));
+  const uniform =
+    schedules.length > 0 && hourMeta.length > 0 && schedules.every((s) => s.every((v, i) => v === schedules[0][i]));
+  const fmtWindow = (iso: string) => formatInTimezone(new Date(iso), "h:mm a", venue.timezone).replace(":00", "");
+
+  let rateLines: { label: string; price: string }[];
+  if (uniform) {
+    const sched = schedules[0];
+    rateLines = [];
+    let runStart = 0;
+    for (let i = 1; i <= sched.length; i++) {
+      if (i === sched.length || sched[i] !== sched[runStart]) {
+        rateLines.push({
+          label: `${fmtWindow(hourMeta[runStart].startIso)} - ${fmtWindow(hourMeta[i - 1].endIso)}`,
+          price: peso(sched[runStart]),
+        });
+        runStart = i;
+      }
+    }
+  } else {
+    rateLines = [...new Set((courts ?? []).map((c) => c.hourly_rate_cents))]
+      .sort((a, b) => a - b)
+      .map((cents) => ({ label: "Rate", price: peso(cents) }));
+  }
+
+  const venueRec = venue as unknown as { custom_domain?: string | null; slug?: string | null };
+  const siteUrl = venueRec.custom_domain ?? (venueRec.slug ? `${venueRec.slug}.dinkdrop.live` : "");
+
+  // Slim the grid down to what the poster needs: a status per court per hour.
+  const posterRows = grid.rows.map((r) => ({
+    startsAtIso: r.startsAtIso,
+    cells: Object.fromEntries((courts ?? []).map((c) => [c.id, r.cells[c.id]?.status ?? "closed"])),
+  }));
 
   function hrefFor(d: string) {
     return `/admin/calendar?date=${d}`;
@@ -104,13 +201,35 @@ export default async function AdminCalendarPage({
           <a href={`/admin/bookings/export?from=${date}&to=${date}`} className="rounded-md border px-3 py-1.5 text-sm">
             Export day CSV
           </a>
+          {!grid.closedAllDay && (
+            <ShareAvailability
+              venueName={venue.name}
+              dateNumeric={formatInTimezone(new Date(`${date}T12:00:00Z`), "MM / dd / yyyy", venue.timezone)}
+              weekday={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE", venue.timezone)}
+              courts={(courts ?? []).map((c) => ({ id: c.id, name: c.name }))}
+              rows={posterRows}
+              rateLines={rateLines}
+              siteUrl={siteUrl}
+              timezone={venue.timezone}
+            />
+          )}
         </div>
       </div>
 
       {grid.closedAllDay ? (
         <p className="text-muted-foreground">No operating hours set for this day.</p>
       ) : (
-        <CalendarGrid timezone={venue.timezone} courts={courts ?? []} rows={grid.rows} />
+        <CalendarViews
+          timezone={venue.timezone}
+          courts={courts ?? []}
+          rows={grid.rows}
+          pricing={pricing}
+          venueId={venue.id}
+          equipmentEnabled={featureEnabled(venue.features, "equipment")}
+          promotions={promotions ?? []}
+          dateLabel={formatInTimezone(new Date(`${date}T12:00:00Z`), "EEEE, MMMM d", venue.timezone)}
+          defaultView={venue.calendar_default_view ?? "grid"}
+        />
       )}
     </div>
   );

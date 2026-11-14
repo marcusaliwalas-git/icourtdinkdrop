@@ -113,7 +113,12 @@ export function RescheduleForm({
         })
       : null;
 
-  const diffCents = ctx && newPriceCents != null ? newPriceCents - ctx.currentTotalCents : 0;
+  // Reschedule re-prices only the COURT; coach/equipment fees carry over (duration is unchanged) and
+  // any promo is forfeited. Mirror the server: new total = max(original court base, new court) + add-ons.
+  const currentCourtBaseCents = ctx ? ctx.currentTotalCents + ctx.currentDiscountCents - ctx.addonsCents : 0;
+  const newTotalCents =
+    ctx && newPriceCents != null ? Math.max(currentCourtBaseCents, newPriceCents) + ctx.addonsCents : null;
+  const diffCents = ctx && newTotalCents != null ? newTotalCents - ctx.currentTotalCents : 0;
   const endLabel =
     ctx && newStartIso
       ? formatInTimezone(new Date(new Date(newStartIso).getTime() + ctx.durationMinutes * 60000), "h:mm a", ctx.timezone)
@@ -174,7 +179,7 @@ export function RescheduleForm({
                 </select>
               </div>
 
-              {newStartIso && newPriceCents != null && (
+              {newStartIso && newTotalCents != null && (
                 <div className="rounded-md border p-3 text-sm">
                   <p>
                     Moving to{" "}
@@ -184,15 +189,17 @@ export function RescheduleForm({
                   </p>
                   {diffCents > 0 ? (
                     <p className="mt-1 text-primary">
-                      New total {pesos(newPriceCents)} — collect {pesos(diffCents)} more before confirming.
-                    </p>
-                  ) : diffCents < 0 ? (
-                    <p className="mt-1 text-muted-foreground">
-                      Cheaper slot — total stays {pesos(ctx.currentTotalCents)} ({pesos(-diffCents)} difference not
-                      refunded).
+                      New total {pesos(newTotalCents)} — collect {pesos(diffCents)} more before confirming.
                     </p>
                   ) : (
-                    <p className="mt-1 text-muted-foreground">Same price — {pesos(ctx.currentTotalCents)}, nothing to collect.</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Same price — {pesos(newTotalCents)}, nothing to collect.
+                    </p>
+                  )}
+                  {ctx.addonsCents > 0 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Includes {pesos(ctx.addonsCents)} for coaching/equipment, kept as-is.
+                    </p>
                   )}
                 </div>
               )}

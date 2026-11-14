@@ -28,6 +28,7 @@ type Hours = {
   day_of_week: number;
   open_time: string;
   close_time: string;
+  closes_next_day: boolean;
 };
 
 // A native <input type="time"> can't display "24:00" (the value the app stores for a close
@@ -87,6 +88,10 @@ function HourRow({ hour }: { hour: Hours }) {
             required
             className="w-32"
           />
+          <label className="flex items-center gap-1.5 pb-2 text-sm whitespace-nowrap">
+            <input type="checkbox" name="closesNextDay" defaultChecked={hour.closes_next_day} />
+            Closes next day
+          </label>
           <Button type="submit" size="sm" disabled={isPending}>
             {isPending ? "Saving..." : "Save"}
           </Button>
@@ -119,7 +124,9 @@ export function HoursManager({ venueId, hours }: { venueId: string; hours: Hours
   return (
     <div className="flex max-w-xl flex-col gap-6">
       <p className="text-sm text-muted-foreground">
-        To allow bookings up until midnight, set Close to 12:00 AM.
+        To allow bookings up until midnight, set Close to 12:00 AM. For a court open past midnight
+        (e.g. 6:00 PM to 2:00 AM), set Close to 2:00 AM and tick <strong>Closes next day</strong> —
+        the late slots stay on the opening day&rsquo;s calendar.
       </p>
       <Table>
         <TableHeader>
@@ -168,6 +175,10 @@ export function HoursManager({ venueId, hours }: { venueId: string; hours: Hours
           <Label htmlFor="closeTime">Close</Label>
           <Input id="closeTime" name="closeTime" type="time" defaultValue="22:00" required />
         </div>
+        <label className="flex items-center gap-1.5 pb-2 text-sm whitespace-nowrap">
+          <input type="checkbox" name="closesNextDay" />
+          Closes next day
+        </label>
         <Button type="submit" disabled={isPending}>
           Add
         </Button>

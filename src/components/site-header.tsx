@@ -3,8 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function NavLink({
@@ -34,32 +33,27 @@ function NavLink({
   );
 }
 
-export function SiteHeader() {
+// `isAdmin` is resolved server-side (see RootLayout → isVenueAdmin) and means "admin of THIS
+// venue" — so the shortcut never shows on a venue you don't administer. It's only a convenience;
+// /admin is independently guarded by requireAdmin server-side.
+export function SiteHeader({
+  logoUrl,
+  brandName,
+  isAdmin = false,
+  signedIn = false,
+  isOfficialMember = false,
+  coachesEnabled = true,
+  membershipEnabled = false,
+}: {
+  logoUrl?: string | null;
+  brandName?: string | null;
+  isAdmin?: boolean;
+  signedIn?: boolean;
+  isOfficialMember?: boolean;
+  coachesEnabled?: boolean;
+  membershipEnabled?: boolean;
+}) {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  // Show the "Admin" shortcut only to a signed-in admin. Checked client-side (the header is
-  // already a client component) — a user can read their own profile.role under RLS, and the
-  // /admin routes are still independently guarded server-side by requireAdmin, so this link
-  // is only a convenience, never the access-control boundary.
-  useEffect(() => {
-    let active = true;
-    const supabase = createClient();
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        if (active) setIsAdmin(false);
-        return;
-      }
-      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-      if (active) setIsAdmin(profile?.role === "admin");
-    })();
-    return () => {
-      active = false;
-    };
-  }, [pathname]);
 
   // Admin has its own layout/nav entirely.
   if (pathname?.startsWith("/admin")) return null;
@@ -67,21 +61,47 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md">
       <nav className="mx-auto flex max-w-3xl items-center gap-5 p-4 text-sm">
-        <Link href="/" aria-label="iCourt Social">
-          <Image src="/icourt-social-logo.png" alt="iCourt Social" width={903} height={438} className="h-7 w-auto" priority />
+        <Link href="/" aria-label={brandName ?? "Home"}>
+          {logoUrl ? (
+            // Tenant's own logo (public bucket URL) — a plain img avoids next/image remote config.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={brandName ?? ""} className="h-7 w-auto object-contain" />
+          ) : brandName ? (
+            <span className="text-base font-semibold">{brandName}</span>
+          ) : (
+            <Image src="/icourt-social-logo.png" alt="iCourt Social" width={903} height={438} className="h-7 w-auto" priority />
+          )}
         </Link>
         <NavLink href="/" pathname={pathname}>Home</NavLink>
         <NavLink href="/book" pathname={pathname}>Book</NavLink>
-        <NavLink href="/coaches" pathname={pathname}>Coaches</NavLink>
+        {coachesEnabled && <NavLink href="/coaches" pathname={pathname}>Coaches</NavLink>}
         <NavLink href="/bookings" pathname={pathname}>My bookings</NavLink>
+        {membershipEnabled && <NavLink href="/membership" pathname={pathname}>Membership</NavLink>}
         {isAdmin && (
-          <NavLink href="/admin/venue" pathname={pathname} className="text-primary hover:text-primary">
+          <NavLink href="/admin" pathname={pathname} className="text-primary hover:text-primary">
             Admin
           </NavLink>
         )}
-        <NavLink href="/account" pathname={pathname} className="ml-auto">
-          Account
-        </NavLink>
+        {signedIn ? (
+          // Signed in: a filled status dot marks the active session — or, for an official member,
+          // a gold crown in its place, so their standing shows on every page.
+          <NavLink href="/account" pathname={pathname} className="ml-auto flex items-center gap-1.5">
+            {isOfficialMember ? (
+              <Crown className="size-4 text-amber-400" aria-hidden />
+            ) : (
+              <span aria-hidden className="h-2 w-2 rounded-full bg-primary" />
+            )}
+            <span>Account</span>
+            <span className="sr-only">{isOfficialMember ? "(signed in — official member)" : "(signed in)"}</span>
+          </NavLink>
+        ) : (
+          // Guest: no session — an outline dot plus a Sign in call to action.
+          <NavLink href="/login" pathname={pathname} className="ml-auto flex items-center gap-1.5">
+            <span aria-hidden className="h-2 w-2 rounded-full border border-muted-foreground" />
+            <span>Sign in</span>
+            <span className="sr-only">(browsing as guest)</span>
+          </NavLink>
+        )}
       </nav>
     </header>
   );
