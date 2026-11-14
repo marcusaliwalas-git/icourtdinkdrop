@@ -690,162 +690,6 @@ export type Database = {
           },
         ]
       }
-      products: {
-        Row: {
-          available: boolean
-          category: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          name: string
-          price_cents: number
-          sort_order: number
-          stock: number | null
-          track_stock: boolean
-          venue_id: string
-        }
-        Insert: {
-          available?: boolean
-          category?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name: string
-          price_cents: number
-          sort_order?: number
-          stock?: number | null
-          track_stock?: boolean
-          venue_id: string
-        }
-        Update: {
-          available?: boolean
-          category?: string | null
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-          price_cents?: number
-          sort_order?: number
-          stock?: number | null
-          track_stock?: boolean
-          venue_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "products_venue_id_fkey"
-            columns: ["venue_id"]
-            isOneToOne: false
-            referencedRelation: "venues"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_sales: {
-        Row: {
-          booking_id: string | null
-          created_at: string
-          id: string
-          note: string | null
-          payment_method: string
-          payment_remarks: string | null
-          sold_at: string
-          sold_by: string | null
-          total_cents: number
-          venue_id: string
-        }
-        Insert: {
-          booking_id?: string | null
-          created_at?: string
-          id?: string
-          note?: string | null
-          payment_method: string
-          payment_remarks?: string | null
-          sold_at?: string
-          sold_by?: string | null
-          total_cents?: number
-          venue_id: string
-        }
-        Update: {
-          booking_id?: string | null
-          created_at?: string
-          id?: string
-          note?: string | null
-          payment_method?: string
-          payment_remarks?: string | null
-          sold_at?: string
-          sold_by?: string | null
-          total_cents?: number
-          venue_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_sales_venue_id_fkey"
-            columns: ["venue_id"]
-            isOneToOne: false
-            referencedRelation: "venues"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_sales_sold_by_fkey"
-            columns: ["sold_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_sales_booking_id_fkey"
-            columns: ["booking_id"]
-            isOneToOne: false
-            referencedRelation: "bookings"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_sale_items: {
-        Row: {
-          id: string
-          line_total_cents: number
-          name_snapshot: string
-          product_id: string | null
-          quantity: number
-          sale_id: string
-          unit_price_cents: number
-        }
-        Insert: {
-          id?: string
-          line_total_cents: number
-          name_snapshot: string
-          product_id?: string | null
-          quantity: number
-          sale_id: string
-          unit_price_cents: number
-        }
-        Update: {
-          id?: string
-          line_total_cents?: number
-          name_snapshot?: string
-          product_id?: string | null
-          quantity?: number
-          sale_id?: string
-          unit_price_cents?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_sale_items_sale_id_fkey"
-            columns: ["sale_id"]
-            isOneToOne: false
-            referencedRelation: "product_sales"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "product_sale_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       expenses: {
         Row: {
           amount_cents: number
@@ -1198,6 +1042,162 @@ export type Database = {
           },
         ]
       }
+      product_sale_items: {
+        Row: {
+          id: string
+          line_total_cents: number
+          name_snapshot: string
+          product_id: string | null
+          quantity: number
+          sale_id: string
+          unit_price_cents: number
+        }
+        Insert: {
+          id?: string
+          line_total_cents: number
+          name_snapshot: string
+          product_id?: string | null
+          quantity: number
+          sale_id: string
+          unit_price_cents: number
+        }
+        Update: {
+          id?: string
+          line_total_cents?: number
+          name_snapshot?: string
+          product_id?: string | null
+          quantity?: number
+          sale_id?: string
+          unit_price_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "product_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_sales: {
+        Row: {
+          booking_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          payment_method: string
+          payment_remarks: string | null
+          sold_at: string
+          sold_by: string | null
+          total_cents: number
+          venue_id: string
+        }
+        Insert: {
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          payment_method: string
+          payment_remarks?: string | null
+          sold_at?: string
+          sold_by?: string | null
+          total_cents: number
+          venue_id: string
+        }
+        Update: {
+          booking_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          payment_method?: string
+          payment_remarks?: string | null
+          sold_at?: string
+          sold_by?: string | null
+          total_cents?: number
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_sales_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_sales_sold_by_fkey"
+            columns: ["sold_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_sales_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          available: boolean
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          stock: number | null
+          track_stock: boolean
+          venue_id: string
+        }
+        Insert: {
+          available?: boolean
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          price_cents: number
+          sort_order?: number
+          stock?: number | null
+          track_stock?: boolean
+          venue_id: string
+        }
+        Update: {
+          available?: boolean
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          stock?: number | null
+          track_stock?: boolean
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1531,6 +1531,7 @@ export type Database = {
           calendar_default_view: string
           cancellation_cutoff_hours: number
           contact: string | null
+          court_type_filter: boolean
           created_at: string
           custom_domain: string | null
           deposit_percent: number | null
@@ -1579,6 +1580,7 @@ export type Database = {
           calendar_default_view?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
+          court_type_filter?: boolean
           created_at?: string
           custom_domain?: string | null
           deposit_percent?: number | null
@@ -1627,6 +1629,7 @@ export type Database = {
           calendar_default_view?: string
           cancellation_cutoff_hours?: number
           contact?: string | null
+          court_type_filter?: boolean
           created_at?: string
           custom_domain?: string | null
           deposit_percent?: number | null
@@ -2055,21 +2058,11 @@ export type Database = {
           total_cents: number
           venue_id: string
         }
-      }
-      set_product_availability: {
-        Args: { p_available: boolean; p_product: string }
-        Returns: {
-          available: boolean
-          category: string | null
-          created_at: string
-          id: string
-          is_active: boolean
-          name: string
-          price_cents: number
-          sort_order: number
-          stock: number | null
-          track_stock: boolean
-          venue_id: string
+        SetofOptions: {
+          from: "*"
+          to: "product_sales"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       current_user_venue: { Args: never; Returns: string }
@@ -2282,6 +2275,28 @@ export type Database = {
       set_membership_role: {
         Args: { p_profile: string; p_role: string; p_venue: string }
         Returns: string
+      }
+      set_product_availability: {
+        Args: { p_available: boolean; p_product: string }
+        Returns: {
+          available: boolean
+          category: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          stock: number | null
+          track_stock: boolean
+          venue_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "products"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_venue_feature: {
         Args: { p_enabled: boolean; p_key: string; p_venue: string }

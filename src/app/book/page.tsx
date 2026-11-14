@@ -74,7 +74,7 @@ export default async function BookPage({
 
   const { data: courts } = await supabase
     .from("courts")
-    .select("id, name, hourly_rate_cents, member_rate_cents")
+    .select("id, name, surface, hourly_rate_cents, member_rate_cents")
     .eq("venue_id", venue.id)
     .eq("is_active", true)
     .order("name");
@@ -224,6 +224,7 @@ export default async function BookPage({
           venueId={venue.id}
           promotions={promotions ?? []}
           depositPercent={venue.deposit_percent}
+          courtTypeFilterEnabled={venue.court_type_filter}
         />
       )}
 
