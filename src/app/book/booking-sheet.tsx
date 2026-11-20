@@ -136,6 +136,8 @@ export function BookingSheet({
   const [guestEmail, setGuestEmail] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentSlipFile, setPaymentSlipFile] = useState<File | null>(null);
+  // The booker must accept the liability waiver before a request can be submitted.
+  const [agreedToWaiver, setAgreedToWaiver] = useState(false);
   // When the venue offers a deposit, the customer can pay the deposit now instead of the full amount.
   const [payDeposit, setPayDeposit] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -231,6 +233,7 @@ export function BookingSheet({
       setGuestEmail("");
       setPaymentReference("");
       setPaymentSlipFile(null);
+      setAgreedToWaiver(false);
       setEquipQty({});
     }
     onOpenChange(next);
@@ -242,6 +245,11 @@ export function BookingSheet({
 
     if (!paymentSlipFile) {
       setError("Attach a screenshot or photo of your payment receipt.");
+      return;
+    }
+
+    if (!agreedToWaiver) {
+      setError("Please read and agree to the Court Booking Waiver & Release Policy to continue.");
       return;
     }
 
@@ -489,7 +497,7 @@ export function BookingSheet({
                   <Input id="guestName" value={guestName} onChange={(e) => setGuestName(e.target.value)} required />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="guestPhone">Mobile number (optional)</Label>
+                  <Label htmlFor="guestPhone">Mobile number</Label>
                   <Input
                     id="guestPhone"
                     placeholder="09171234567"
@@ -614,10 +622,61 @@ export function BookingSheet({
               </p>
             </div>
 
+            <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/30 p-3">
+              <p className="text-sm font-semibold">Court Booking Waiver &amp; Release Policy</p>
+              <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+                <p>By proceeding with this booking, I acknowledge and agree to the following:</p>
+                <div className="flex flex-col gap-1">
+                  <p className="font-medium text-foreground">1. Participation &amp; Health</p>
+                  <ul className="list-disc space-y-1 pl-4">
+                    <li>I understand that sports activities involve a risk of injury.</li>
+                    <li>I voluntarily accept the risks of participation, including falls, collisions, and equipment-related injuries.</li>
+                    <li>I confirm that I am physically fit to participate and have no known condition that would prevent me from doing so safely.</li>
+                    <li>I will immediately inform staff if I experience discomfort, injury, or any health concern.</li>
+                  </ul>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <p className="font-medium text-foreground">2. Release of Liability</p>
+                  <ul className="list-disc space-y-1 pl-4">
+                    <li>I release and hold harmless the facility, its owners, operators, employees, and agents from claims, losses, damages, or injuries arising from my participation, to the extent permitted by law.</li>
+                  </ul>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <p className="font-medium text-foreground">3. Facility Rules &amp; Safety</p>
+                  <ul className="list-disc space-y-1 pl-4">
+                    <li>I agree to follow all facility rules, posted guidelines, and staff instructions.</li>
+                    <li>Failure to comply may result in removal from the premises without refund.</li>
+                  </ul>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <p className="font-medium text-foreground">4. Personal Belongings</p>
+                  <ul className="list-disc space-y-1 pl-4">
+                    <li>I understand that the facility is not responsible for lost, stolen, or damaged personal belongings.</li>
+                  </ul>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <p className="font-medium text-foreground">5. Photo &amp; Video Consent</p>
+                  <ul className="list-disc space-y-1 pl-4">
+                    <li>I consent to being photographed or recorded during facility activities or events for promotional purposes.</li>
+                    <li>I may notify staff if I do not wish to be photographed or recorded.</li>
+                  </ul>
+                </div>
+              </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={agreedToWaiver}
+                  onChange={(e) => setAgreedToWaiver(e.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-primary"
+                />
+                <span>I have read and agree to the Court Booking Waiver &amp; Release Policy.</span>
+              </label>
+            </div>
+
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <SheetFooter className="p-0">
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" disabled={isPending || !agreedToWaiver}>
                 {isPending ? "Requesting..." : `Request ${segments.length} booking${segments.length > 1 ? "s" : ""}`}
               </Button>
             </SheetFooter>
