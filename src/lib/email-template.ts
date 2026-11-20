@@ -79,8 +79,11 @@ export function renderEmail(t: EmailTemplate): string {
 
   const brand = t.brandName?.trim() || "Bookings";
   // The tenant's logo if it has one, else its name as a text wordmark.
+  // The height="40" attribute is load-bearing: Gmail (especially the mobile app) strips the CSS
+  // max-height/max-width, so without an explicit HTML height attribute the logo renders at its full
+  // natural size and fills the header — large logos then show as a near-blank block on phones.
   const headerBrandHtml = t.logoUrl
-    ? `<img src="${escapeHtml(t.logoUrl)}" alt="${escapeHtml(brand)}" style="max-height:40px;max-width:220px;display:inline-block;" />`
+    ? `<img src="${escapeHtml(t.logoUrl)}" alt="${escapeHtml(brand)}" height="40" style="height:40px;width:auto;max-height:40px;max-width:220px;display:inline-block;border:0;outline:none;text-decoration:none;" />`
     : `<span style="font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:bold;color:#ffffff;letter-spacing:-0.5px;">${escapeHtml(brand)}</span>`;
 
   return `<!doctype html>
