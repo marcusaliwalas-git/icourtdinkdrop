@@ -1,10 +1,5 @@
-"use client";
-
-import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { cancelBooking } from "@/app/book/actions";
 import { formatInTimezone } from "@/lib/time";
 import { parseTstzRange } from "@/lib/availability";
 
@@ -40,23 +35,13 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   paid_at_venue: "paid",
   awaiting_verification: "payment awaiting verification",
   paid_online: "paid online",
+  complimentary: "complimentary",
   refunded: "refunded",
   partially_refunded: "partially refunded",
 };
 
 export function BookingCard({ booking, timezone }: { booking: Booking; timezone: string }) {
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const { start, end } = parseTstzRange(booking.time_range);
-  const canCancel = ["confirmed", "pending"].includes(booking.status) && start > new Date();
-
-  function onCancel() {
-    setError(null);
-    startTransition(async () => {
-      const result = await cancelBooking({ bookingId: booking.id });
-      if (!result.success) setError(result.message);
-    });
-  }
 
   return (
     <Card>
@@ -68,21 +53,13 @@ export function BookingCard({ booking, timezone }: { booking: Booking; timezone:
             {formatInTimezone(end, "h:mm a", timezone)}
           </p>
           <p className="text-xs text-muted-foreground">
-            Ref {booking.reference_code} · {booking.party_size} players · {pesos(booking.total_cents)} (
+            Ref {booking.reference_code} · {pesos(booking.total_cents)} (
             {PAYMENT_STATUS_LABEL[booking.payment_status] ?? booking.payment_status})
           </p>
-          {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <Badge variant={STATUS_VARIANT[booking.status] ?? "secondary"}>
-            {STATUS_LABEL[booking.status] ?? booking.status}
-          </Badge>
-          {canCancel && (
-            <Button size="sm" variant="outline" disabled={isPending} onClick={onCancel}>
-              {isPending ? "Cancelling..." : "Cancel"}
-            </Button>
-          )}
-        </div>
+        <Badge variant={STATUS_VARIANT[booking.status] ?? "secondary"}>
+          {STATUS_LABEL[booking.status] ?? booking.status}
+        </Badge>
       </CardContent>
     </Card>
   );

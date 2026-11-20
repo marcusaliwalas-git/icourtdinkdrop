@@ -13,6 +13,10 @@ import {
 } from "@/components/ui/table";
 import { formatInTimezone, startOfLocalDayUtc, endOfLocalDayUtc } from "@/lib/time";
 import { periodBounds, shiftAnchor, type CalendarPeriod } from "@/lib/period-range";
+import { getTenant } from "@/lib/tenant";
+import { featureEnabled } from "@/lib/features";
+import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -43,19 +47,16 @@ export default async function AdminCustomersPage({
 }: {
   searchParams: Promise<{ period?: string; anchor?: string; from?: string; to?: string }>;
 }) {
+  await requireAdmin();
   const params = await searchParams;
   const supabase = await createClient();
 
-  const { data: venue } = await supabase
-    .from("venues")
-    .select("id, timezone")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const venue = await getTenant();
 
   if (!venue) {
     return <p className="text-muted-foreground">Set up your venue first.</p>;
   }
+  if (!featureEnabled(venue.features, "analytics")) notFound();
 
   const period: CalendarPeriod | "custom" = PERIOD_OPTIONS.some((p) => p.value === params.period)
     ? (params.period as CalendarPeriod | "custom")
@@ -75,14 +76,15 @@ export default async function AdminCustomersPage({
   // actually happened, but a still-pending one is a genuine booking request either way.
   const { data: bookings } = await supabase
     .from("bookings")
-    .select("booked_by, guest_name, guest_phone, status, total_cents, profiles(full_name, phone)")
+    .select("booked_by, guest_name, guest_phone, status, total_cents, profiles(full_name, phone, email), courts!inner(venue_id)")
+    .eq("courts.venue_id", venue.id) // scope to this venue — RLS alone pools all of a multi-venue admin's venues
     .neq("status", "cancelled")
     .filter("time_range", "ov", `[${rangeStart.toISOString()},${rangeEnd.toISOString()}]`)
     .limit(10000);
 
   const stats = new Map<string, CustomerStats>();
   for (const b of bookings ?? []) {
-    const profile = b.profiles as unknown as { full_name: string | null; phone: string | null } | null;
+    const profile = b.profiles as unknown as { full_name: string | null; phone: string | null; email: string | null } | null;
     const isMember = b.booked_by != null;
     const key = isMember ? `member:${b.booked_by}` : `guest:${b.guest_phone || b.guest_name || "unknown"}`;
 
@@ -94,7 +96,7 @@ export default async function AdminCustomersPage({
     } else {
       stats.set(key, {
         key,
-        name: (isMember ? profile?.full_name : b.guest_name) || (isMember ? "(no name on file)" : "Guest"),
+        name: (isMember ? (profile?.full_name ?? profile?.email) : b.guest_name) || (isMember ? "(no name on file)" : "Guest"),
         contact: (isMember ? profile?.phone : b.guest_phone) ?? null,
         isMember,
         memberId: isMember ? b.booked_by : null,
