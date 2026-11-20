@@ -87,7 +87,21 @@ export function renderEmail(t: EmailTemplate): string {
     : `<span style="font-family:Arial,Helvetica,sans-serif;font-size:22px;font-weight:bold;color:#ffffff;letter-spacing:-0.5px;">${escapeHtml(brand)}</span>`;
 
   return `<!doctype html>
-<html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Declaring color-scheme tells dark-mode clients (notably the Gmail mobile app) that this
+         email sets its own colors, so they must NOT force-invert them. Without it, Gmail lightens
+         the near-black header but leaves the logo image untouched, so a white/transparent logo lands
+         on a now-light header and disappears. Desktop clients don't force-invert, so they were always
+         fine — which is exactly the light-vs-dark difference seen in testing. -->
+    <meta name="color-scheme" content="light dark" />
+    <meta name="supported-color-schemes" content="light dark" />
+    <style>
+      :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    </style>
+  </head>
   <body style="margin:0;padding:0;background-color:#f4f4f5;-webkit-text-size-adjust:100%;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;">
       <tr>
